@@ -6,6 +6,7 @@ import { isFresh, indexPath, loadGraph, noteCounts, reindex } from './store.ts';
 import { newestMtime } from './scan.ts';
 import { findJUnitFile, parseJUnit, type Case } from './junit.ts';
 import { renderExplore } from './render.ts';
+import { ask, askConfig, formatAsk } from './ask.ts';
 import * as registry from './registry.ts';
 import { appendPerf, perfReport, readPerf } from './perf.ts';
 import { analyze, changeView, context, doctor, evidence, evidenceFacts, impact, listChanges, phaseLine, plan, search } from './query.ts';
@@ -120,6 +121,16 @@ switch (cmd) {
     console.log(parts.join('  '));
     if (g.perf) console.log(phaseLine(g.perf));
     console.log(indexPath(root));
+    break;
+  }
+  case 'ask': {
+    const q = positional().join(' ');
+    if (!q) {
+      console.error('usage: weave ask "question" [--file path]');
+      process.exit(2);
+    }
+    const files = process.argv.flatMap((a, i, all) => (a === '--file' && all[i + 1] ? [all[i + 1]] : []));
+    console.log(formatAsk(await ask(graphFor(), q, files)));
     break;
   }
   case 'perf': {
@@ -277,7 +288,7 @@ switch (cmd) {
       graphs.set(r, g);
       return g;
     };
-    serveMcp(get, multi);
+    serveMcp(get, multi, process.argv.includes('--manager'));
     break;
   }
   case 'help':
@@ -299,6 +310,7 @@ function helpText(): string {
   weave context <file...>       one file, explained (--budget tokens)
   weave impact  <file...>       full blast radius
   weave plan    <change> [T3]   the next task, its files, its command
+  weave ask     "question"      a cheap model answers from the graph
   weave change  [slug]          spec change records
   weave search  <query>
   weave check   [file...]       fail when a change breaks a contract (no args: git diff)

@@ -130,6 +130,7 @@ and `weave` is not guaranteed to be on it.
 | `search(query)` | endpoints, pages, modules, tables, requirements, tests by name. One line each, never file contents. | ~150 tokens |
 | `changes(slug)` | a spec change record: tasks, open tasks, files they touch, and the blast radius of those files. With no slug: the newest 25 records with progress. | ~400 tokens |
 | **`plan(slug)`** | the next unfinished task: its files, endpoints, tables, tests and the run command. Call this instead of reading `tasks.md`. | ~150 tokens |
+| **`ask(question)`** | a cheap model answers from the graph in ≤5 lines and names the facts it used. For questions that need reasoning, not retrieval. | ~200 tokens |
 | `status()` | graph health: counts, endpoints no page calls, endpoints no test covers, pages without e2e, phase timings, and this server's own call latency. | ~250 tokens |
 
 The server rebuilds a stale index (older than 15 s) before answering, so the map follows the agent's edits.
@@ -175,6 +176,48 @@ avg 1094ms · max 1302ms · heap 63MB · trend -48% over the window
 agent session is visible instead of felt.
 
 Without `npm link`, every command also runs as `node src/cli.ts <command>`.
+
+## The manager
+
+An expensive model should not do retrieval. Give it one verb instead of six:```bash
+weave ask "what does the warehouse change touch, and what is untested?"
+```
+
+A cheap model answers in five lines, from the graph, and prints the facts it used:
+
+```
+The change touches GET/POST /api/v1/orders and 2 tables (part_orders, parts).
+POST /orders has no direct test; the warehouse page is covered by e2e/admin.spec.ts.
+
+-- from deepseek-v4.1-flash in 940ms; facts used:
+endpoint  GET /api/v1/orders  orders.routes.ts:58
+...
+```
+
+It is grounded, not creative: the prompt forbids naming any file, endpoint, table or
+requirement that is not in the facts, and the answer is followed by the facts so the
+caller can check it.
+
+```bash
+# OpenCode Go (default)
+export OPENCODE_GO_API_KEY=...
+# DeepSeek direct
+export DEEPSEEK_API_KEY=...            # base https://api.deepseek.com/v1, model deepseek-chat
+# anything OpenAI-compatible
+export WEAVE_LLM_API_KEY=... WEAVE_LLM_BASE_URL=... WEAVE_LLM_MODEL=...
+```
+
+Then hand the expensive agent a manager instead of a toolbox:
+
+```bash
+claude mcp add weave -- node /abs/path/weave/src/cli.ts mcp --manager
+```
+
+`--manager` exposes only `ask`, `plan` and `status`. No raw `impact`/`context`/`search`,
+so the expensive model cannot burn context re-deriving what the cheap one already knows,
+and no tool returns file contents — it reads code with its own tools when it must.
+
+Without a key, `ask` says exactly which variable to set and everything else still works.
 
 ## Explorer (for people)
 

@@ -1,4 +1,5 @@
 import { plan, changeView, context, doctor, impact, listChanges, search } from './query.ts';
+import { ask, askConfig, formatAsk } from './ask.ts';
 import type { Graph } from './model.ts';
 
 // MCP over stdio, newline-delimited JSON-RPC. No SDK, no dependencies.
@@ -72,6 +73,19 @@ const TOOL_DEFS = [
     },
   },
   {
+    name: 'ask',
+    description:
+      'Ask a question about this repo in plain language. A cheap model answers from the graph in a few lines and names the facts it used. Use this instead of chaining search/context/impact yourself.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        question: { type: 'string', description: 'e.g. "what does the warehouse change touch?"' },
+        files: { type: 'array', items: { type: 'string' }, description: 'optional repo-relative paths to ground the answer' },
+      },
+      required: ['question'],
+    },
+  },
+  {
     name: 'changes',
     description:
       'A spec change record: its tasks, open tasks, the files its tasks touch, and the blast radius of those files. With no argument, lists all change records.',
@@ -84,7 +98,7 @@ const TOOL_DEFS = [
   },
 ];
 
-export function serveMcp(getGraph: (project?: string) => Graph, multi = false): void {
+export function serveMcp(getGraph: (project?: string) => Graph, multi = false, manager = false): void {
   process.stdin.setEncoding('utf8');
   let buf = '';
   process.stdin.on('data', (chunk) => {
@@ -100,13 +114,13 @@ export function serveMcp(getGraph: (project?: string) => Graph, multi = false): 
       } catch {
         continue;
       }
-      handle(msg, getGraph, multi);
+      handle(msg, getGraph, multi, manager);
     }
   });
   process.stdin.on('end', () => process.exit(0));
 }
 
-function handle(msg: Rpc, getGraph: (project?: string) => Graph, multi: boolean): void {
+async function handle(msg: Rpc, getGraph: (project?: string) => Graph, multi: boolean, manager: boolean): void {
   if (msg.id === undefined || msg.id === null) return; // notification
   const reply = (result: any) => send({ jsonrpc: '2.0', id: msg.id!, result });
   const fail = (code: number, message: string) => send({ jsonrpc: '2.0', id: msg.id!, error: { code, message } });
@@ -120,11 +134,15 @@ function handle(msg: Rpc, getGraph: (project?: string) => Graph, multi: boolean)
           protocolVersion: SUPPORTED.includes(asked) ? asked : PROTOCOL,
           capabilities: { tools: {}, resources: {}, prompts: {} },
           serverInfo: { name: 'weave', version: '0.1.0' },
-          instructions: multi ? `${instructions} This server serves several projects: pass \`project\` (a name from \`weave projects\`) to pick one; omit it for this repo.` : instructions,
+          instructions: manager
+            ? 'This is a repo manager, not a repo. Call ask(question) for anything that needs reasoning over the codebase: a cheap model answers in a few lines and names the facts it used. Call plan(slug) for the next task and status() for health. No tool returns file contents — if you need code, read the file yourself with your own tools.'
+            : multi
+              ? `${instructions} This server serves several projects: pass \`project\` (a name from \`weave projects\`) to pick one; omit it for this repo.`
+              : instructions,
         });
       }
       case 'tools/list':
-        return reply({ tools: toolDefs(multi) });
+        return reply({ tools: toolDefs(multi, manager) });
       // Clients probe these three; empty lists cost nothing and stop noisy errors.
       case 'resources/list':
       case 'resources/templates/list':
@@ -167,6 +185,10 @@ function handle(msg: Rpc, getGraph: (project?: string) => Graph, multi: boolean)
           case 'plan':
             if (!a.slug) return fail(-32602, 'plan needs `slug`; call changes() for the list');
             text = plan(g, String(a.slug), a.task ? String(a.task) : undefined);
+            break;
+          case 'ask':
+            if (!a.question) return fail(-32602, 'ask needs `question`');
+            text = formatAsk(await ask(g, String(a.question), asFiles(a.files)));
             break;
           case 'status':
             text = doctor(g) + '\n' + runtimeLine(g);
@@ -212,10 +234,12 @@ function asFiles(v: unknown): string[] {  if (Array.isArray(v)) return v.map(Str
   return [];
 }
 
-/** With --all every tool takes an optional `project`; without it the schema stays lean. */
-function toolDefs(multi: boolean): unknown[] {
-  if (!multi) return TOOL_DEFS;
-  return TOOL_DEFS.map((t) => ({
+/** With --all every tool takes an optional `project`; with --manager only the three
+ *  "talk to it" verbs are exposed, so an expensive agent cannot do the grunt work. */
+function toolDefs(multi: boolean, manager = false): unknown[] {
+  const base = manager ? TOOL_DEFS.filter((t) => ['ask', 'plan', 'status'].includes(t.name)) : TOOL_DEFS;
+  if (!multi) return base;
+  return base.map((t) => ({
     ...t,
     inputSchema: {
       ...t.inputSchema,

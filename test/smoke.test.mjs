@@ -57,7 +57,7 @@ test('mcp handshake, tools and impact', async () => {
   assert.equal(init.result.serverInfo.name, 'weave');
   assert.deepEqual(
     list.result.tools.map((t) => t.name),
-    ['context', 'impact', 'search', 'plan', 'changes', 'status'],
+    ['context', 'impact', 'search', 'plan', 'ask', 'changes', 'status'],
   );
 
   const t = text(impact);
@@ -261,6 +261,49 @@ test('next route handlers and trpc procedures become endpoints', () => {
     encoding: 'utf8',
   });
   assert.match(c.stdout, /QUERY \/api\/trpc\/quotes\.list/);
+});
+
+test('mcp --manager exposes only the three verbs', async () => {
+  const [list] = await rpc([{ jsonrpc: '2.0', id: 1, method: 'tools/list' }], ['--manager']);
+  assert.deepEqual(
+    list.result.tools.map((t) => t.name),
+    ['plan', 'ask', 'status'],
+  );
+});
+
+test('ask talks to any OpenAI-compatible endpoint', async () => {
+  const { createServer } = await import('node:http');
+  const seen = [];
+  const server = createServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => {
+      seen.push({ url: req.url, auth: req.headers.authorization, body: JSON.parse(body) });
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify({ choices: [{ message: { content: 'The warehouse change touches 6 endpoints and 4 tables.' } }] }));
+    });
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+
+  const out = await new Promise((resolve) => {
+    const p = spawn(process.execPath, [cli, 'ask', 'what does the warehouse change touch?', '--root', fixture], {
+      env: { ...process.env, WEAVE_LLM_BASE_URL: `http://127.0.0.1:${port}`, WEAVE_LLM_API_KEY: 'test-key', WEAVE_LLM_MODEL: 'cheap' },
+    });
+    let s = '';
+    p.stdout.on('data', (d) => (s += d));
+    p.on('close', () => resolve(s));
+  });
+  server.close();
+
+  assert.match(out, /The warehouse change touches 6 endpoints and 4 tables/);
+  assert.match(out, /facts used:/);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0].url, '/chat/completions');
+  assert.equal(seen[0].auth, 'Bearer test-key');
+  assert.equal(seen[0].body.model, 'cheap');
+  assert.match(seen[0].body.messages[0].content, /ONLY the facts/);
+  assert.match(seen[0].body.messages[1].content, /FACTS/);
 });
 
 test('impact accepts several files at once', async () => {
