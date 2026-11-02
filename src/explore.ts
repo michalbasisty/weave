@@ -10,13 +10,19 @@ export interface Project {
   root: string;
   builtAt: string;
   counts: { pages: number; endpoints: number; modules: number; tables: number; tests: number; changes: number; reqs: number };
-  cov: { gaps: number; line: string };
+  cov: {
+    gaps: number;
+    unmapped: number;
+    calls: { resolved: number; total: number };
+    routes: { found: number; files: number };
+    specs: { parsed: number; files: number };
+  };
   nodes: { i: string; k: string; n: string; f?: string; l?: number; x?: string; d?: string; t?: string; dn?: 1 }[];
   edges: [string, string, string, string][];
   flows: { p: string; e: string[]; t: string[] }[];
   modules: { m: string; e: string[]; t: string[] }[];
   changes: { c: string; done: number; total: number; open: string[]; s?: string; sum?: string; r: { id: string; title: string }[] }[];
-  issues: { kind: string; title: string; items: string[] }[];
+  issues: { key: string; kind: string; title: string; items: string[] }[];
 }
 
 export function explorePayload(g: Graph): Omit<Project, 'name'> {
@@ -46,6 +52,18 @@ export function explorePayload(g: Graph): Omit<Project, 'name'> {
       dn: n.kind === 'task' && n.meta?.done === true ? (1 as const) : undefined,
     }));
   const ids = new Set(nodes.map((n) => n.i));
+  // Modules use Prisma models; the explorer speaks tables. Project the hop so a
+  // module-to-table link survives into the payload (and the trace can show it).
+  const modelTable = new Map<string, string>();
+  for (const e of g.edges) if (e.kind === 'maps_to') modelTable.set(e.from, e.to);
+  const tablesOf = (moduleId: string): string[] => {
+    const seen = new Set<string>();
+    for (const e of ix.from(moduleId, 'uses')) {
+      const t = modelTable.get(e.to);
+      if (t && ids.has(t)) seen.add(t);
+    }
+    return [...seen];
+  };
   const wanted = new Set([
     'calls', 'hits', 'exercises', 'asserts', 'verifies', 'implements', 'satisfies',
     'has_task', 'in_module', 'uses', 'calls_missing', 'touches', 'declared_in',
@@ -62,10 +80,7 @@ export function explorePayload(g: Graph): Omit<Project, 'name'> {
       for (const ep of eps) {
         const mod = ix.node(ep)?.meta?.module;
         if (typeof mod !== 'string') continue;
-        for (const e of ix.from('module:' + mod, 'uses')) {
-          const t = ix.node(e.to);
-          if (t?.kind === 'table') tables.add(t.id);
-        }
+        for (const t of tablesOf('module:' + mod)) tables.add(t);
       }
       return { p: p.id, e: [...new Set(eps)], t: [...tables] };
     })
@@ -76,9 +91,10 @@ export function explorePayload(g: Graph): Omit<Project, 'name'> {
     .map((m) => ({
       m: m.id,
       e: ix.to(m.id, 'in_module').map((e) => e.from).filter((id) => ids.has(id)),
-      t: ix.from(m.id, 'uses').map((e) => e.to).filter((id) => ids.has(id)),
+      t: tablesOf(m.id),
     }))
     .filter((m) => m.e.length);
+  for (const m of modules) for (const t of m.t) edges.push([m.m, t, 'uses', 'exact']);
 
   const changes = ix
     .ofKind('change')
@@ -105,13 +121,13 @@ export function explorePayload(g: Graph): Omit<Project, 'name'> {
 
   const issues: Project['issues'] = [];
   const broken = ix.ofKind('call').filter((c) => ix.to(c.id).some((e) => e.kind === 'calls_missing'));
-  if (broken.length) issues.push({ kind: 'error', title: 'Call sites with no matching endpoint', items: broken.map((b) => b.id) });
+  if (broken.length) issues.push({ key: 'broken_calls', kind: 'error', title: 'Call sites with no matching endpoint', items: broken.map((b) => b.id) });
   const noTest = ix.ofKind('endpoint').filter((e) => !ix.to(e.id, 'hits').length && !ix.to(e.id, 'covers').length);
-  if (noTest.length) issues.push({ kind: 'warn', title: `${noTest.length} endpoint${noTest.length === 1 ? '' : 's'} with no direct test`, items: noTest.map((e) => e.id) });
+  if (noTest.length) issues.push({ key: 'untested_endpoints', kind: 'warn', title: `${noTest.length} endpoint${noTest.length === 1 ? '' : 's'} with no direct test`, items: noTest.map((e) => e.id) });
   const noE2e = ix.ofKind('page').filter((p) => !ix.to(p.id, 'exercises').length);
-  if (noE2e.length) issues.push({ kind: 'warn', title: `${noE2e.length} page${noE2e.length === 1 ? '' : 's'} with no e2e`, items: noE2e.map((p) => p.id) });
+  if (noE2e.length) issues.push({ key: 'pages_without_e2e', kind: 'warn', title: `${noE2e.length} page${noE2e.length === 1 ? '' : 's'} with no e2e`, items: noE2e.map((p) => p.id) });
   const suspect = ix.ofKind('req').filter((r) => r.meta?.suspect === true);
-  if (suspect.length) issues.push({ kind: 'warn', title: 'Requirements changed after the code was written', items: suspect.map((r) => r.id) });
+  if (suspect.length) issues.push({ key: 'suspect_reqs', kind: 'warn', title: 'Requirements changed after the code was written', items: suspect.map((r) => r.id) });
 
   return {
     root: g.root,
@@ -136,14 +152,17 @@ export function explorePayload(g: Graph): Omit<Project, 'name'> {
 }
 
 /** The one number a reader should see before trusting anything else on the page. */
-function coverageOf(g: Graph): { gaps: number; line: string } {
+function coverageOf(g: Graph): Project['cov'] {
   const c = g.coverage;
-  if (!c) return { gaps: 0, line: 'coverage unknown' };
+  if (!c) return { gaps: 0, unmapped: 0, calls: { resolved: 0, total: 0 }, routes: { found: 0, files: 0 }, specs: { parsed: 0, files: 0 } };
   const gaps = c.routes.silent.length + c.specs.silent.length + (c.next?.silent.length ?? 0) + (c.trpc?.silent.length ?? 0);
-  const pct = (a: number, b: number) => (b ? Math.floor((a / b) * 100) : 100);
-  const line = `${c.calls.resolved}/${c.calls.total} calls · ${c.routes.found}/${c.routes.files} route files · ${c.specs.parsed}/${c.specs.files} task files`;
-  if (gaps) return { gaps, line };
-  return { gaps: 0, line };
+  return {
+    gaps,
+    unmapped: c.calls.silent?.length ?? 0,
+    calls: { resolved: c.calls.resolved, total: c.calls.total },
+    routes: { found: c.routes.found, files: c.routes.files },
+    specs: { parsed: c.specs.parsed, files: c.specs.files },
+  };
 }
 
 /** Blast radius text for a change record, precomputed so the page needs no logic. */

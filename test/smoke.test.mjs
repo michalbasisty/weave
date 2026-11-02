@@ -64,7 +64,8 @@ test('mcp handshake, tools and impact', async () => {
   assert.match(t, /GET \/api\/v1\/orders/);
   assert.match(t, /POST \/api\/v1\/orders/);
   assert.match(t, /\/orders \(exact\)/);
-  assert.match(t, /orders/);
+  // prisma.order in the module code must reach the table, not stop at the model.
+  assert.match(t, /tables\s+orders/);
 });
 
 test('context pack fits its token budget and names the tests', async () => {
@@ -225,9 +226,14 @@ test('explore --all bundles every indexed project', () => {
 
 test('doctor states recall and names a route file it could not parse', () => {
   const dyn = join(fixture, 'packages/backend/src/modules/orders/dynamic.routes.ts');
+  const doc = join(fixture, 'quoting-routes.md');
+  // Markdown that quotes a router call is not a route file and must not count as a gap.
+  writeFileSync(doc, "Example:\n\nrouter.get('/quoted', handler)\n");
   const clean = spawnSync(process.execPath, [cli, 'doctor', '--root', fixture], { encoding: 'utf8' });
+  rmSync(doc);
   assert.match(clean.stdout, /route files {3}1\/1 produced endpoints \(100%\)/);
   assert.match(clean.stdout, /task files {4}1\/1 parsed \(100%\)/);
+  assert.doesNotMatch(clean.stdout, /quoting-routes/);
 
   writeFileSync(
     dyn,
@@ -362,9 +368,14 @@ test('explore renders a self-contained page that parses', () => {
   rmSync(out);
   assert.match(html, /^<!doctype html>/);
   assert.match(html, /page:\/orders/);
+  // A module's Prisma use must arrive as a module-to-table edge the trace can draw.
+  assert.match(html, /"module:orders","table:orders","uses"/);
   assert.doesNotMatch(html, /undefined/);
   const js = html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>'));
   new Function(js); // syntax only: throws on a broken template
+  // Two functions of one name: the later one silently wins, and the earlier caller recurses into it.
+  const declared = [...js.matchAll(/function ([A-Za-z_$][\w$]*)/g)].map((m) => m[1]);
+  assert.deepEqual(declared.filter((n, i) => declared.indexOf(n) !== i), [], 'duplicate function declaration');
   assert.ok(html.length > 8000, `page too small: ${html.length}`);
 });
 

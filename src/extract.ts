@@ -179,7 +179,7 @@ export interface Model {
   fields: { name: string; type: string; relation: boolean }[];
 }
 
-export function extractModels(files: SourceFile[], b: Builder): Model[] {
+export function extractModels(files: SourceFile[], b: Builder, usedIn: SourceFile[] = files): Model[] {
   const out: Model[] = [];
   for (const f of files) {
     const known: string[] = [];
@@ -208,9 +208,10 @@ export function extractModels(files: SourceFile[], b: Builder): Model[] {
       out.push({ name, table, file: f.rel, line, fields });
     }
   }
-  // Which models each module touches (prisma.<model> or tx.<model>).
+  // Which models each module touches (prisma.<model> or tx.<model>). Read from the
+  // code that uses them, not from the schema file they are declared in.
   const modelByLower = new Map(out.map((m) => [m.name.toLowerCase(), m.name]));
-  for (const file of files) {
+  for (const file of usedIn) {
     const mod = moduleOf(file.rel);
     if (!mod) continue;
     for (const m of file.text.matchAll(/\b(?:prisma|tx|db)\.(\w+)\./g)) {

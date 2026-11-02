@@ -51,7 +51,7 @@ export function buildGraph(root: string): Graph {
   }
 
   const allEndpoints = [...endpoints, ...nextStats.endpoints, ...trpcStats.endpoints, ...apiStats.endpoints, ...customEndpoints];
-  extractModels(t.prisma, b);
+  extractModels(t.prisma, b, files);
   const pageInfo = extractPages(t.web, b);
   const pages = pageInfo.pages;
   const calls = extractCalls(files.filter((f) => /\.(t|j)sx?$/.test(f.rel) && !/\.(test|spec)\./.test(f.rel)));
@@ -158,9 +158,12 @@ function withCoverage(
   specFiles: SourceFile[],
   tasks: { change: string }[],
 ): Graph {
-  const isTest = (rel: string) => /\.(test|spec)\.[tj]sx?$/.test(rel) || /(^|\/)(__tests__|e2e)\//.test(rel);
+  const isTest = (rel: string) => /\.(test|spec)\.[mc]?[tj]sx?$/.test(rel) || /(^|\/)(__tests__|e2e)\//.test(rel);
+  // Same rule as extraction: only code can declare a route. Documentation quotes
+  // examples, and a .md file that "produced nothing" is not a coverage gap.
+  const isCode = (rel: string) => /\.(t|j)sx?$/.test(rel);
   // indexOf first: running the router regex against every file costs more than the walk.
-  const routeLike = files.filter((f) => !isTest(f.rel) && f.text.includes('router') && /router\.(get|post|put|patch|delete)\s*\(/.test(f.text));
+  const routeLike = files.filter((f) => isCode(f.rel) && !isTest(f.rel) && f.text.includes('router') && /router\.(get|post|put|patch|delete)\s*\(/.test(f.text));
   const withEndpoints = new Set(endpoints.map((e) => e.file));
   const silentRoutes = routeLike.filter((f) => !withEndpoints.has(f.rel)).map((f) => f.rel);
 

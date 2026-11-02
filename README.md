@@ -226,28 +226,36 @@ weave explore            # writes .weave/explore.html and opens it
 weave explore --all      # every registered project, one file, with a switcher
 ```
 
-One self-contained HTML file — 280 KB for a 745-file repo, 1.6 MB for three of them. No
+One self-contained HTML file — 44 KB for this repo, 832 KB for a 937-file one. No
 server, no network, no build. It is for people only: agents use the MCP server, never
 this page, so every choice here optimises for reading, not for parsing.
 
+The page teaches one line and then keeps every detail on it:
+
+```
+screen ──calls──▶ API endpoint ──handled in──▶ module ──uses──▶ table
+```
+
 | view | what you see |
 |---|---|
-| **Overview** | the landing screen: repo name, counts, one coverage line, what needs attention, changes in flight |
-| **Flows** | one card per page: its description, then `CALLS` and `READS` as labelled rows |
-| **Endpoints** | every endpoint, each tagged `tested` or `no test` |
-| **Pages** | every route, its component file, its description |
-| **Tables** | each table and which modules read it |
-| **Specs** | change records with progress, the next open task, and the blast radius |
-| **Risk** | the most depended-on nodes — where a change reaches furthest |
-| **Issues** | broken calls, endpoints without a test, pages without e2e, changed requirements |
+| **Summary** | the whole map in one sentence, a worked example of the line above, what the index could and could not read, problems as counts, test coverage, and changes in flight |
+| **Screens** | every route, the endpoints it calls and the tables it reaches, most connected first |
+| **API** | every endpoint, grouped under the module that handles it, with `tested` / `no test` |
+| **Data** | each table and the modules that read or write it |
+| **Changes** | change records in progress and done, with tasks, requirements and files |
+| **Problems** | calls that match no endpoint, endpoints and screens with no test, changed requirements |
 
-Select anything and the right pane shows its description, a one-line blast radius
-("connected to 3 endpoints, 1 test"), and its relations split into outbound and inbound.
+Open any item and the four-lane **trace** shows the same line around it: the screens
+that reach it, its endpoints, the module, and the tables — two hops either way. Below
+the trace: **Proved by** (tests), **Planned in** (change, tasks, requirements), and one
+**Reach** sentence ("a change here can reach 19 screens, 64 endpoints and 18 tests").
+Relations are written in words, never as graph vocabulary.
 
-Two controls next to the view switcher keep it usable on any screen: a **density**
-toggle (comfortable / compact) and **hide the list** to read a detail at full width.
-Both survive a reload. Click a file path to copy it. `/` focuses the filter, `↑`/`↓`
-walk the list, `Esc` clears.
+Navigation is six entries with a count and a one-line gloss; there are no duplicate
+tabs. Every node has a URL (`#node/…`), so back, forward and a pasted link work.
+Search is global and lives at the top of the rail. `/` focuses it, `↑`/`↓` walk the
+list, `Esc` clears it or clears the selection, and clicking a file path copies it.
+Light, dark and follow-the-system are one button.
 
 **Every node explains itself.** Descriptions are read from the source, not written twice:
 
@@ -258,13 +266,16 @@ walk the list, `Esc` clears.
 | table | the `///` or `//` comment above the Prisma model |
 | change | the first real sentence of its `proposal.md` |
 | requirement | its heading plus the requirement text |
-| task | its title, with done/open shown as a checkbox |
+| task | its title, open tasks first, done ones behind one fold |
 
-Clicking a change shows its requirements and its tasks with ticks, so the spec reads like
-a document rather than a list of slugs. 694 descriptions across three projects; 1.3 MB.
+Clicking a change opens its requirements and its tasks, so the spec reads like a
+document rather than a list of slugs.
 
 Files are in the graph only where a spec task names them as evidence — click a task,
-then a file, and you see which change owns it. `/` focuses search, `Esc` clears it.
+then a file, and you see which change owns it.
+
+The visual contract — tokens, type roles, scroll ownership, primitives, accepted debt —
+is in [`docs/explorer/DESIGN.md`](docs/explorer/DESIGN.md).
 
 No MCP support? Shell out to `context` — same output, same budget.
 
@@ -414,7 +425,7 @@ and a pattern that matches nothing shows up as a gap rather than silently doing 
 ## Test
 
 ```bash
-node --test test/smoke.test.mjs   # 14 tests, incl. a renamed route that must fail the gate
+node --test test/smoke.test.mjs   # 23 tests, incl. a renamed route that must fail the gate
 node test/bench.mjs <repo>        # cold / warm call latency and response size
 ```
 

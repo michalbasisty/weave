@@ -1,5 +1,8 @@
 # Design: what the research changed
 
+The explorer's visual contract lives separately, in
+[`explorer/DESIGN.md`](explorer/DESIGN.md); this file is about the product's research.
+
 Research question: what is the right shape for a tool that makes spec-driven work
 survive contact with a real codebase — universal across stacks, cheap enough that
 agents actually call it, and strict enough that "nothing breaks" is a check rather
