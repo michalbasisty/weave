@@ -22,25 +22,35 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Check node
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.22'
+        cache: false
+
+    - name: Build weave
       shell: bash
       run: |
-        node --version
-        node -e "const [a,b]=process.versions.node.split('.').map(Number);if(a<22||(a===22&&b<6)){console.error('weave needs Node >= 22.6');process.exit(1)}"
+        set -euo pipefail
+        bin="$RUNNER_TEMP/weave"
+        if [ "${RUNNER_OS:-}" = "Windows" ]; then bin="$bin.exe"; fi
+        (cd "$GITHUB_ACTION_PATH" && go build -trimpath -ldflags "-s -w" -o "$bin" ./cmd/weave)
+        printf 'WEAVE_BIN=%s\n' "$bin" >> "$GITHUB_ENV"
 
     - name: Index
       shell: bash
-      run: node "${{ github.action_path }}/src/cli.ts" index --root "${{ inputs.root }}"
+      run: '"$WEAVE_BIN" index --root "${{ inputs.root }}"'
 
     - name: Check
       shell: bash
       run: |
-        node "${{ github.action_path }}/src/cli.ts" check --root "${{ inputs.root }}" --against "${{ inputs.against }}"
-        if [ "${{ inputs.strict-tests }}" = "true" ]; then
-          node "${{ github.action_path }}/src/cli.ts" check --root "${{ inputs.root }}" --against "${{ inputs.against }}" --strict-tests
-        fi
+        set -euo pipefail
+        args=(check --root "${{ inputs.root }}")
+        if [ -n "${{ inputs.against }}" ]; then args+=(--against "${{ inputs.against }}"); fi
+        if [ "${{ inputs.strict-tests }}" = "true" ]; then args+=(--strict-tests); fi
+        "$WEAVE_BIN" "${args[@]}"
 
     - name: Coverage
       if: always()
       shell: bash
-      run: node "${{ github.action_path }}/src/cli.ts" doctor --root "${{ inputs.root }}"
+      run: '"$WEAVE_BIN" doctor --root "${{ inputs.root }}"'

@@ -1,0 +1,441 @@
+package weave
+
+import (
+	"math"
+	"regexp"
+	"runtime"
+	"strings"
+
+	"github.com/michalbasisty/weave/internal/jsstr"
+	"github.com/michalbasisty/weave/internal/perf"
+)
+
+// phasesOf is the timer's laps in the order they ran.
+func phasesOf(t *perf.Timer) Phases {
+	out := Phases{}
+	for _, name := range t.PhaseOrder() {
+		out.Set(name, t.Phases()[name])
+	}
+	return out
+}
+
+var (
+	reReqMarker  = jsRe(`@req\s+((?:REQ|FR|NFR)-[A-Z0-9]+(?:-[A-Z0-9]+)*)`)
+	reTestOrSpec = regexp.MustCompile(`\.(test|spec)\.`)
+)
+
+// BuildGraph walks root and builds the whole graph, in the TypeScript's
+// node and edge insertion order.
+func BuildGraph(root string) *Graph {
+	tm := perf.NewTimer()
+	files := Walk(root)
+	tm.Lap("walk")
+	known := knownSet(files)
+	t := Classify(files)
+	b := NewBuilder()
+
+	for i := range files {
+		b.Node(fileNode(files[i].Rel))
+	}
+
+	// file -> file imports: the only way a change to a shared util can be traced back.
+	for _, e := range BuildImportMap(files, known).List {
+		for _, to := range e.Targets {
+			b.Edge(FileID(e.From), FileID(to), "imports")
+		}
+	}
+
+	endpoints := ExtractEndpoints(files, b)
+	nextStats := ExtractNextRoutes(files, b)
+	trpcStats := ExtractTRPC(files, b)
+	apiStats := ExtractOpenAPI(files, b)
+
+	// Patterns from .weave/patterns.json: the escape hatch for a team's own wrapper.
+	pat := CompilePatterns(LoadPatterns(root))
+	customRoutes := PatternRoutes(files, pat)
+	var customEndpoints []Endpoint
+	for _, r := range customRoutes {
+		path := reMultiSlash.ReplaceAllString(r.Path, "/")
+		eid := EndpointID(r.Method, path)
+		b.Node(&GNode{ID: eid, Kind: KindEndpoint, Name: r.Method + " " + path, File: Ptr(r.File), Line: Ptr(r.Line), Meta: strMeta("module", "api", "desc", "custom pattern", "framework", "pattern")})
+		b.Edge(eid, FileID(r.File), "defined_in")
+		customEndpoints = append(customEndpoints, Endpoint{r.Method, path, r.File, r.Line, "api", eid})
+	}
+
+	var allEndpoints []Endpoint
+	for _, list := range [][]Endpoint{endpoints, nextStats.Endpoints, trpcStats.Endpoints, apiStats.Endpoints, customEndpoints} {
+		allEndpoints = append(allEndpoints, list...)
+	}
+	ExtractModels(t.Prisma, b, files)
+	pageInfo := ExtractPages(t.Web, b, files)
+	pages := pageInfo.Pages
+	var callFiles []SourceFile
+	for i := range files {
+		if isCode(files[i].Rel) && !reTestOrSpec.MatchString(files[i].Rel) {
+			callFiles = append(callFiles, files[i])
+		}
+	}
+	calls := ExtractCalls(callFiles)
+	for _, c := range PatternCalls(files, pat) {
+		calls = append(calls, Call{c.Method, c.Path, c.File, c.Line, strings.Contains(c.Path, "${")})
+	}
+	tm.Lap("extract")
+
+	// MatchEndpoint is pure: resolve each call once for both passes below.
+	matched := make([]*Endpoint, len(calls))
+	for i := range calls {
+		matched[i] = MatchEndpoint(calls[i], allEndpoints)
+	}
+
+	// page -> endpoint, through the component import graph
+	imp := BuildImportMap(t.Web, known)
+	for _, p := range pages {
+		if p.File == "" {
+			continue
+		}
+		scope := Reachable(p.File, imp, 80)
+		for i, c := range calls {
+			if !scope[c.File] {
+				continue
+			}
+			e := matched[i]
+			if e == nil {
+				continue
+			}
+			conf := ConfInferred
+			if c.File == p.File && !c.Dynamic {
+				conf = ConfExact
+			}
+			b.EdgeConf(PageID(p.Route), e.ID, "calls", conf)
+		}
+	}
+
+	// Any call site with no page in scope still belongs to its file. A call that
+	// matches no endpoint is a broken contract: keep it, never drop it — unless its
+	// path starts with a variable, which is unknowable rather than broken.
+	dynamicCalls := 0
+	lineCache := make(map[string][]string, len(files))
+	for i := range files {
+		lineCache[files[i].Rel] = files[i].Lines
+	}
+	for i, c := range calls {
+		if strings.HasPrefix(jsstr.TrimStart(c.Path), "${") {
+			dynamicCalls++
+			continue
+		}
+		// A fetch of the app root (`/?t=…`) is a page load, not a contract.
+		bare := c.Path
+		if q := strings.IndexByte(bare, '?'); q >= 0 {
+			bare = bare[:q]
+		}
+		if strings.TrimLeft(bare, "/") == "" {
+			continue
+		}
+		conf := ConfExact
+		if c.Dynamic {
+			conf = ConfInferred
+		}
+		if e := matched[i]; e != nil {
+			b.EdgeConf(FileID(c.File), e.ID, "calls", conf)
+			continue
+		}
+		// A call site may be marked as known-broken debt instead of blocking a merge.
+		if lines, ok := lineCache[c.File]; ok && c.Line-1 >= 0 && c.Line-1 < len(lines) && strings.Contains(lines[c.Line-1], "weave-ignore") {
+			continue
+		}
+		callID := CallID(c.Method, c.Path)
+		b.Node(&GNode{ID: callID, Kind: KindCall, Name: c.Method + " " + c.Path, File: Ptr(c.File), Line: Ptr(c.Line)})
+		b.EdgeConf(FileID(c.File), callID, "calls_missing", conf)
+	}
+
+	// A requirement named in the code is an exact edge — the one traceability
+	// mechanism that survives renames, unlike a file path in a spec. Markers inside a
+	// template literal are documentation that quotes the syntax, not an implementation.
+	for i := range files {
+		f := &files[i]
+		if !strings.Contains(f.Text, "@req") {
+			continue
+		}
+		for _, m := range reReqMarker.FindAllStringSubmatchIndex(f.Text, -1) {
+			if inTemplate(f.Text, m[0]) {
+				continue
+			}
+			b.Edge(FileID(f.Rel), ReqID(f.Text[m[2]:m[3]]), "implements")
+		}
+	}
+
+	extractTests(files, allEndpoints, pages, b)
+	_, tasks := ExtractSpecs(t.Specs, b)
+	tm.Lap("specs")
+	// task evidence -> files (memoised: the same paths repeat across hundreds of tasks,
+	// and the directory fallback scans every known file)
+	evCache := map[string]string{}
+	dirs := DirIndex(files)
+	for _, task := range tasks {
+		tid := TaskID(task.Change + "/" + task.ID)
+		for _, ev := range task.Evidence {
+			file, ok := evCache[ev]
+			if !ok {
+				file = ResolveEvidence(ev, known, dirs)
+				evCache[ev] = file
+			}
+			if file == "" {
+				continue
+			}
+			if strings.HasSuffix(file, "/") {
+				for k := range files {
+					if strings.HasPrefix(files[k].Rel, file) {
+						b.EdgeConf(tid, FileID(files[k].Rel), "touches", ConfInferred)
+					}
+				}
+			} else {
+				b.Edge(tid, FileID(file), "touches")
+			}
+		}
+	}
+
+	tm.Lap("evidence")
+	g := withCoverage(b.Finish(root, len(files)), files, allEndpoints, calls, dynamicCalls, pageInfo, nextStats, trpcStats, apiStats, len(customRoutes), t.Specs, tasks)
+	tm.Lap("coverage")
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+	g.Perf = &Perf{TotalMs: tm.Total(), Phases: phasesOf(tm), HeapMb: math.Floor(float64(ms.HeapAlloc)/1048576 + 0.5)}
+	return g
+}
+
+// inTemplate: a marker inside an unterminated template literal is prose quoting the syntax.
+func inTemplate(text string, at int) bool {
+	open := false
+	for i := 0; i < at; i++ {
+		switch text[i] {
+		case '\\':
+			i++
+		case '`':
+			open = !open
+		}
+	}
+	return open
+}
+
+var (
+	reCovTestName = regexp.MustCompile(`\.(test|spec)\.[mc]?[tj]sx?$`)
+	reCovTestDir  = regexp.MustCompile(`(^|/)(__tests__|e2e)/`)
+	reGenerated   = regexp.MustCompile(`/(generated|__generated__|dist|build)/`)
+)
+
+func first12(s []string) []string {
+	if len(s) > 12 {
+		s = s[:12]
+	}
+	return append([]string{}, s...)
+}
+
+// withCoverage records what the extractors actually covered. Precision is easy to
+// claim; recall is the number that decides whether an answer can be trusted, so it
+// is measured and shown.
+func withCoverage(g *Graph, files []SourceFile, endpoints []Endpoint, calls []Call, dynamicCalls int, pages PageInfo, nextStats, trpcStats, apiStats ExtractStats, patternRoutes int, specFiles []SourceFile, tasks []*Task) *Graph {
+	isTest := func(rel string) bool { return reCovTestName.MatchString(rel) || reCovTestDir.MatchString(rel) }
+	// Same rule as extraction: only code can declare a route. Documentation quotes
+	// examples, and a .md file that "produced nothing" is not a coverage gap.
+	withEndpoints := map[string]bool{}
+	for _, e := range endpoints {
+		withEndpoints[e.File] = true
+	}
+	routeLike := 0
+	silentRoutes := []string{}
+	for i := range files {
+		f := &files[i]
+		// indexOf first: running the router regex against every file costs more than the walk.
+		if isCode(f.Rel) && !isTest(f.Rel) && strings.Contains(f.Text, "router") && reRouterAny.MatchString(f.Text) {
+			routeLike++
+			if !withEndpoints[f.Rel] {
+				silentRoutes = append(silentRoutes, f.Rel)
+			}
+		}
+	}
+
+	orphan, models, tables := 0, 0, 0
+	for _, n := range g.Nodes {
+		switch n.Kind {
+		case KindCall:
+			orphan++
+		case KindModel:
+			models++
+		case KindTable:
+			tables++
+		}
+	}
+
+	// A file that calls an API in a way none of our patterns recognise is the one
+	// gap we cannot see from the nodes: measure it from the source instead.
+	// Patterns are call-shaped on purpose — a bare word like `got` matches prose.
+	callFiles := map[string]bool{}
+	for _, c := range calls {
+		callFiles[c.File] = true
+	}
+	silentCalls := []string{}
+	for i := range files {
+		f := &files[i]
+		if !isTest(f.Rel) && isCode(f.Rel) && !reGenerated.MatchString(f.Rel) && !callFiles[f.Rel] && callish(f.Text) {
+			silentCalls = append(silentCalls, f.Rel)
+		}
+	}
+
+	var taskFiles []*SourceFile
+	for i := range specFiles {
+		if reTasksFile.MatchString(specFiles[i].Rel) && !reTemplates.MatchString(specFiles[i].Rel) {
+			taskFiles = append(taskFiles, &specFiles[i])
+		}
+	}
+	parsed := map[string]bool{}
+	for _, t := range tasks {
+		parsed[t.Change] = true
+	}
+	silentSpecs := []string{}
+	for _, f := range taskFiles {
+		parts := strings.Split(f.Rel, "/")
+		if !parsed[parts[len(parts)-2]] {
+			silentSpecs = append(silentSpecs, f.Rel)
+		}
+	}
+
+	total := len(calls) - dynamicCalls
+	g.Coverage = &Coverage{
+		Routes:   FileStats{Files: routeLike, Found: routeLike - len(silentRoutes), Silent: first12(silentRoutes)},
+		Calls:    CallStats{Total: total, Resolved: total - orphan, Dynamic: Ptr(dynamicCalls), Silent: first12(silentCalls)},
+		Pages:    PageStats{Declared: pages.Declared, Mapped: pages.Declared - len(pages.Skipped), Skipped: len(pages.Skipped)},
+		Specs:    SpecStats{Files: len(taskFiles), Parsed: len(parsed), Silent: silentSpecs},
+		Prisma:   PrismaStats{Models: models, Tables: tables},
+		Next:     &FileStats{Files: nextStats.Files, Found: nextStats.Found, Silent: first12(nextStats.Silent)},
+		Trpc:     &FileStats{Files: trpcStats.Files, Found: trpcStats.Found, Silent: first12(trpcStats.Silent)},
+		OpenAPI:  &FileStats{Files: apiStats.Files, Found: apiStats.Found, Silent: first12(apiStats.Silent)},
+		Patterns: Ptr(patternRoutes),
+	}
+	return g
+}
+
+var (
+	reTestHome   = regexp.MustCompile(`__tests__|tests?$|e2e`)
+	reAPILiteral = jsRe("['\"`](\\/api\\/[^'\"`$]+)['\"`]")
+	reClientCall = jsRe("\\.(get|post|put|patch|delete)\\s*\\(\\s*[`'\"]([^`'\"\\n]+)[`'\"]")
+	reGoto       = jsRe(`(?:page\.goto|goto|visit)\s*\(([^)]*)\)`)
+	reGotoPath   = jsRe("['\"`](\\/[^'\"`$]*)['\"`]")
+	reUpper      = regexp.MustCompile(`[A-Z]`)
+)
+
+func extractTests(files []SourceFile, endpoints []Endpoint, pages []Page, b *Builder) {
+	for i := range files {
+		f := &files[i]
+		if !reTestName.MatchString(f.Rel) { // isTest(rel) && the name rule: the name rule implies isTest
+			continue
+		}
+		tid := TestID(f.Rel)
+		b.Node(&GNode{ID: tid, Kind: KindTest, Name: f.Rel, File: Ptr(f.Rel)})
+
+		for _, id := range reqIDs(f.Text, false) {
+			b.Edge(tid, ReqID(id), "asserts")
+		}
+		if strings.Contains(f.Text, "@req") {
+			for _, m := range reReqMarker.FindAllStringSubmatch(f.Text, -1) {
+				b.Edge(tid, ReqID(m[1]), "verifies")
+			}
+		}
+
+		if mod := testModule(f.Rel); mod != "" {
+			b.Edge(tid, ModuleID(mod), "covers")
+		}
+		if reTestHome.MatchString(DirOf(f.Rel)) {
+			b.Edge(tid, FileID(f.Rel), "in")
+		}
+
+		// literal API paths referenced by the test
+		for _, m := range reAPILiteral.FindAllStringSubmatch(f.Text, -1) {
+			for _, method := range []string{"GET", "POST", "PUT", "PATCH", "DELETE"} {
+				if e := MatchEndpoint(Call{method, m[1], f.Rel, 0, false}, endpoints); e != nil {
+					b.Edge(tid, e.ID, "hits")
+				}
+			}
+		}
+		// client calls relative to the API base: admin.get('/machines?limit=1'), tech.get(`/tasks/${id}`)
+		for _, m := range reClientCall.FindAllStringSubmatch(f.Text, -1) {
+			dynamic := strings.Contains(m[2], "${")
+			path := m[2]
+			if dynamic {
+				path = reTemplateExpr.ReplaceAllString(path, "*")
+			}
+			if e := MatchEndpoint(Call{strings.ToUpper(m[1]), path, f.Rel, 0, dynamic}, endpoints); e != nil {
+				conf := ConfExact
+				if dynamic {
+					conf = ConfInferred
+				}
+				b.EdgeConf(tid, e.ID, "hits", conf)
+			}
+		}
+		// e2e navigation: page.goto(BASE + '/tasks')
+		for _, line := range f.Lines {
+			m := reGoto.FindStringSubmatch(line)
+			if m == nil {
+				continue
+			}
+			q := reGotoPath.FindStringSubmatch(m[1])
+			if q == nil {
+				continue
+			}
+			if p := matchPage(q[1], pages); p != nil {
+				b.Edge(tid, PageID(p.Route), "exercises")
+			}
+		}
+	}
+}
+
+func testModule(rel string) string {
+	if m := reModuleOfDir.FindStringSubmatch(rel); m != nil {
+		return m[1]
+	}
+	name := reTestName.ReplaceAllString(BaseName(rel), "")
+	first := strings.Split(name, ".")[0]
+	if first == "" || first == "index" {
+		return ""
+	}
+	if loc := reUpper.FindStringIndex(first); loc != nil {
+		first = first[:loc[0]] + strings.ToLower(first[loc[0]:loc[1]]) + first[loc[1]:]
+	}
+	return first
+}
+
+func matchPage(path string, pages []Page) *Page {
+	p := path
+	if i := strings.IndexByte(p, '?'); i >= 0 {
+		p = p[:i]
+	}
+	p = strings.TrimSuffix(p, "/")
+	if p == "" {
+		p = "/"
+	}
+	want := segments(p)
+	var best *Page
+	bestLiteral := -1
+	for i := range pages {
+		have := segments(pages[i].Route)
+		if len(have) != len(want) {
+			continue
+		}
+		literal := 0
+		ok := true
+		for k := range have {
+			if strings.HasPrefix(have[k], ":") {
+				continue
+			}
+			if have[k] != want[k] {
+				ok = false
+				break
+			}
+			literal++
+		}
+		if ok && literal > bestLiteral {
+			bestLiteral = literal
+			best = &pages[i]
+		}
+	}
+	return best
+}

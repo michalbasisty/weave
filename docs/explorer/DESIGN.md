@@ -1,7 +1,8 @@
 # Explorer: design contract
 
-Scope: the single page `weave explore` writes, rendered by `src/render.ts`. It is for
-people; agents use the MCP server. One HTML file, no framework, no build, no network.
+Scope: the single page `weave explore` writes, rendered by `internal/weave/render.go`
+(CSS and JS embedded from `internal/weave/assets/`). It is for people; agents use the
+MCP server. One HTML file, no framework, no build, no network.
 
 ## 0. Research log
 
@@ -11,8 +12,9 @@ people; agents use the MCP server. One HTML file, no framework, no build, no net
   Read `redesign-skill.md`, `layout-skill.md`, `perfection/README.md`.
 - **No Layer B brand**: the brief named no brand and explicitly rejected the generic
   Next/shadcn dashboard look, so type and colour below are set by role, not borrowed.
-- **Evidence**: an Opus 5.5 review of `src/render.ts` and the 937-file QR-gent render,
-  a 375 px baseline, and screenshots of every view before and after.
+- **Evidence**: an Opus 5.5 review of the renderer (then `src/render.ts`, now
+  `internal/weave/render.go`) and the 937-file QR-gent render, a 375 px baseline, and
+  screenshots of every view before and after.
 
 ## 1. Direction
 
@@ -84,8 +86,9 @@ No `box-shadow` anywhere.
 | **section** | "Proved by" (tests), "Planned in" (change, tasks, requirements), "Reach" (one sentence), plain relation groups |
 | **problem group** | neutral; only `kind === 'error'` takes red |
 
-Relations never use edge names. The vocabulary is fixed in `SAY` in `src/render.ts`
-(for example `calls` → "Calls these endpoints" / "Called from these screens",
+Relations never use edge names. The vocabulary is fixed in `SAY` in
+`internal/weave/assets/explorer.js` (for example `calls` → "Calls these endpoints" /
+"Called from these screens",
 `uses` → "Uses tables" / "Used by modules", `in_module` → "Handled in module").
 
 ## 5. Navigation

@@ -1,5 +1,2 @@
-node_modules/
 .weave/
-test/fixture/.weave/
-preview.html
-test/shots/
+/bin/

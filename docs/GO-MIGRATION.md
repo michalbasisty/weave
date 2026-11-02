@@ -1,10 +1,30 @@
 # Go migration: plan and Phase 0 evidence
 
-Status: **Phase 0 complete.** Decision: **GO**, with one revised assumption — the hot
-extractors must be hand scanners, not ported regexes.
+Status: **complete.** Phases 0–6 landed and the TypeScript implementation was removed at
+cutover. The Go binary is the product: same CLI, same MCP schemas, same explorer bytes.
 
-The TypeScript implementation stays the shipped default until the parity gates pass.
-Nothing here is a rewrite commitment; it is the measured basis for one.
+This file records how the port was measured and gated. It is history, not a plan.
+
+## Progress (2026-11-02)
+
+- **Phase 1 done**: `jsjson`, `jsstr`, model, scan, store. Both existing graphs re-encode
+  byte-identically, including through the typed model.
+- **Phase 2 done**: extractors, build, reindex, and `weave index` in Go. **G1 passed
+  strict** — same bytes as TypeScript on `test/fixture` and on QR-gent (937 files,
+  2,513 nodes, 5,694 edges), no `--unordered`.
+- Warm index on QR-gent: **Go 278 ms, Node 780 ms**; extraction alone 92 ms vs 205 ms.
+  A freshly copied tree on Windows costs ~3.9 s on the first Go run and 0.28 s on the
+  next, while Node stays at ~0.78 s. That is Windows process-reputation/AV scanning of
+  a new unsigned binary, not a walk regression; confirm on a fresh copy before treating
+  it as one. Linux CI does not show it.
+- Helper packages ported: `perf`, `registry`, `junit`, `runners`.
+- **Phase 3 done**: `query`/`memory`, CLI wiring, `check`, `init`, `ask`, and the
+  feature packages (`grep`, `usage`, `delta`, `baseline`).
+- **Phases 4–6 done**: MCP server and schema goldens, explorer renderer
+  (47,388 bytes identical), Go action, release workflow, three-OS CI.
+- **Cutover**: `src/` and the Node tooling were deleted; the Go suite now holds the
+  goldens (build graph, MCP schemas, explorer HTML) and an integration suite that
+  drives the real binary. No Node at runtime or in tests.
 
 ## Gates
 
@@ -16,12 +36,12 @@ Nothing here is a rewrite commitment; it is the measured basis for one.
 | 3 | CLI (`query`, `check`, `init`, `perf`, `evidence`) | **G2** byte-equal stdout, equal exit codes, cross-read graphs |
 | 4 | MCP + `ask` | **G3** transcript and `tools/list` goldens byte-equal |
 | 5 | Explorer | **G4** `explore.html` byte-identical from the same graph |
-| 6 | CI, perf, distribution, cutover | **G5** 23 tests on three OSes, targets met, two weeks dogfooding |
+| 6 | CI, perf, distribution, cutover | **G5** Go suite green on three OSes; targets met; cutover |
 
-Parity harness: `node test/parity/run.mjs` runs one implementation twice and diffs
-graph JSON, twelve CLI commands, an MCP transcript and the explorer HTML. Timing,
-dates, heap and file sizes are masked; `perf` column padding is normalized because
-it follows the real timings. At cutover, `--a "node src/cli.ts" --b "bin/weave"`.
+Parity was proven by a Node harness (removed at cutover) that ran one implementation
+twice and diffed graph JSON, fifteen CLI commands, an MCP transcript and the explorer
+HTML, with timing, dates, heap and file sizes masked. It was then run with
+`--a "node src/cli.ts" --b "bin/weave"` until both sides matched.
 
 ## Findings
 
@@ -84,37 +104,54 @@ Consequences for the plan:
 - Kill criterion (“Go extraction > 2× slower even with prefilters”) is **not**
   triggered once scanners are the strategy.
 
-### 4. Harness
+### 4. Harness (removed at cutover)
 
-`node test/parity/run.mjs` is clean in ~4.7 s: graph, twelve CLI commands (including
-`check` and `perf`), a five-request MCP transcript, and the explorer HTML. It proves
-the masks and determinism before any Go exists; the only mask that needed a
-correction was `perf`'s timing-dependent column padding and the trend percentage.
+`node test/parity/run.mjs` proved byte parity on the graph, fifteen CLI commands, the
+MCP transcript and the explorer HTML. It required both implementations, so it was
+deleted with the TypeScript one. The same contracts now live in Go tests:
 
-## Revised cost and next step
+- `internal/weave` — fixture graph golden, explorer HTML golden, model round-trip;
+- `internal/mcp` — `tools/list`/`initialize` goldens for four modes, transcript tests;
+- `test/integration` — the real binary on the fixture: index, context (names and code),
+  impact, search, grep, notes, delta, `check` failing on a renamed route, explore, MCP,
+  gain, init.
 
-~28 person-days (range 22–32), up from 26, because of the scanners. Phases, layout,
-distribution, cutover and rollback are unchanged from the plan reviewed with Opus 5.5:
+## Cost and cutover
 
-- one Go package whose files mirror the TS files; `cmd/weave` for the CLI;
+~31 person-days (range 24–35), up from 26: the scanners added two, and the five
+features had to ship before the parity oracle went away. Phases, layout, distribution
+and cutover followed the plan reviewed with Opus 5.5:
+
+- one Go package whose files mirror the former TS files; `cmd/weave` for the CLI;
 - `go:embed` + concatenation for the explorer, CSS/JS extracted as shared assets;
-- stdlib MCP (~350 lines), byte-identical tool schemas and error shapes;
-- GitHub release binaries + `go install`, no npm wrapper, a shim for existing
-  `node …/src/cli.ts` MCP entries that never looks up `weave` on PATH;
-- the five unbuilt LeanCTX features are written in Go after G5, never in TS.
+- stdlib MCP, byte-identical tool schemas and error shapes;
+- GitHub release binaries + `go install`, no npm wrapper; existing
+  `node …/src/cli.ts` MCP entries are replaced by running `weave init` again (no shim
+  was shipped; the old path no longer exists);
+- the five LeanCTX-style features shipped before cutover and were ported with the rest.
 
-Phase 1 starts with `internal/jsstr` (locale oracle, UTF-16 length/slice) and
-`internal/jsjson` (ordered objects, escaping, number formatting), then model, scan
-and store — the pieces that make a byte-identical `graph.json` possible.
+### Feature parity additions
 
-## Running Phase 0
+The port preserved the new surface:
+
+| feature | CLI | MCP | persisted |
+|---|---|---|---|
+| delta | `weave delta [ref]`, `--from`, `--all` | `changed` | none (git worktree or a saved graph) |
+| text search | `weave grep`, `--regex`, `--limit` | `search(text:true)` | none |
+| notes | `remember`, `recall`, `memory` | `remember`, `recall` | `.weave/memory.jsonl` |
+| cost | `gain --since` | receipt on every answer | `.weave/usage.jsonl` |
+| code depth | `context --depth code` | `context(depth:"code")` | none (reads at answer time) |
+
+The shipped layout: `internal/jsstr` (locale oracle, UTF-16 length/slice) and
+`internal/jsjson` (ordered objects, escaping, number formatting) underpin the model,
+scan, store, extractors and renderer; `cmd/weave` is the CLI and MCP host.
+
+## Running the suite
 
 ```bash
-node test/parity/run.mjs                 # self-parity, fixture corpus
-node test/parity/spikes/spike-readdir.mjs
-node test/parity/spikes/spike-locale.mjs
-node test/parity/spikes/spike-regex.mjs  # Go regex vs Node, prefilters
-go run test/parity/spikes/spike-scan.go G:/projekty/QR-gent
+go test ./...
+go test ./test/integration -v   # builds and drives the real binary
 ```
 
-Requires Go 1.26 (installed) and Node 22.6+.
+The Phase 0 spikes and the TypeScript parity harness were removed at cutover; their
+findings are in this file and in git history.

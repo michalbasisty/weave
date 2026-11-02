@@ -48,21 +48,36 @@ the honest boundary of every answer weave gives.
 An index is rebuilt whenever a source file **or weave itself** changed, so an answer is
 never from yesterday.
 
-Zero dependencies, zero build step, one JSON file. Node 22.6+ runs the TypeScript directly.
+Zero dependencies, one static binary, one JSON file. No Node, no Python, no daemon.
+
+## Install
+
+```bash
+# Go is only needed to build
+go install github.com/michalbasisty/weave/cmd/weave@latest
+
+# or download a release binary (linux, macOS, Windows; amd64 and arm64)
+#   https://github.com/michalbasisty/weave/releases
+
+# or from a checkout
+go build -o weave ./cmd/weave
+```
+
+Go 1.22+ to build. The resulting binary has no runtime dependencies.
 
 ## Quick start
 
 ```bash
-cd /path/to/weave && npm link     # once: gives you the `weave` command
 cd /path/to/your/project
 
-weave                # what is this repo, and what can I do
-weave explore        # the map, in your browser
-weave init           # connect Claude, Cursor, opencode, Codex
+weave            # what is this repo, and what can I do
+weave init       # connect Claude, Cursor, VS Code, opencode
+weave explore    # the map, in your browser
+weave check      # what a change breaks (exit 1)
 ```
 
-`weave` finds the project root by walking up from wherever you are, so it works from any
-subdirectory. `--root` exists only for when that guess is wrong.
+`weave` finds the project root by walking up from wherever you are, so it works from
+any subdirectory. `--root` exists only for when that guess is wrong.
 
 ## Several projects
 
@@ -75,7 +90,6 @@ weave projects
 ```
 name           size                                path
 QR-gent         745 files · 196 ep ·  87 changes    G:\QR-gent
-QR-gent-print   880 files · 242 ep · 105 changes    G:\QR-gent-print
 weave            25 files ·   5 ep ·  1 changes    G:\projekty\weave
 ```
 
@@ -83,17 +97,17 @@ Then work on any of them from anywhere — no `cd`, no paths:
 
 ```bash
 weave --project qrgent plan 2026-10-19-ui-restyle
-weave --project print explore
+weave --project weave explore
 ```
 
-Names match loosely (`qrgent`, `QR-gent` and `qr-gent` are the same), a unique fragment is
-enough (`print`), and an ambiguous one is refused with the candidates listed. `weave
-forget <name>` drops one.
+Names match loosely (`qrgent`, `QR-gent` and `qr-gent` are the same), a unique fragment
+is enough (`print`), and an ambiguous one is refused with the candidates listed.
+`weave forget <name>` drops one.
 
 **One MCP entry for all of them:**
 
 ```bash
-claude mcp add weave -- node /abs/path/weave/src/cli.ts mcp --all
+claude mcp add weave -- /abs/path/weave mcp --all
 ```
 
 Every tool then takes an optional `project` argument. Without `--all` the schema stays
@@ -101,7 +115,8 @@ lean and the server answers for the repo it was started in.
 
 ## Connect an agent, once
 
-Writes MCP configs for every client it can, without touching files that exist:
+`weave init` writes MCP configs for every client it can, without touching files that
+exist:
 
 | client | file |
 |---|---|
@@ -110,30 +125,38 @@ Writes MCP configs for every client it can, without touching files that exist:
 | VS Code / Copilot | `.vscode/mcp.json` |
 | opencode | `opencode.json` (merged) |
 
-It also appends `.weave/` to `.gitignore` and prints the `claude mcp add` line plus an `AGENTS.md` snippet for agents that read instructions instead of MCP.
+It also appends `.weave/` to `.gitignore` and prints the `claude mcp add` line plus an
+`AGENTS.md` snippet for agents that read instructions instead of MCP.
 
 Manual, if you prefer:
 
 ```bash
-claude mcp add weave -- node /abs/path/weave/src/cli.ts mcp --root .
+claude mcp add weave -- /abs/path/weave mcp --root .
 ```
 
-The absolute node path is deliberate: an MCP client spawns the server with its own `PATH`,
-and `weave` is not guaranteed to be on it.
+The absolute binary path is deliberate: an MCP client spawns the server with its own
+`PATH`, and `weave` is not guaranteed to be on it.
 
 ## Tools
 
 | tool | what it returns | size |
 |---|---|---|
-| **`context(files)`** | the pack to read *before* editing: page, module, endpoints with `file:line`, tables, owning spec change, open tasks, linked requirements, tests **and the command to run them**, broken call sites. `budget` caps it (default 350 tokens). | ~350 tokens |
+| **`context(files)`** | the pack to read *before* editing: page, module, endpoints with `file:line`, tables, owning spec change, open tasks, linked requirements, tests **and the command to run them**, broken call sites. `budget` caps it (default 350 tokens). `depth: "code"` adds up to three 15-line windows at the anchors, opt-in. | ~350 tokens |
 | `impact(files)` | the complete blast radius: every module, endpoint, table, page, test, requirement, importers of the file, and endpoints no test covers. | ~500 tokens |
-| `search(query)` | endpoints, pages, modules, tables, requirements, tests by name. One line each, never file contents. | ~150 tokens |
+| `search(query)` | endpoints, pages, modules, tables, requirements, tests by name. One line each. `text: true` scans source lines instead, graph files first. | ~150 tokens |
+| `remember(files, note)` | keep a short note for the next session: a decision, a gotcha. `context` returns it, labelled as a note, never as evidence. | ~20 tokens |
+| `recall(files)` | notes previously kept for these files, newest first. | ~60 tokens |
+| `changed(ref)` | what the graph gained or lost since a git ref (default HEAD) or a saved graph: added/removed/moved endpoints, pages, tables, modules, requirements; a removed endpoint still called by the base is named with its caller count. | ~100 tokens |
 | `changes(slug)` | a spec change record: tasks, open tasks, files they touch, and the blast radius of those files. With no slug: the newest 25 records with progress. | ~400 tokens |
 | **`plan(slug)`** | the next unfinished task: its files, endpoints, tables, tests and the run command. Call this instead of reading `tasks.md`. | ~150 tokens |
 | **`ask(question)`** | a cheap model answers from the graph in ≤5 lines and names the facts it used. For questions that need reasoning, not retrieval. | ~200 tokens |
 | `status()` | graph health: counts, endpoints no page calls, endpoints no test covers, pages without e2e, phase timings, and this server's own call latency. | ~250 tokens |
 
-The server rebuilds a stale index (older than 15 s) before answering, so the map follows the agent's edits.
+Every tool answer ends with a receipt: the tokens it cost, the age of the graph and the
+coverage it was built from. `weave gain` turns those lines into a ledger.
+
+The server rebuilds a stale index before answering, so the map follows the agent's
+edits; a burst of calls within 1.5 s reuses the in-memory graph.
 
 `context` answers "I know the file, what is it?" · `plan` answers "I know the spec, what
 do I do next?" · `impact` answers "I know the change, what else breaks?"
@@ -143,11 +166,17 @@ do I do next?" · `impact` answers "I know the change, what else breaks?"
 ```bash
 weave                      # status, and what to do next
 weave explore              # the map, in your browser
-weave context <file...>    # --budget 250
+weave context <file...>    # --budget 250; --depth code for a window at each anchor
 weave impact  <file...>
 weave plan    <change> [T3]
 weave change  [slug]
 weave search  <query>
+weave grep    <text>       # --regex, --limit; graph files rank first
+weave delta   [ref]        # what the graph gained or lost (--from graph.json)
+weave remember --note "…" <file...>
+weave recall  [file...]
+weave memory               # all notes (--clear)
+weave gain    [--since N]  # tokens served over the last N days
 weave check   [file...]    # no args = git diff; exit 1 on a broken contract
 weave evidence [REQ...]
 weave doctor
@@ -157,68 +186,6 @@ weave mcp
 weave --help
 ```
 
-## Performance
-
-Every index run appends a line to `.weave/perf.jsonl`: total, per-phase timings, node
-and edge counts, heap. `weave perf` prints the last eight runs with the trend, and
-`--runs 3` indexes three times to separate cold from warm cost.
-
-```
-last 8 index run(s)
-when                  files  nodes  edges    total     walk  extract    specs  evidence  coverage
-2026-11-02 14:28:58     745   2048   4203  1302.1ms  529.7ms  248.2ms   85.3ms         0   438.9ms
-2026-11-02 14:33:21     745   2048   4203   628.2ms  356.8ms  197.9ms   60.5ms     4.9ms       8ms
-avg 1094ms · max 1302ms · heap 63MB · trend -48% over the window
-```
-
-`doctor` also reports the last run's phases and the index file size, and the MCP
-`status` tool adds this server's own uptime, call count and p95 latency — so a slow
-agent session is visible instead of felt.
-
-Without `npm link`, every command also runs as `node src/cli.ts <command>`.
-
-## The manager
-
-An expensive model should not do retrieval. Give it one verb instead of six:```bash
-weave ask "what does the warehouse change touch, and what is untested?"
-```
-
-A cheap model answers in five lines, from the graph, and prints the facts it used:
-
-```
-The change touches GET/POST /api/v1/orders and 2 tables (part_orders, parts).
-POST /orders has no direct test; the warehouse page is covered by e2e/admin.spec.ts.
-
--- from deepseek-v4.1-flash in 940ms; facts used:
-endpoint  GET /api/v1/orders  orders.routes.ts:58
-...
-```
-
-It is grounded, not creative: the prompt forbids naming any file, endpoint, table or
-requirement that is not in the facts, and the answer is followed by the facts so the
-caller can check it.
-
-```bash
-# OpenCode Go (default)
-export OPENCODE_GO_API_KEY=...
-# DeepSeek direct
-export DEEPSEEK_API_KEY=...            # base https://api.deepseek.com/v1, model deepseek-chat
-# anything OpenAI-compatible
-export WEAVE_LLM_API_KEY=... WEAVE_LLM_BASE_URL=... WEAVE_LLM_MODEL=...
-```
-
-Then hand the expensive agent a manager instead of a toolbox:
-
-```bash
-claude mcp add weave -- node /abs/path/weave/src/cli.ts mcp --manager
-```
-
-`--manager` exposes only `ask`, `plan` and `status`. No raw `impact`/`context`/`search`,
-so the expensive model cannot burn context re-deriving what the cheap one already knows,
-and no tool returns file contents — it reads code with its own tools when it must.
-
-Without a key, `ask` says exactly which variable to set and everything else still works.
-
 ## Explorer (for people)
 
 ```bash
@@ -226,7 +193,7 @@ weave explore            # writes .weave/explore.html and opens it
 weave explore --all      # every registered project, one file, with a switcher
 ```
 
-One self-contained HTML file — 44 KB for this repo, 832 KB for a 937-file one. No
+One self-contained HTML file — 45 KB for this repo, 859 KB for a 937-file one. No
 server, no network, no build. It is for people only: agents use the MCP server, never
 this page, so every choice here optimises for reading, not for parsing.
 
@@ -245,11 +212,9 @@ screen ──calls──▶ API endpoint ──handled in──▶ module ──
 | **Changes** | change records in progress and done, with tasks, requirements and files |
 | **Problems** | calls that match no endpoint, endpoints and screens with no test, changed requirements |
 
-Open any item and the four-lane **trace** shows the same line around it: the screens
-that reach it, its endpoints, the module, and the tables — two hops either way. Below
-the trace: **Proved by** (tests), **Planned in** (change, tasks, requirements), and one
-**Reach** sentence ("a change here can reach 19 screens, 64 endpoints and 18 tests").
-Relations are written in words, never as graph vocabulary.
+Open any item and the four-lane **trace** shows the same line around it. Below the
+trace: **Proved by** (tests), **Planned in** (change, tasks, requirements), and one
+**Reach** sentence. Relations are written in words, never as graph vocabulary.
 
 Navigation is six entries with a count and a one-line gloss; there are no duplicate
 tabs. Every node has a URL (`#node/…`), so back, forward and a pasted link work.
@@ -257,70 +222,59 @@ Search is global and lives at the top of the rail. `/` focuses it, `↑`/`↓` w
 list, `Esc` clears it or clears the selection, and clicking a file path copies it.
 Light, dark and follow-the-system are one button.
 
-**Every node explains itself.** Descriptions are read from the source, not written twice:
-
-| node | where the text comes from |
-|---|---|
-| endpoint | the comment directly above `router.get(...)` |
-| page | the comment above the `<Route>`, else the top of the component file |
-| table | the `///` or `//` comment above the Prisma model |
-| change | the first real sentence of its `proposal.md` |
-| requirement | its heading plus the requirement text |
-| task | its title, open tasks first, done ones behind one fold |
-
-Clicking a change opens its requirements and its tasks, so the spec reads like a
-document rather than a list of slugs.
-
-Files are in the graph only where a spec task names them as evidence — click a task,
-then a file, and you see which change owns it.
-
 The visual contract — tokens, type roles, scroll ownership, primitives, accepted debt —
 is in [`docs/explorer/DESIGN.md`](docs/explorer/DESIGN.md).
 
-No MCP support? Shell out to `context` — same output, same budget.
+## Carrying knowledge forward
+
+Four small pieces, stored beside the graph (inside `.weave/`, never committed):
+
+- **`delta [ref]`** (`changed` over MCP) compares the graph with a git ref or a saved
+  `graph.json` and prints what was added, removed or moved — and names a removed
+  endpoint that the old graph still had callers for.
+- **`grep <text>`** (`search(text: true)`) scans source lines instead of names. Files
+  that carry graph nodes rank first.
+- **`remember --note "…" <file...>`** keeps a decision or gotcha next to the files it
+  concerns; `context` returns it as `note … (not evidence)`, and `recall` lists it.
+- **`gain [--since N]`** reads the receipt every MCP answer carries (tokens, graph age,
+  coverage) and reports total, median and p95 tokens by tool.
+
+`context --depth code` is the one place a tool returns source: up to three 15-line
+windows at the anchors, opt-in, hard-capped by the same budget, and it refuses `.env`,
+keys, certificates and anything outside the repo.
 
 ## Enforcement
 
 A gate has to run where the agent cannot skip it. So `check` is a CLI with an exit code,
-not an MCP tool the model chooses to call — nothing stops an agent from running it and
-reading the output, and nothing should: the point is that CI decides, not the agent.
+not an MCP tool the model chooses to call.
 
 ```bash
 weave check              # no args: git diff against HEAD
 weave check src/a.ts     # explicit files
-weave check --strict-tests   # also fail when a touched endpoint has no test
+weave check --against origin/main
+weave check --strict-tests
 ```
 
 **In CI**, this repository ships `action.yml`:
 
 ```yaml
 - uses: actions/checkout@v4
-  with: { fetch-depth: 0 }        # the base ref must be readable
-- uses: actions/setup-node@v4
-  with: { node-version: 22 }
+  with: { fetch-depth: 0 }
 - uses: michalbasisty/weave@main
   with: { root: '.', strict-tests: 'true', against: origin/main }
 ```
 
-Exit 1 when:
+The action builds the Go binary, indexes, checks, and prints coverage. Exit 1 when:
 
 - a **removed endpoint is still called** — it compares the endpoint set with the one
-  the previous index saw, so renaming `GET /orders` to `GET /orders/list` fails with
-  the caller's `file:line`, even though the caller was not the file you edited;
+  the previous index saw;
 - a changed file contains a call site that matches no endpoint;
 - a requirement implemented in the changed files has a failing test in the JUnit report;
 - with `--strict-tests`, a touched endpoint has no test at all.
 
 It warns, without failing, when a requirement's text changed and the code was not
 re-checked, when no spec change record names the changed files, or when a touched
-endpoint has no direct test. On a healthy 745-file repo it prints one line and exits 0.
-
-```
-git pre-commit   node src/cli.ts check --root .
-claude code      PostToolUse hook on Edit|Write → the same command
-kiro hook        .kiro/hooks/weave.json, trigger PostFileSave → the same command
-ci               node src/cli.ts index && node src/cli.ts check
-```
+endpoint has no direct test.
 
 ## Traceability
 
@@ -331,19 +285,13 @@ Three levels, weakest to strongest. None is required:
 3. `// @req REQ-ORD-1` in the code → file → requirement, exact, survives renames.
 
 Requirement text is hashed at index time. If it changes between indexes, every file
-and test linked to it is reported as **suspect** — the Doorstop idea, without the
-manual review step.
-
-```js
-// @req REQ-ORD-1
-router.get('/', async (_req, res) => { … });
-```
+and test linked to it is reported as **suspect**.
 
 ### Evidence: the part the agent cannot fake
 
-Linking is not proof. `weave evidence` reads the JUnit XML your tests already produce
-and joins it to requirements through the `@req` markers, so the answer is "a named
-test ran and reported a result", not "the agent says so".
+`weave evidence` reads the JUnit XML your tests already produce and joins it to
+requirements through the `@req` markers, so the answer is "a named test ran and
+reported a result", not "the agent says so".
 
 ```
 evidence: 2/3 requirement(s) verified, 41 test case(s)
@@ -352,8 +300,7 @@ REQ-ORD-2        FAIL    1 test(s)  order status moves to shipped [fail]
 REQ-ORD-3        no test           implemented via @req, never exercised
 ```
 
-Enable it once per project — no flags are added to `run` for you, because a wrong
-flag breaks a working test command:
+Enable it once per project:
 
 ```
 vitest      npx vitest run --reporter=junit --outputFile=.weave/junit.xml
@@ -363,86 +310,61 @@ phpunit     vendor/bin/phpunit --log-junit .weave/junit.xml
 go          go test -json ./... | go-junit-report > .weave/junit.xml
 ```
 
-`check` then fails on a failing requirement test in the changed files, and warns on a
-requirement that is implemented but never exercised.
-
 ## Why it is cheap
 
-- **One call replaces explore + grep + read.** `context` names the page, endpoints, tables, spec change and tests in ~350 tokens; getting that by hand costs thousands and several tool round-trips.
-- **It names the tests to run *and* the command**, grouped per package and runner. An agent that runs 6 named tests instead of 85 plus a 3-minute e2e suite is a different workflow, not a marginal saving.
-- **Nothing returns file contents.** Every list is capped and line-oriented (`path:line`), not JSON — JSON costs 2-3× the tokens for the same facts.
-- **No index server, no embeddings.** One file, rebuilt in ~1.2 s for 750 files; warm calls cost ~57 ms (a stat sweep, then in-memory answers).
-- **No per-language parsers.** Regex over the contracts a framework already publishes, so the maintenance cost stays near zero.
+- **One call replaces explore + grep + read.** `context` names the page, endpoints, tables, spec change and tests in ~350 tokens.
+- **It names the tests to run *and* the command**, grouped per package and runner.
+- **No whole files.** Every list is capped and line-oriented (`path:line`), not JSON. The two exceptions are opt-in and bounded: text search returns matching lines, and `context(depth: "code")` up to three 15-line windows.
+- **No index server, no embeddings.** One file, rebuilt in ~280 ms for 937 files.
+- **No per-language parsers.** Regex over the contracts a framework already publishes.
 
-Measured on a 745-file Express + Prisma + React monorepo: 1.2 s to index, 57 ms per warm call, 1.4 KB median response, 196 endpoints, 33 pages, 46 tables, 3,865 edges.
-
-The CLI builds the index on first use, so `context` works on a fresh clone with no setup step.
+Measured on a 937-file Express + Prisma + React monorepo: **278 ms** to index (Node was
+780 ms in the same harness), 242 endpoints, 37 pages, 57 tables, 5,694 edges.
 
 ## What it extracts, and how exact it is
 
 | edge | source | confidence |
 |---|---|---|
 | `app.use('/api/v1/x', router)` + `router.get('/y')` → endpoint | Express mount table + router files | exact |
-| `app/api/x/route.ts` exporting `GET`/`POST` → endpoint | Next.js file routing (route groups and `[id]` handled) | exact |
-| `quotes: { list: procedure.query(…) }` → `QUERY /api/trpc/quotes.list` | tRPC router objects, nested routers flattened | exact |
-| `openapi.json` / `swagger.json` paths | any language's spec: `{id}` → `:id`, `summary` → description | exact |
-| your own wrapper, via `.weave/patterns.json` | one regex per rule, capture group 1 is the path | exact |
-| `api.get('/orders')`, ``api.get(`/orders/${id}`)``, `trpc.quotes.list.useQuery()` → endpoint | client call sites, matched on the tail of both paths | exact / inferred |
-| page → endpoint | `<Route path element>` + lazy imports + the component import graph | exact in the page file, inferred through imported components |
+| `app/api/x/route.ts` exporting `GET`/`POST` → endpoint | Next.js file routing | exact |
+| `quotes: { list: procedure.query(…) }` → `QUERY /api/trpc/quotes.list` | tRPC routers | exact |
+| `openapi.json` / `swagger.json` paths | any language's spec | exact |
+| your own wrapper, via `.weave/patterns.json` | one regex per rule | exact |
+| `api.get('/orders')`, ``api.get(`/orders/${id}`)`` → endpoint | client call sites | exact / inferred |
+| page → endpoint | `<Route>` + lazy imports (inline or through a chunk map) + the component import graph | exact / inferred |
 | `model` → `@@map` table, relations | `schema.prisma` | exact |
-| module → table | `prisma.<model>` / `tx.<model>` use inside the module | exact |
-| file → file importers | relative imports, `.js`→`.ts` resolution | exact |
-| test → endpoint | e2e request calls and literal `/api/...` paths | exact / inferred |
-| test → page | `page.goto(BASE + '/tasks')` | exact |
-| change → task → file | `tasks.md` `- [x] T1 … Evidence: \`path\`` | exact |
-| task → requirement | `[Satisfies: REQ-…]` when present | exact |
+| module → table | `prisma.<model>` use inside the module | exact |
+| file → file importers | relative imports | exact |
+| test → endpoint / page | e2e request calls, `page.goto` | exact / inferred |
+| change → task → file | `tasks.md` Evidence paths | exact |
 
-Confidence is printed next to page edges (`~` in `context`). **An inferred edge is a lead, not a fact**, and the tool never hides which is which.
-
-### When your stack has its own wrapper
-
-Every team eventually writes `defineRoute()`, a generated client, or a `request()`
-helper. Rather than a parser per framework, name them once:
-
-```json
-// .weave/patterns.json
-{
-  "routes": [{ "match": "defineRoute\\('([^']+)'\\)", "method": "GET" }],
-  "calls":  [{ "match": "request\\('([^']+)'\\)" }]
-}
-```
-
-Capture group 1 is the path. `doctor` reports how many endpoints came from patterns,
-and a pattern that matches nothing shows up as a gap rather than silently doing nothing.
+**An inferred edge is a lead, not a fact**, and the tool never hides which is which.
 
 ## Design rules
 
-- **No new spec format.** It uses whatever exists — `[Satisfies:]`, `REQ-` ids, or only the `Evidence:` paths most task files already carry.
+- **No new spec format.** It uses whatever exists — `[Satisfies:]`, `REQ-` ids, or the `Evidence:` paths most task files already carry.
 - **No parsers per language.** A language it does not cover degrades to "no nodes", never to wrong nodes.
 - **No database, no daemon.** One file, rebuilt on demand.
-- **Budgeted output.** Every tool has a cap; `context` takes an explicit token budget and honours it.
+- **Budgeted output.** Every tool has a cap.
 
 ## Test
 
 ```bash
-node --test test/smoke.test.mjs   # 23 tests, incl. a renamed route that must fail the gate
-node test/bench.mjs <repo>        # cold / warm call latency and response size
-npm run parity                    # Go-port parity harness (Phase 0, TS vs TS today)
+go test ./...                    # unit, golden and integration suites
+go test ./test/integration -v    # the binary, end to end
 ```
 
-The fixture is a miniature Express + Prisma + React repo. The tests drive the MCP
-server over stdio and assert the whole chain, the budget, `init` never overwriting,
-`@req` linking, suspect detection and `check`.
-
-The research behind the design — what was measured, what was deliberately not built —
-is in [`docs/DESIGN.md`](docs/DESIGN.md).
+The integration suite builds the real binary and drives it on a miniature Express +
+Prisma + React fixture: index, context (names and code), impact, search, grep, notes,
+delta, check failing on a renamed route, explore, MCP, gain and init.
 
 ## Known limits
 
-- Express and Next.js route handlers (App Router and `pages/api`), tRPC routers, and any
-  OpenAPI JSON spec. Nest, Fastify, GraphQL and SvelteKit still need either an extractor
-  or a `.weave/patterns.json` rule; until then their handlers are invisible, and the
-  coverage block is where that shows.
-- Importers are one hop deep. A util imported by 40 modules reports "used by 40 files — wide blast radius" instead of listing 40 endpoints.
-- No incremental indexing: a rebuild re-reads every file. Fine to ~5k files.
+- Express, Next.js route handlers, tRPC routers and OpenAPI JSON specs. Nest, Fastify, GraphQL and SvelteKit need a `.weave/patterns.json` rule; the coverage block names what was skipped.
+- Importers are one hop deep.
+- No incremental indexing: a rebuild re-reads every file, fine to ~5k files. `delta` compares graphs, so a column-only schema edit shows nothing.
 - `untested` means "no direct test reference" — e2e that drives the UI by clicking does not count.
+- On Windows, the very first run of a freshly built unsigned binary can take a few seconds while antivirus scans the files it opens; later runs are fast. Linux CI does not see it.
+
+The research behind the design is in [`docs/DESIGN.md`](docs/DESIGN.md); the Go port's
+measurements and gates are in [`docs/GO-MIGRATION.md`](docs/GO-MIGRATION.md).
