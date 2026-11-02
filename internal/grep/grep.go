@@ -27,14 +27,16 @@ type hit struct {
 }
 
 // Grep returns the matching lines, ranked graph-first, then by file and line.
+// It uses the per-root text cache, so repeated searches in one process only
+// re-read files that changed.
 func Grep(g *weave.Graph, query string, limit int, useRegex bool) string {
+	return Cached(g, query, limit, useRegex)
+}
+
+func render(g *weave.Graph, query string, limit int, useRegex bool, files []cachedLines) string {
 	q := jsstr.Trim(query)
 	if q == "" {
 		return "grep needs a query"
-	}
-	re, err := compile(q, useRegex)
-	if err != nil {
-		return "bad regex: " + badRegex(q, err)
 	}
 
 	inGraph := map[string]bool{}
@@ -45,22 +47,62 @@ func Grep(g *weave.Graph, query string, limit int, useRegex bool) string {
 	}
 
 	var hits []hit
-	for _, f := range weave.Walk(g.Root) {
-		for i, line := range f.Lines {
-			if jsstr.Len(line) > maxLine {
-				continue
+	if useRegex {
+		re, err := compile(q, useRegex)
+		if err != nil {
+			return "bad regex: " + badRegex(q, err)
+		}
+		for _, f := range files {
+			for i, line := range f.lines {
+				if jsstr.Len(line) > maxLine {
+					continue
+				}
+				if !re.MatchString(line) {
+					continue
+				}
+				text := jsstr.Slice(jsstr.Trim(line), 0, 160)
+				rank := 1
+				if inGraph[f.rel] {
+					rank = 0
+				}
+				hits = append(hits, hit{f.rel, i + 1, text, rank})
+				if len(hits) > maxHits {
+					break
+				}
 			}
-			if !re.MatchString(line) {
-				continue
-			}
-			text := jsstr.Slice(jsstr.Trim(line), 0, 160)
+		}
+	} else {
+		needle := strings.ToLower(q)
+		for _, f := range files {
 			rank := 1
-			if inGraph[f.Rel] {
+			if inGraph[f.rel] {
 				rank = 0
 			}
-			hits = append(hits, hit{f.Rel, i + 1, text, rank})
-			if len(hits) > maxHits {
-				break
+			from := 0
+			for {
+				j := strings.Index(f.lower[from:], needle)
+				if j < 0 {
+					break
+				}
+				pos := from + j
+				lineIdx := sort.SearchInts(f.starts, pos+1) - 1
+				lineEnd := len(f.lower)
+				if lineIdx >= 0 && lineIdx < len(f.lines) {
+					line := f.lines[lineIdx]
+					if jsstr.Len(line) <= maxLine {
+						hits = append(hits, hit{f.rel, lineIdx + 1, jsstr.Slice(jsstr.Trim(line), 0, 160), rank})
+						if len(hits) > maxHits {
+							break
+						}
+					}
+				}
+				if lineIdx+1 < len(f.starts) {
+					lineEnd = f.starts[lineIdx+1]
+				}
+				if lineEnd <= from {
+					lineEnd = from + len(needle)
+				}
+				from = lineEnd
 			}
 		}
 	}

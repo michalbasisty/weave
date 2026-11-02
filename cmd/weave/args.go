@@ -40,6 +40,9 @@ func parseArgs(argv []string) (string, []string) {
 			if c == "" && (a == "--help" || a == "-h") {
 				c = "help"
 			}
+			if c == "" && (a == "--version" || a == "-v") {
+				c = "version"
+			}
 			continue
 		}
 		if c == "" {

@@ -85,6 +85,45 @@ func Walk(root string) []SourceFile {
 	return out
 }
 
+// FileInfo is a file the walk would read, without reading it. Mtime is UnixNano.
+type FileInfo struct {
+	Rel   string
+	Abs   string
+	Size  int64
+	Mtime int64
+}
+
+// WalkInfo lists the files Walk would read, with size and modification time but
+// no contents. Long-lived callers use it to re-read only what changed.
+func WalkInfo(root string) []FileInfo {
+	var out []FileInfo
+	var visit func(dir, rel string)
+	visit = func(dir, rel string) {
+		for _, e := range readDir(dir) {
+			name := e.Name()
+			if skipped(name) {
+				continue
+			}
+			abs := filepath.Join(dir, name)
+			st, err := os.Stat(abs)
+			if err != nil {
+				continue
+			}
+			r := ToPosix(name)
+			if rel != "" {
+				r = rel + "/" + r
+			}
+			if st.IsDir() {
+				visit(abs, r)
+			} else if st.Size() <= MaxBytes && code[Ext(name)] {
+				out = append(out, FileInfo{Rel: r, Abs: abs, Size: st.Size(), Mtime: st.ModTime().UnixNano()})
+			}
+		}
+	}
+	visit(root, "")
+	return out
+}
+
 // NewestMtime is the newest file modification time under root in milliseconds,
 // without reading any file. Directories do not count.
 func NewestMtime(root string) float64 {

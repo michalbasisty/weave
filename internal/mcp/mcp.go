@@ -17,6 +17,7 @@ import (
 	"github.com/michalbasisty/weave/internal/delta"
 	"github.com/michalbasisty/weave/internal/grep"
 	"github.com/michalbasisty/weave/internal/usage"
+	"github.com/michalbasisty/weave/internal/version"
 	"github.com/michalbasisty/weave/internal/weave"
 )
 
@@ -147,10 +148,10 @@ func handle(line string, src GraphSource, multi, manager bool, w *bufio.Writer) 
 	switch msg.Method {
 	case "initialize":
 		asked := strAt(params(msg.Params), "protocolVersion")
-		version := protocol
+		proto := protocol
 		for _, s := range supported {
 			if s == asked {
-				version = asked
+				proto = asked
 				break
 			}
 		}
@@ -160,7 +161,7 @@ func handle(line string, src GraphSource, multi, manager bool, w *bufio.Writer) 
 		} else if multi {
 			ins = instructions + " This server serves several projects: pass `project` (a name from `weave projects`) to pick one; omit it for this repo."
 		}
-		reply(initializeResult{ProtocolVersion: version, Capabilities: capabilities{}, ServerInfo: serverInfo{Name: "weave", Version: "0.1.0"}, Instructions: ins})
+		reply(initializeResult{ProtocolVersion: proto, Capabilities: capabilities{}, ServerInfo: serverInfo{Name: "weave", Version: version.Version}, Instructions: ins})
 	case "tools/list":
 		reply(struct {
 			Tools []tool `json:"tools"`

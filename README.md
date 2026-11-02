@@ -71,8 +71,7 @@ Go 1.22+ to build. The resulting binary has no runtime dependencies.
 cd /path/to/your/project
 
 weave            # what is this repo, and what can I do
-weave init       # connect Claude, Cursor, VS Code, opencode
-weave explore    # the map, in your browser
+weave init       # connect Claude, Cursor, VS Code, opencodeweave explore    # the map, in your browser
 weave check      # what a change breaks (exit 1)
 ```
 
@@ -116,7 +115,8 @@ lean and the server answers for the repo it was started in.
 ## Connect an agent, once
 
 `weave init` writes MCP configs for every client it can, without touching files that
-exist:
+exist. If a project still has a TypeScript-era entry (`node …/src/cli.ts`), run
+`weave init --upgrade`: it replaces only the `weave` entry and leaves the rest alone.
 
 | client | file |
 |---|---|
@@ -184,6 +184,7 @@ weave perf   [--runs N]    # index timings over time, or N fresh runs
 weave init
 weave mcp
 weave --help
+weave --version
 ```
 
 ## Explorer (for people)
@@ -318,8 +319,10 @@ go          go test -json ./... | go-junit-report > .weave/junit.xml
 - **No index server, no embeddings.** One file, rebuilt in ~280 ms for 937 files.
 - **No per-language parsers.** Regex over the contracts a framework already publishes.
 
-Measured on a 937-file Express + Prisma + React monorepo: **278 ms** to index (Node was
-780 ms in the same harness), 242 endpoints, 37 pages, 57 tables, 5,694 edges.
+Measured on a 937-file Express + Prisma + React monorepo: **229 ms** to index (Node was
+780 ms in the same harness), 242 endpoints, 37 pages, 57 tables, 5,694 edges. Warm MCP
+calls are ~3 ms; text search is 27 ms warm (cached file text), and a git baseline is
+59 ms after its first build.
 
 ## What it extracts, and how exact it is
 

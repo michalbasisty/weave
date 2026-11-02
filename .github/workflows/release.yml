@@ -27,7 +27,8 @@ jobs:
             ext=""
             if [ "$os" = "windows" ]; then ext=".exe"; fi
             GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 \
-              go build -trimpath -ldflags "-s -w" \
+              go build -trimpath \
+              -ldflags "-s -w -X github.com/michalbasisty/weave/internal/version.Version=${GITHUB_REF_NAME#v}" \
               -o "dist/weave-$os-$arch$ext" ./cmd/weave
           done
           cd dist

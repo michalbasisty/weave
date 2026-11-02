@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/michalbasisty/weave/internal/registry"
+	"github.com/michalbasisty/weave/internal/version"
 	"github.com/michalbasisty/weave/internal/weave"
 )
 
@@ -67,6 +68,8 @@ func main() {
 		code = cmdMcp()
 	case "help", "--help", "-h":
 		fmt.Println(helpText())
+	case "version", "--version", "-v":
+		fmt.Printf("weave %s\n", version.Version)
 	default:
 		home()
 	}
@@ -124,9 +127,10 @@ func helpText() string {
   weave evidence [REQ...]       which requirements a JUnit report proves
   weave doctor                  graph health
   weave perf    [--runs N]      index timings over time, or N fresh runs
-  weave init                    connect Claude, Cursor, opencode, Codex
+  weave init    [--upgrade]     connect Claude, Cursor, opencode, Codex
   weave forget  <name>          drop a project from the list
   weave mcp                     MCP server on stdio (--all: serve every project)
+  weave --version               the release version
 
 --root <dir>        point at a specific checkout
 --project <name>    use a registered project from anywhere
@@ -178,5 +182,6 @@ func home() {
   weave init             connect your agent
 
   weave --help           all commands
+  weave --version        the release version
 `, extra)
 }

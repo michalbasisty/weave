@@ -290,6 +290,54 @@ func TestCheckFailsWhenRequirementTestFails(t *testing.T) {
 	}
 }
 
+func TestInitUpgradeReplacesStaleEntry(t *testing.T) {
+	stale := `{"mcpServers":{"weave":{"command":"node","args":["C:/old/src/cli.ts","mcp"]}}}`
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(stale), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, code := run(t, "init", "--upgrade", "--root", dir)
+	if code != 0 || !strings.Contains(out, ".mcp.json (upgraded)") {
+		t.Fatalf("init --upgrade: %d\n%s", code, out)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, ".mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		MCPServers map[string]struct {
+			Command string   `json:"command"`
+			Args    []string `json:"args"`
+		} `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.MCPServers["weave"].Command; got != bin {
+		t.Fatalf("command = %q, want %q", got, bin)
+	}
+
+	// Without the flag an existing file is untouched.
+	dir2 := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir2, ".mcp.json"), []byte(stale), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, code := run(t, "init", "--root", dir2); code != 0 {
+		t.Fatal("init failed")
+	}
+	raw2, _ := os.ReadFile(filepath.Join(dir2, ".mcp.json"))
+	if !strings.Contains(string(raw2), `"node"`) {
+		t.Fatalf("init without --upgrade rewrote the file: %s", raw2)
+	}
+}
+
+func TestVersion(t *testing.T) {
+	out, code := run(t, "version")
+	if code != 0 || !strings.HasPrefix(strings.TrimSpace(out), "weave ") {
+		t.Fatalf("version: %d %q", code, out)
+	}
+}
+
 func TestInitWritesTheBinaryPath(t *testing.T) {
 	dir := t.TempDir()
 	out, code := run(t, "init", "--root", dir)

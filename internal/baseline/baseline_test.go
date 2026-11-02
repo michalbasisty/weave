@@ -103,6 +103,13 @@ export default router;
 	if g == nil {
 		t.Fatal("GraphAt(HEAD) returned nil")
 	}
+	cached, err := filepath.Glob(filepath.Join(root, ".weave", "baselines", "*.json"))
+	if err != nil || len(cached) != 1 {
+		t.Fatalf("baseline cache: %v %v", cached, err)
+	}
+	if again := GraphAt(root, "HEAD"); again == nil || len(again.Nodes) != len(g.Nodes) {
+		t.Fatal("cached GraphAt returned a different graph")
+	}
 	var names []string
 	for _, n := range g.Nodes {
 		if n.Kind == "endpoint" {

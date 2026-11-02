@@ -50,67 +50,115 @@ func cmdInit() int {
 		exe = resolved
 	}
 	args := []string{"mcp", "--root", "."}
+	upgrade := hasFlag("upgrade")
 	var did, skipped []string
 
-	writeJSON := func(rel string, value any) {
-		p := filepath.Join(root, rel)
-		if pathExists(p) {
-			skipped = append(skipped, rel+" (exists)")
-			return
-		}
+	writeValue := func(p string, value any) bool {
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			skipped = append(skipped, rel+" (unwritable)")
-			return
+			return false
 		}
 		b, err := json.MarshalIndent(value, "", "  ")
 		if err != nil {
-			skipped = append(skipped, rel+" (encode)")
-			return
+			return false
 		}
-		if err := os.WriteFile(p, append(b, '\n'), 0o644); err != nil {
-			skipped = append(skipped, rel+" (unwritable)")
-			return
+		return os.WriteFile(p, append(b, '\n'), 0o644) == nil
+	}
+	readDoc := func(p string) (map[string]any, bool) {
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			return nil, false
 		}
-		did = append(did, rel)
+		var doc map[string]any
+		if json.Unmarshal(raw, &doc) != nil {
+			return nil, false
+		}
+		return doc, true
 	}
 
-	stdio := stdioConfig{Command: exe, Args: args}
-	writeJSON(".mcp.json", mcpFile{MCPServers: map[string]stdioConfig{"weave": stdio}})
-	writeJSON(filepath.Join(".cursor", "mcp.json"), mcpFile{MCPServers: map[string]stdioConfig{"weave": stdio}})
-	writeJSON(filepath.Join(".vscode", "mcp.json"), vsFile{Servers: map[string]vsConfig{
+	// ensure writes a missing config, or replaces the weave entry when --upgrade
+	// is asked for. Without --upgrade an existing file is never touched.
+	ensure := func(rel string, value any, apply func(map[string]any)) {
+		p := filepath.Join(root, rel)
+		if !pathExists(p) {
+			if writeValue(p, value) {
+				did = append(did, rel)
+			} else {
+				skipped = append(skipped, rel+" (unwritable)")
+			}
+			return
+		}
+		if !upgrade {
+			skipped = append(skipped, rel+" (exists)")
+			return
+		}
+		doc, ok := readDoc(p)
+		if !ok {
+			skipped = append(skipped, rel+" (not valid JSON — add by hand)")
+			return
+		}
+		apply(doc)
+		if writeValue(p, doc) {
+			did = append(did, rel+" (upgraded)")
+		} else {
+			skipped = append(skipped, rel+" (unwritable)")
+		}
+	}
+
+	setMCP := func(doc map[string]any) {
+		servers, _ := doc["mcpServers"].(map[string]any)
+		if servers == nil {
+			servers = map[string]any{}
+		}
+		servers["weave"] = map[string]any{"command": exe, "args": args}
+		doc["mcpServers"] = servers
+	}
+	ensure(".mcp.json", mcpFile{MCPServers: map[string]stdioConfig{"weave": {Command: exe, Args: args}}}, setMCP)
+	ensure(filepath.Join(".cursor", "mcp.json"), mcpFile{MCPServers: map[string]stdioConfig{"weave": {Command: exe, Args: args}}}, setMCP)
+	ensure(filepath.Join(".vscode", "mcp.json"), vsFile{Servers: map[string]vsConfig{
 		"weave": {Type: "stdio", Command: exe, Args: args},
-	}})
+	}}, func(doc map[string]any) {
+		servers, _ := doc["servers"].(map[string]any)
+		if servers == nil {
+			servers = map[string]any{}
+		}
+		servers["weave"] = map[string]any{"type": "stdio", "command": exe, "args": args}
+		doc["servers"] = servers
+	})
 
 	oc := filepath.Join(root, "opencode.json")
-	if pathExists(oc) {
-		raw, err := os.ReadFile(oc)
-		var doc map[string]any
-		if err != nil || json.Unmarshal(raw, &doc) != nil {
-			skipped = append(skipped, "opencode.json (not valid JSON — add by hand)")
+	if !pathExists(oc) {
+		if writeValue(oc, openCodeFile{Mcp: map[string]localConfig{
+			"weave": {Type: "local", Command: []string{exe, "mcp", "--root", "."}, Enabled: true},
+		}}) {
+			did = append(did, "opencode.json")
 		} else {
-			mcp, _ := doc["mcp"].(map[string]any)
-			if mcp == nil {
-				mcp = map[string]any{}
+			skipped = append(skipped, "opencode.json (unwritable)")
+		}
+	} else if doc, ok := readDoc(oc); !ok {
+		skipped = append(skipped, "opencode.json (not valid JSON — add by hand)")
+	} else {
+		mcp, _ := doc["mcp"].(map[string]any)
+		if mcp == nil {
+			mcp = map[string]any{}
+		}
+		_, has := mcp["weave"]
+		if has && !upgrade {
+			skipped = append(skipped, "opencode.json (already has weave)")
+		} else {
+			mcp["weave"] = map[string]any{
+				"type":    "local",
+				"command": []string{exe, "mcp", "--root", "."},
+				"enabled": true,
 			}
-			if _, exists := mcp["weave"]; exists {
-				skipped = append(skipped, "opencode.json (already has weave)")
-			} else {
-				mcp["weave"] = map[string]any{
-					"type":    "local",
-					"command": []string{exe, "mcp", "--root", "."},
-					"enabled": true,
-				}
-				doc["mcp"] = mcp
-				b, _ := json.MarshalIndent(doc, "", "  ")
-				if os.WriteFile(oc, append(b, '\n'), 0o644) == nil {
+			doc["mcp"] = mcp
+			if writeValue(oc, doc) {
+				if has {
+					did = append(did, "opencode.json (upgraded)")
+				} else {
 					did = append(did, "opencode.json")
 				}
 			}
 		}
-	} else {
-		writeJSON("opencode.json", openCodeFile{Mcp: map[string]localConfig{
-			"weave": {Type: "local", Command: []string{exe, "mcp", "--root", "."}, Enabled: true},
-		}})
 	}
 
 	gi := filepath.Join(root, ".gitignore")
