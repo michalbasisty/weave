@@ -1,0 +1,10 @@
+{
+  "openapi": "3.0.0",
+  "info": { "title": "Fixture API", "version": "1.0.0" },
+  "paths": {
+    "/api/reports/{id}": {
+      "get": { "summary": "One report with its photos and events.", "tags": ["reports"] },
+      "delete": { "summary": "Delete a report and its media.", "tags": ["reports"] }
+    }
+  }
+}

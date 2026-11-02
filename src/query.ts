@@ -599,7 +599,11 @@ export function coverageLines(g: Graph, full = false): string[] {
   if (c.trpc && (c.trpc.files || c.trpc.found)) {
     out.push(`  tRPC routers  ${c.trpc.found}/${c.trpc.files} parsed (${pct(c.trpc.found, c.trpc.files)}%)`);
   }
-  const silent = [...c.routes.silent, ...c.specs.silent, ...(c.next?.silent ?? []), ...(c.trpc?.silent ?? []), ...(c.calls.silent ?? [])];
+  if (c.openapi && c.openapi.files) {
+    out.push(`  openapi       ${c.openapi.found}/${c.openapi.files} specs produced endpoints (${pct(c.openapi.found, c.openapi.files)}%)`);
+  }
+  if (c.patterns) out.push(`  patterns      ${c.patterns} endpoint(s) from .weave/patterns.json`);
+  const silent = [...c.routes.silent, ...c.specs.silent, ...(c.next?.silent ?? []), ...(c.trpc?.silent ?? []), ...(c.openapi?.silent ?? []), ...(c.calls.silent ?? [])];
   if (silent.length) {
     out.push(`  GAPS          ${silent.length} file(s) call an API we did not map (external service, or a pattern we miss):`);
     for (const f of silent.slice(0, full ? 40 : 8)) out.push(`    ${f}`);

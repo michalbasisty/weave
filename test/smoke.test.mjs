@@ -306,6 +306,29 @@ test('ask talks to any OpenAI-compatible endpoint', async () => {
   assert.match(seen[0].body.messages[1].content, /FACTS/);
 });
 
+test('openapi specs and custom patterns become endpoints', () => {
+  const s = spawnSync(process.execPath, [cli, 'search', 'reports', '--limit', '20', '--root', fixture], { encoding: 'utf8' });
+  assert.match(s.stdout, /GET \/api\/reports\/:id/);
+  assert.match(s.stdout, /DELETE \/api\/reports\/:id/);
+
+  // A wrapper route is invisible until a pattern names it.
+  const before = spawnSync(process.execPath, [cli, 'search', 'legacy', '--limit', '10', '--root', fixture], { encoding: 'utf8' });
+  assert.doesNotMatch(before.stdout, /GET \/api\/legacy/);
+
+  mkdirSync(join(fixture, '.weave'), { recursive: true });
+  const pat = join(fixture, '.weave', 'patterns.json');
+  writeFileSync(pat, JSON.stringify({ routes: [{ match: "defineRoute\\('([^']+)'\\)", method: 'GET' }] }));
+  try {
+    const after = spawnSync(process.execPath, [cli, 'search', 'legacy', '--limit', '10', '--root', fixture], { encoding: 'utf8' });
+    assert.match(after.stdout, /GET \/api\/legacy/);
+    const d = spawnSync(process.execPath, [cli, 'doctor', '--root', fixture], { encoding: 'utf8' });
+    assert.match(d.stdout, /patterns\s+1 endpoint/);
+    assert.match(d.stdout, /openapi\s+1\/1 specs/);
+  } finally {
+    rmSync(pat);
+  }
+});
+
 test('impact accepts several files at once', async () => {
   const [res] = await rpc([
     {

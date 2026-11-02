@@ -33,6 +33,9 @@ export function isFresh(root: string, codeDir?: string): boolean {
   const stamp = statSync(idx).mtimeMs;
   // A changed extractor invalidates every index it produced, not just changed sources.
   if (codeDir && newestMtime(codeDir) > stamp) return false;
+  // .weave/ is skipped by the walk, so a patterns file needs its own check.
+  const pat = join(root, '.weave', 'patterns.json');
+  if (existsSync(pat) && statSync(pat).mtimeMs > stamp) return false;
   return newestMtime(root) <= stamp;
 }
 

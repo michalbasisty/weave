@@ -41,6 +41,8 @@ export interface Coverage {
   prisma: { models: number; tables: number };
   next?: { files: number; found: number; silent: string[] };
   trpc?: { files: number; found: number; silent: string[] };
+  openapi?: { files: number; found: number; silent: string[] };
+  patterns?: number;
 }
 
 export interface Graph {

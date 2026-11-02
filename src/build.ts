@@ -13,6 +13,8 @@ import {
 } from './extract.ts';
 import { extractSpecs, resolveEvidence, dirIndex } from './specs.ts';
 import { extractNextRoutes, extractTRPC } from './frameworks.ts';
+import { extractOpenAPI } from './openapi.ts';
+import { compile, loadPatterns, patternCalls, patternRoutes } from './patterns.ts';
 import { Timer } from './perf.ts';
 import { baseName, dirOf, eachMatch, walk, type SourceFile } from './scan.ts';
 
@@ -34,11 +36,27 @@ export function buildGraph(root: string): Graph {
   const endpoints = extractEndpoints(files, b);
   const nextStats = extractNextRoutes(files, b);
   const trpcStats = extractTRPC(files, b);
-  const allEndpoints = [...endpoints, ...nextStats.endpoints, ...trpcStats.endpoints];
+  const apiStats = extractOpenAPI(files, b);
+
+  // Patterns from .weave/patterns.json: the escape hatch for a team's own wrapper.
+  const pat = compile(loadPatterns(root));
+  const customRoutes = patternRoutes(files, pat);
+  const customEndpoints: Endpoint[] = [];
+  for (const r of customRoutes) {
+    const path = r.path.replace(/\/{2,}/g, '/');
+    const eid = id.endpoint(r.method, path);
+    b.node({ id: eid, kind: 'endpoint', name: `${r.method} ${path}`, file: r.file, line: r.line, meta: { module: 'api', desc: r.desc, framework: 'pattern' } });
+    b.edge(eid, id.file(r.file), 'defined_in');
+    customEndpoints.push({ method: r.method, path, file: r.file, line: r.line, module: 'api', id: eid });
+  }
+
+  const allEndpoints = [...endpoints, ...nextStats.endpoints, ...trpcStats.endpoints, ...apiStats.endpoints, ...customEndpoints];
   extractModels(t.prisma, b);
   const pageInfo = extractPages(t.web, b);
   const pages = pageInfo.pages;
   const calls = extractCalls(files.filter((f) => /\.(t|j)sx?$/.test(f.rel) && !/\.(test|spec)\./.test(f.rel)));
+  const customCalls = patternCalls(files, pat);
+  calls.push(...customCalls.map((c) => ({ ...c, dynamic: c.path.includes('${') })));
   timer.lap('extract');
   
 
@@ -115,7 +133,7 @@ export function buildGraph(root: string): Graph {
   }
 
   timer.lap('evidence');
-  const g = withCoverage(b.finish(root, files.length), files, allEndpoints, calls, dynamicCalls, pageInfo.declared, pageInfo.skipped.length, nextStats, trpcStats, t.specs, tasks);
+  const g = withCoverage(b.finish(root, files.length), files, allEndpoints, calls, dynamicCalls, pageInfo.declared, pageInfo.skipped.length, nextStats, trpcStats, apiStats, customRoutes.length, t.specs, tasks);
   timer.lap('coverage');
   g.perf = { totalMs: timer.total, phases: timer.phases, heapMb: Math.round(process.memoryUsage().heapUsed / 1048576) };
   return g;
@@ -135,6 +153,8 @@ function withCoverage(
   skippedRoutes: number,
   nextStats: { files: number; found: number; silent: string[] },
   trpcStats: { files: number; found: number; silent: string[] },
+  apiStats: { files: number; found: number; silent: string[] },
+  patternRoutes: number,
   specFiles: SourceFile[],
   tasks: { change: string }[],
 ): Graph {
@@ -176,6 +196,8 @@ function withCoverage(
     prisma: { models: g.nodes.filter((n) => n.kind === 'model').length, tables: g.nodes.filter((n) => n.kind === 'table').length },
     next: { files: nextStats.files, found: nextStats.found, silent: nextStats.silent.slice(0, 12) },
     trpc: { files: trpcStats.files, found: trpcStats.found, silent: trpcStats.silent.slice(0, 12) },
+    openapi: { files: apiStats.files, found: apiStats.found, silent: apiStats.silent.slice(0, 12) },
+    patterns: patternRoutes,
   };
   return g;
 }

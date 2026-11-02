@@ -374,6 +374,8 @@ The CLI builds the index on first use, so `context` works on a fresh clone with 
 | `app.use('/api/v1/x', router)` + `router.get('/y')` → endpoint | Express mount table + router files | exact |
 | `app/api/x/route.ts` exporting `GET`/`POST` → endpoint | Next.js file routing (route groups and `[id]` handled) | exact |
 | `quotes: { list: procedure.query(…) }` → `QUERY /api/trpc/quotes.list` | tRPC router objects, nested routers flattened | exact |
+| `openapi.json` / `swagger.json` paths | any language's spec: `{id}` → `:id`, `summary` → description | exact |
+| your own wrapper, via `.weave/patterns.json` | one regex per rule, capture group 1 is the path | exact |
 | `api.get('/orders')`, ``api.get(`/orders/${id}`)``, `trpc.quotes.list.useQuery()` → endpoint | client call sites, matched on the tail of both paths | exact / inferred |
 | page → endpoint | `<Route path element>` + lazy imports + the component import graph | exact in the page file, inferred through imported components |
 | `model` → `@@map` table, relations | `schema.prisma` | exact |
@@ -385,6 +387,22 @@ The CLI builds the index on first use, so `context` works on a fresh clone with 
 | task → requirement | `[Satisfies: REQ-…]` when present | exact |
 
 Confidence is printed next to page edges (`~` in `context`). **An inferred edge is a lead, not a fact**, and the tool never hides which is which.
+
+### When your stack has its own wrapper
+
+Every team eventually writes `defineRoute()`, a generated client, or a `request()`
+helper. Rather than a parser per framework, name them once:
+
+```json
+// .weave/patterns.json
+{
+  "routes": [{ "match": "defineRoute\\('([^']+)'\\)", "method": "GET" }],
+  "calls":  [{ "match": "request\\('([^']+)'\\)" }]
+}
+```
+
+Capture group 1 is the path. `doctor` reports how many endpoints came from patterns,
+and a pattern that matches nothing shows up as a gap rather than silently doing nothing.
 
 ## Design rules
 
@@ -409,9 +427,10 @@ is in [`docs/DESIGN.md`](docs/DESIGN.md).
 
 ## Known limits
 
-- Express and Next.js route handlers (App Router and `pages/api`). Nest, Fastify,
-  GraphQL and SvelteKit need their own extractor; until then their handlers are invisible
-  and the coverage block is where that shows.
+- Express and Next.js route handlers (App Router and `pages/api`), tRPC routers, and any
+  OpenAPI JSON spec. Nest, Fastify, GraphQL and SvelteKit still need either an extractor
+  or a `.weave/patterns.json` rule; until then their handlers are invisible, and the
+  coverage block is where that shows.
 - Importers are one hop deep. A util imported by 40 modules reports "used by 40 files — wide blast radius" instead of listing 40 endpoints.
 - No incremental indexing: a rebuild re-reads every file. Fine to ~5k files.
 - `untested` means "no direct test reference" — e2e that drives the UI by clicking does not count.

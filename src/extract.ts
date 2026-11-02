@@ -316,11 +316,12 @@ export function matchEndpoint(call: Call, endpoints: Endpoint[]): Endpoint | nul
   let best: Endpoint | null = null;
   let bestScore = -1;
   for (const e of endpoints) {
-    if (e.method !== call.method && e.method !== 'ANY') continue;
+    if (e.method !== call.method && e.method !== 'ANY' && call.method !== 'ANY') continue;
     const es = segments(e.path);
     const n = Math.min(es.length, cs.length);
     if (!n) continue;
     let score = 0;
+    let literals = 0;
     let ok = true;
     for (let i = 1; i <= n; i++) {
       const a = es[es.length - i];
@@ -335,11 +336,15 @@ export function matchEndpoint(call: Call, endpoints: Endpoint[]): Endpoint | nul
       }
       if (a === b) {
         score += 2;
+        literals++;
         continue;
       }
       ok = false;
       break;
     }
+    // A call may omit the mount prefix, but it must share at least one literal
+    // segment: otherwise `/orders` would match `/api/reports/:id`.
+    if (ok && cs.length < es.length && literals === 0) ok = false;
     if (ok && score > bestScore) {
       bestScore = score;
       best = e;

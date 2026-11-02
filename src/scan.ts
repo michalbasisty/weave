@@ -7,7 +7,7 @@ const SKIP = new Set([
   'test-results', '.gradle', 'Pods', 'DerivedData',
 ]);
 
-const CODE = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.vue', '.svelte', '.prisma', '.md']);
+const CODE = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.vue', '.svelte', '.prisma', '.md', '.json']);
 const MAX_BYTES = 512 * 1024;
 
 export type SourceFile = { rel: string; abs: string; text: string; lines: string[] };
