@@ -313,8 +313,14 @@ func TestInitUpgradeReplacesStaleEntry(t *testing.T) {
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		t.Fatal(err)
 	}
-	if got := cfg.MCPServers["weave"].Command; got != bin {
-		t.Fatalf("command = %q, want %q", got, bin)
+	if got := cfg.MCPServers["weave"].Command; got == "" {
+		t.Fatalf("no command in %s", raw)
+	} else if gotInfo, err := os.Stat(got); err != nil {
+		t.Fatalf("command %q does not exist: %v", got, err)
+	} else if binInfo, err := os.Stat(bin); err != nil {
+		t.Fatalf("test binary: %v", err)
+	} else if !os.SameFile(gotInfo, binInfo) {
+		t.Fatalf("command = %q, want the test binary %q", got, bin)
 	}
 
 	// Without the flag an existing file is untouched.
