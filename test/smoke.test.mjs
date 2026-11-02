@@ -218,7 +218,7 @@ test('explore --all bundles every indexed project', () => {
   assert.match(run.stdout, /2 project\(s\)/);
   assert.match(html, /"name":"fixture"/);
   assert.match(html, /"name":"twin"/);
-  const js = html.slice(html.indexOf('<script>') + 8, html.lastIndexOf('</script>'));
+  const js = html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>'));
   new Function(js);
   rmSync(twin, { recursive: true, force: true });
 });
@@ -297,7 +297,7 @@ test('explore renders a self-contained page that parses', () => {
   assert.match(html, /^<!doctype html>/);
   assert.match(html, /page:\/orders/);
   assert.doesNotMatch(html, /undefined/);
-  const js = html.slice(html.indexOf('<script>') + 8, html.lastIndexOf('</script>'));
+  const js = html.slice(html.lastIndexOf('<script>') + 8, html.lastIndexOf('</script>'));
   new Function(js); // syntax only: throws on a broken template
   assert.ok(html.length > 8000, `page too small: ${html.length}`);
 });

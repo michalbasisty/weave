@@ -11,6 +11,7 @@ export function renderExplore(projects: { name: string; graph: import('./model.t
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>weave — ${esc(title)}</title>
+<script>try{var p=localStorage.getItem('weave:theme')||'auto',d=p==='dark'||(p==='auto'&&matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.dataset.theme=d?'dark':'light'}catch(e){try{document.documentElement.dataset.theme=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'}catch(e2){}}</script>
 <style>${CSS}</style></head>
 <body>
 <header class="bar">
@@ -18,6 +19,7 @@ export function renderExplore(projects: { name: string; graph: import('./model.t
   <select id="proj" aria-label="Project"></select>
   <nav id="tabs" class="seg" aria-label="View"></nav>
   <div class="tools">
+    <button id="theme" class="iconbtn" title="Theme: auto" aria-label="Theme"></button>
     <button id="dense" class="iconbtn" title="Compact or comfortable rows" aria-label="Row density"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 3.5h10M2 7h10M2 10.5h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
     <button id="collapse" class="iconbtn" title="Hide the list" aria-label="Hide the list"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M8.5 3.5 5 7l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
   </div>
@@ -55,12 +57,13 @@ const CSS = `
   --p:#1a6740;--e:#1a5a94;--m:#8a5220;--t:#5c3d84;--g:#146b67;--r:#7d5f0d;--c:#3a3a38;--k:#7b7b74;--f:#71716a;
   --h:52px;
 }
-@media (prefers-color-scheme:dark){:root{
+/* the head script sets data-theme before first paint; auto follows the OS */
+:root[data-theme=dark]{
   --bg:#0f0f10;--panel:#1a1a19;--fg:#eeeee8;--fg2:#b6b6ae;--fg3:#8b8b84;
   --line:#2c2c29;--line2:#232322;
   --acc:#7cc79f;--acc-bg:#15241c;
   --p:#7cc79f;--e:#8fbae5;--m:#d5a677;--t:#c0a4e0;--g:#7ccbc6;--r:#dcc078;--c:#c4c4be;--k:#94948d;--f:#a0a099;
-}}
+}
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:var(--f4)/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
@@ -217,9 +220,25 @@ function load(i){pi=i;S=D.projects[i];sel=null;q='';$('#q').value='';
 }
 /* chrome state survives a reload; a sandboxed frame may block storage, so never throw */
 const store={get(k,d){try{const v=localStorage.getItem('weave:'+k);return v===null?d:v==='1'}catch{return d}},
-             set(k,v){try{localStorage.setItem('weave:'+k,v?'1':'0')}catch{}}};
+             set(k,v){try{localStorage.setItem('weave:'+k,v?'1':'0')}catch{}},
+             getStr(k,d){try{const v=localStorage.getItem('weave:'+k);return v===null?d:v}catch{return d}},
+             setStr(k,v){try{localStorage.setItem('weave:'+k,v)}catch{}}};
 let dense=store.get('dense',false),collapsed=store.get('collapsed',false);
+const THEMES=['auto','light','dark'];
+let theme=THEMES.includes(store.getStr('theme','auto'))?store.getStr('theme','auto'):'auto';
+const SVG={
+  auto:'<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 2a5 5 0 0 1 0 10z" fill="currentColor"/></svg>',
+  light:'<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 1v1.6M7 11.4V13M1 7h1.6M11.4 7H13M2.8 2.8l1.1 1.1M10.1 10.1l1.1 1.1M11.2 2.8l-1.1 1.1M3.9 10.1l-1.1 1.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+  dark:'<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M11.5 8.6A5 5 0 0 1 5.4 2.5a5.5 5.5 0 1 0 6.1 6.1z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>'};
+function applyTheme(){
+  const mq=typeof matchMedia==='function'?matchMedia('(prefers-color-scheme:dark)'):{matches:false};
+  const dark=theme==='dark'||(theme==='auto'&&mq.matches);
+  document.documentElement.dataset.theme=dark?'dark':'light';
+  const b=$('#theme');if(!b)return;
+  b.innerHTML=SVG[theme];b.title='Theme: '+theme;b.setAttribute('aria-label','Theme: '+theme);
+}
 function applyChrome(){
+  applyTheme();
   document.body.classList.toggle('dense',dense);
   document.querySelector('main').classList.toggle('collapsed',collapsed&&view!=='overview');
   $('#dense').setAttribute('aria-pressed',dense);
@@ -420,6 +439,11 @@ $('#tabs').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(
 $('#proj').addEventListener('change',e=>load(Number(e.target.value)));
 $('#q').addEventListener('input',e=>{q=e.target.value.trim().toLowerCase();list()});
 $('#dense').addEventListener('click',()=>{dense=!dense;store.set('dense',dense);applyChrome()});
+$('#theme').addEventListener('click',()=>{theme=THEMES[(THEMES.indexOf(theme)+1)%THEMES.length];store.setStr('theme',theme);applyChrome()});
+if(typeof matchMedia==='function'){
+  const mq=matchMedia('(prefers-color-scheme:dark)');
+  if(mq.addEventListener)mq.addEventListener('change',()=>{if(theme==='auto')applyTheme()});
+}
 $('#collapse').addEventListener('click',()=>{collapsed=!collapsed;store.set('collapsed',collapsed);applyChrome()});
 $('#detail').addEventListener('click',e=>{const p=e.target.closest('.path');if(p)copyPath(p)});
 function copyPath(el){
