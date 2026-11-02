@@ -427,6 +427,7 @@ and a pattern that matches nothing shows up as a gap rather than silently doing 
 ```bash
 node --test test/smoke.test.mjs   # 23 tests, incl. a renamed route that must fail the gate
 node test/bench.mjs <repo>        # cold / warm call latency and response size
+npm run parity                    # Go-port parity harness (Phase 0, TS vs TS today)
 ```
 
 The fixture is a miniature Express + Prisma + React repo. The tests drive the MCP

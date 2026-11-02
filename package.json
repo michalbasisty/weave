@@ -10,6 +10,7 @@
   "scripts": {
     "index": "node src/cli.ts index",
     "test": "node --test test/smoke.test.mjs",
+    "parity": "node test/parity/run.mjs",
     "bench": "node test/bench.mjs",
     "explore": "node src/cli.ts explore"
   }
