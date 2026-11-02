@@ -1,0 +1,15 @@
+{
+  "name": "weave",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Repo map for coding agents: UI pages -> HTTP endpoints -> modules -> database tables, plus spec requirements and tests.",
+  "engines": { "node": ">=22.6" },
+  "bin": { "weave": "./src/cli.ts" },
+  "scripts": {
+    "index": "node src/cli.ts index",
+    "test": "node --test test/smoke.test.mjs",
+    "bench": "node test/bench.mjs",
+    "explore": "node src/cli.ts explore"
+  }
+}

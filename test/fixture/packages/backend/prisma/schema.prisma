@@ -1,0 +1,15 @@
+model Order {
+  id     String @id
+  status String
+  parts  OrderPart[]
+
+  @@map("orders")
+}
+
+model OrderPart {
+  id      String @id
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  @@map("order_parts")
+}

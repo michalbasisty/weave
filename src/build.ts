@@ -1,0 +1,227 @@
+import { Builder, id, type Graph } from './model.ts';
+import {
+  classify,
+  extractCalls,
+  extractEndpoints,
+  extractModels,
+  extractPages,
+  importMap,
+  matchEndpoint,
+  joinPosix,
+  reachable,
+  type Endpoint,
+} from './extract.ts';
+import { extractSpecs, resolveEvidence } from './specs.ts';
+import { extractNextRoutes, extractTRPC } from './frameworks.ts';
+import { baseName, dirOf, eachMatch, walk, type SourceFile } from './scan.ts';
+
+export function buildGraph(root: string): Graph {
+  const files = walk(root);
+  const known = new Set(files.map((f) => f.rel));
+  const t = classify(files, root);
+  const b = new Builder();
+
+  for (const f of files) b.node({ id: id.file(f.rel), kind: 'file', name: f.rel, file: f.rel });
+
+  // file -> file imports: the only way a change to a shared util can be traced back.
+  for (const [from, targets] of importMap(files, known)) {
+    for (const to of targets) b.edge(id.file(from), id.file(to), 'imports');
+  }
+
+  const endpoints = extractEndpoints(files, b);
+  const nextStats = extractNextRoutes(files, b);
+  const trpcStats = extractTRPC(files, b);
+  const allEndpoints = [...endpoints, ...nextStats.endpoints, ...trpcStats.endpoints];
+  extractModels(t.prisma, b);
+  const pageInfo = extractPages(t.web, b);
+  const pages = pageInfo.pages;
+  const calls = extractCalls(files.filter((f) => /\.(t|j)sx?$/.test(f.rel) && !/\.(test|spec)\./.test(f.rel)));
+  
+
+  // page -> endpoint, through the component import graph
+  const imp = importMap(t.web, known);
+  const pageOfFile = new Map<string, string[]>();
+  for (const p of pages) {
+    if (!p.file) continue;
+    const scope = reachable(p.file, imp);
+    for (const c of calls) {
+      if (!scope.has(c.file)) continue;
+      const e = matchEndpoint(c, allEndpoints);
+      if (!e) continue;
+      const direct = c.file === p.file;
+      b.edge(id.page(p.route), e.id, 'calls', direct && !c.dynamic ? 'exact' : 'inferred');
+      const cur = pageOfFile.get(id.page(p.route)) ?? [];
+      cur.push(e.id);
+      pageOfFile.set(id.page(p.route), cur);
+    }
+  }
+
+  // Any call site with no page in scope still belongs to its file. A call that
+  // matches no endpoint is a broken contract: keep it, never drop it — unless its
+  // path starts with a variable, which is unknowable rather than broken.
+  let dynamicCalls = 0;
+  for (const c of calls) {
+    if (c.path.trimStart().startsWith('${')) {
+      dynamicCalls++;
+      continue;
+    }
+    // A fetch of the app root (`/?t=…`) is a page load, not a contract.
+    if (!c.path.split('?')[0].replace(/^\/+/, '')) continue;
+    const e = matchEndpoint(c, allEndpoints);
+    if (e) {
+      b.edge(id.file(c.file), e.id, 'calls', c.dynamic ? 'inferred' : 'exact');
+      continue;
+    }
+    const callId = id.call(c.method, c.path);
+    b.node({ id: callId, kind: 'call', name: `${c.method} ${c.path}`, file: c.file, line: c.line });
+    b.edge(id.file(c.file), callId, 'calls_missing', c.dynamic ? 'inferred' : 'exact');
+  }
+
+  // A requirement named in the code is an exact edge — the one traceability
+  // mechanism that survives renames, unlike a file path in a spec.
+  for (const f of files) {
+    for (const m of f.text.matchAll(/@req\s+((?:REQ|FR|NFR)-[A-Z0-9]+(?:-[A-Z0-9]+)*)/g)) {
+      b.edge(id.file(f.rel), id.req(m[1]), 'implements');
+    }
+  }
+
+  extractTests(files, allEndpoints, pages, b);
+  const { tasks } = extractSpecs(t.specs, b);
+  // task evidence -> files
+  for (const task of tasks) {
+    const tid = id.task(`${task.change}/${task.id}`);
+    for (const ev of task.evidence) {
+      const file = resolveEvidence(ev, known);
+      if (!file) continue;
+      if (file.endsWith('/')) {
+        for (const k of known) if (k.startsWith(file)) b.edge(tid, id.file(k), 'touches', 'inferred');
+      } else {
+        b.edge(tid, id.file(file), 'touches');
+      }
+    }
+  }
+
+  return withCoverage(b.finish(root, files.length), files, allEndpoints, calls, dynamicCalls, pageInfo.declared, pageInfo.skipped.length, nextStats, trpcStats, t.specs, tasks);
+}
+
+/**
+ * What the extractors actually covered. Precision is easy to claim; recall is the
+ * number that decides whether an answer can be trusted, so it is measured and shown.
+ */
+function withCoverage(
+  g: Graph,
+  files: SourceFile[],
+  endpoints: Endpoint[],
+  calls: { file: string }[],
+  dynamicCalls: number,
+  declaredRoutes: number,
+  skippedRoutes: number,
+  nextStats: { files: number; found: number; silent: string[] },
+  trpcStats: { files: number; found: number; silent: string[] },
+  specFiles: SourceFile[],
+  tasks: { change: string }[],
+): Graph {
+  const isTest = (rel: string) => /\.(test|spec)\.[tj]sx?$/.test(rel) || /(^|\/)(__tests__|e2e)\//.test(rel);
+  const routeLike = files.filter((f) => !isTest(f.rel) && /router\.(get|post|put|patch|delete)\s*\(/.test(f.text));
+  const withEndpoints = new Set(endpoints.map((e) => e.file));
+  const silentRoutes = routeLike.filter((f) => !withEndpoints.has(f.rel)).map((f) => f.rel);
+
+  const orphan = g.nodes.filter((n) => n.kind === 'call').length;
+
+  const taskFiles = specFiles.filter((f) => /\/tasks\.md$/.test(f.rel) && !/\/templates\//.test(f.rel));
+  const parsed = new Set(tasks.map((t) => t.change));
+  const silentSpecs = taskFiles
+    .filter((f) => !parsed.has(f.rel.split('/').slice(-2)[0] ?? ''))
+    .map((f) => f.rel);
+
+  g.coverage = {
+    routes: { files: routeLike.length, found: routeLike.length - silentRoutes.length, silent: silentRoutes.slice(0, 12) },
+    calls: { total: calls.length - dynamicCalls, resolved: calls.length - dynamicCalls - orphan, dynamic: dynamicCalls },
+    pages: { declared: declaredRoutes, mapped: declaredRoutes - skippedRoutes, skipped: skippedRoutes },
+    specs: { files: taskFiles.length, parsed: parsed.size, silent: silentSpecs },
+    prisma: { models: g.nodes.filter((n) => n.kind === 'model').length, tables: g.nodes.filter((n) => n.kind === 'table').length },
+    next: { files: nextStats.files, found: nextStats.found, silent: nextStats.silent.slice(0, 12) },
+    trpc: { files: trpcStats.files, found: trpcStats.found, silent: trpcStats.silent.slice(0, 12) },
+  };
+  return g;
+}
+
+function extractTests(
+  files: ReturnType<typeof walk>,
+  endpoints: Endpoint[],
+  pages: { route: string; component: string; file?: string }[],
+  b: Builder,
+): void {
+  const isTest = (rel: string) => /(^|\/)(__tests__|e2e|tests?)\//.test(rel) || /\.(test|spec)\.[tj]sx?$/.test(rel);
+  for (const f of files) {
+    if (!isTest(f.rel) || !/\.(test|spec)\.[tj]sx?$/.test(f.rel)) continue;
+    const tid = id.test(f.rel);
+    b.node({ id: tid, kind: 'test', name: f.rel, file: f.rel });
+
+    for (const m of f.text.matchAll(/\bREQ-[A-Z0-9]+(?:-[A-Z0-9]+)*\b/g)) b.edge(tid, id.req(m[0]), 'asserts');
+    for (const m of f.text.matchAll(/@req\s+((?:REQ|FR|NFR)-[A-Z0-9]+(?:-[A-Z0-9]+)*)/g)) b.edge(tid, id.req(m[1]), 'verifies');
+
+    const mod = testModule(f.rel);
+    if (mod) b.edge(tid, id.module(mod), 'covers');
+    const dn = dirOf(f.rel);
+    if (/__tests__|tests?$|e2e/.test(dn)) b.edge(tid, id.file(f.rel), 'in');
+
+    // literal API paths referenced by the test
+    for (const m of f.text.matchAll(/['"`](\/api\/[^'"`$]+)['"`]/g)) {
+      for (const method of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']) {
+        const e = matchEndpoint({ method, path: m[1], file: f.rel, line: 0, dynamic: false }, endpoints);
+        if (e) b.edge(tid, e.id, 'hits');
+      }
+    }
+    // client calls relative to the API base: admin.get('/machines?limit=1'), tech.get(`/tasks/${id}`)
+    for (const m of f.text.matchAll(/\.(get|post|put|patch|delete)\s*\(\s*[`'"]([^`'"\n]+)[`'"]/g)) {
+      const dynamic = m[2].includes('${');
+      const path = dynamic ? m[2].replace(/\$\{[^}]*\}/g, '*') : m[2];
+      const e = matchEndpoint({ method: m[1].toUpperCase(), path, file: f.rel, line: 0, dynamic }, endpoints);
+      if (e) b.edge(tid, e.id, 'hits', dynamic ? 'inferred' : 'exact');
+    }
+    // e2e navigation: page.goto(BASE + '/tasks')
+    for (const { m } of eachMatch(f.text, /(?:page\.goto|goto|visit)\s*\(([^)]*)\)/)) {
+      const q = m[1].match(/['"`](\/[^'"`$]*)['"`]/);
+      if (!q) continue;
+      const p = matchPage(q[1], pages);
+      if (p) b.edge(tid, id.page(p.route), 'exercises');
+    }
+  }
+}
+
+function testModule(rel: string): string {
+  const m = rel.match(/modules\/([^/]+)\//);
+  if (m) return m[1];
+  const name = baseName(rel).replace(/\.(test|spec)\.[tj]sx?$/, '');
+  const first = name.split('.')[0];
+  return first && first !== 'index' ? first.replace(/[A-Z]/, (c) => c.toLowerCase()) : '';
+}
+
+function matchPage(path: string, pages: { route: string }[]) {
+  const p = path.split('?')[0].replace(/\/$/, '') || '/';
+  const want = p.split('/').filter(Boolean);
+  let best: { route: string } | null = null;
+  let bestLiteral = -1;
+  for (const page of pages) {
+    const have = page.route.split('/').filter(Boolean);
+    if (have.length !== want.length) continue;
+    let literal = 0;
+    let ok = true;
+    for (let i = 0; i < have.length; i++) {
+      if (have[i].startsWith(':')) continue;
+      if (have[i] !== want[i]) {
+        ok = false;
+        break;
+      }
+      literal++;
+    }
+    if (ok && literal > bestLiteral) {
+      bestLiteral = literal;
+      best = page;
+    }
+  }
+  return best;
+}
+
+export { joinPosix };
