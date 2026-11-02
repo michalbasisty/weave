@@ -11,12 +11,15 @@ import {
   reachable,
   type Endpoint,
 } from './extract.ts';
-import { extractSpecs, resolveEvidence } from './specs.ts';
+import { extractSpecs, resolveEvidence, dirIndex } from './specs.ts';
 import { extractNextRoutes, extractTRPC } from './frameworks.ts';
+import { Timer } from './perf.ts';
 import { baseName, dirOf, eachMatch, walk, type SourceFile } from './scan.ts';
 
 export function buildGraph(root: string): Graph {
+  const timer = new Timer();
   const files = walk(root);
+  timer.lap('walk');
   const known = new Set(files.map((f) => f.rel));
   const t = classify(files, root);
   const b = new Builder();
@@ -36,6 +39,7 @@ export function buildGraph(root: string): Graph {
   const pageInfo = extractPages(t.web, b);
   const pages = pageInfo.pages;
   const calls = extractCalls(files.filter((f) => /\.(t|j)sx?$/.test(f.rel) && !/\.(test|spec)\./.test(f.rel)));
+  timer.lap('extract');
   
 
   // page -> endpoint, through the component import graph
@@ -87,11 +91,16 @@ export function buildGraph(root: string): Graph {
 
   extractTests(files, allEndpoints, pages, b);
   const { tasks } = extractSpecs(t.specs, b);
-  // task evidence -> files
+  timer.lap('specs');
+  // task evidence -> files (memoised: the same paths repeat across hundreds of tasks,
+  // and the directory fallback scans every known file)
+  const evCache = new Map<string, string | null>();
+  const dirs = dirIndex(known);
   for (const task of tasks) {
     const tid = id.task(`${task.change}/${task.id}`);
     for (const ev of task.evidence) {
-      const file = resolveEvidence(ev, known);
+      if (!evCache.has(ev)) evCache.set(ev, resolveEvidence(ev, known, dirs));
+      const file = evCache.get(ev);
       if (!file) continue;
       if (file.endsWith('/')) {
         for (const k of known) if (k.startsWith(file)) b.edge(tid, id.file(k), 'touches', 'inferred');
@@ -101,7 +110,11 @@ export function buildGraph(root: string): Graph {
     }
   }
 
-  return withCoverage(b.finish(root, files.length), files, allEndpoints, calls, dynamicCalls, pageInfo.declared, pageInfo.skipped.length, nextStats, trpcStats, t.specs, tasks);
+  timer.lap('evidence');
+  const g = withCoverage(b.finish(root, files.length), files, allEndpoints, calls, dynamicCalls, pageInfo.declared, pageInfo.skipped.length, nextStats, trpcStats, t.specs, tasks);
+  timer.lap('coverage');
+  g.perf = { totalMs: timer.total, phases: timer.phases, heapMb: Math.round(process.memoryUsage().heapUsed / 1048576) };
+  return g;
 }
 
 /**
@@ -122,7 +135,8 @@ function withCoverage(
   tasks: { change: string }[],
 ): Graph {
   const isTest = (rel: string) => /\.(test|spec)\.[tj]sx?$/.test(rel) || /(^|\/)(__tests__|e2e)\//.test(rel);
-  const routeLike = files.filter((f) => !isTest(f.rel) && /router\.(get|post|put|patch|delete)\s*\(/.test(f.text));
+  // indexOf first: running the router regex against every file costs more than the walk.
+  const routeLike = files.filter((f) => !isTest(f.rel) && f.text.includes('router') && /router\.(get|post|put|patch|delete)\s*\(/.test(f.text));
   const withEndpoints = new Set(endpoints.map((e) => e.file));
   const silentRoutes = routeLike.filter((f) => !withEndpoints.has(f.rel)).map((f) => f.rel);
 

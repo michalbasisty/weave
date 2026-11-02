@@ -110,6 +110,8 @@ export function extractSpecs(specFiles: SourceFile[], b: Builder): { reqs: Req[]
       cur = null;
     };
     for (const raw of f.lines) {
+      // A "Definition of done" or "Checklist" section is not a task list.
+      if (/^#{1,4}\s*(definition of done|checklist|verification|notes|references)/i.test(raw)) break;
       const tm = raw.match(TASK_START);
       if (tm) {
         flush();
@@ -165,12 +167,29 @@ export function firstParagraph(md: string, max = 280): string {
 }
 
 /** Resolve a task evidence path to a known repo file (tries monorepo conventions). */
-export function resolveEvidence(path: string, known: Set<string>): string | null {
+export function resolveEvidence(path: string, known: Set<string>, dirs?: Set<string>): string | null {
   const p = path.replace(/^\.?\//, '').replace(/\/$/, '');
   const candidates = [p, `packages/backend/src/${p}`, `packages/web/src/${p}`, `packages/backend/${p}`, `packages/web/${p}`, `specs/${p}`];
   for (const c of candidates) if (known.has(c)) return c;
   for (const c of candidates) {
+    if (dirs) {
+      if (dirs.has(c)) return c + '/';
+      continue;
+    }
     for (const k of known) if (k.startsWith(c + '/')) return c + '/';
   }
   return null;
+}
+
+/** Every directory prefix in the repo, built once so evidence resolution is O(1). */
+export function dirIndex(known: Set<string>): Set<string> {
+  const dirs = new Set<string>();
+  for (const k of known) {
+    let i = k.indexOf('/');
+    while (i > 0) {
+      dirs.add(k.slice(0, i));
+      i = k.indexOf('/', i + 1);
+    }
+  }
+  return dirs;
 }

@@ -130,7 +130,7 @@ and `weave` is not guaranteed to be on it.
 | `search(query)` | endpoints, pages, modules, tables, requirements, tests by name. One line each, never file contents. | ~150 tokens |
 | `changes(slug)` | a spec change record: tasks, open tasks, files they touch, and the blast radius of those files. With no slug: the newest 25 records with progress. | ~400 tokens |
 | **`plan(slug)`** | the next unfinished task: its files, endpoints, tables, tests and the run command. Call this instead of reading `tasks.md`. | ~150 tokens |
-| `status()` | graph health: counts, endpoints no page calls, endpoints no test covers, pages without e2e. | ~200 tokens |
+| `status()` | graph health: counts, endpoints no page calls, endpoints no test covers, pages without e2e, phase timings, and this server's own call latency. | ~250 tokens |
 
 The server rebuilds a stale index (older than 15 s) before answering, so the map follows the agent's edits.
 
@@ -150,10 +150,29 @@ weave search  <query>
 weave check   [file...]    # no args = git diff; exit 1 on a broken contract
 weave evidence [REQ...]
 weave doctor
+weave perf   [--runs N]    # index timings over time, or N fresh runs
 weave init
 weave mcp
 weave --help
 ```
+
+## Performance
+
+Every index run appends a line to `.weave/perf.jsonl`: total, per-phase timings, node
+and edge counts, heap. `weave perf` prints the last eight runs with the trend, and
+`--runs 3` indexes three times to separate cold from warm cost.
+
+```
+last 8 index run(s)
+when                  files  nodes  edges    total     walk  extract    specs  evidence  coverage
+2026-11-02 14:28:58     745   2048   4203  1302.1ms  529.7ms  248.2ms   85.3ms         0   438.9ms
+2026-11-02 14:33:21     745   2048   4203   628.2ms  356.8ms  197.9ms   60.5ms     4.9ms       8ms
+avg 1094ms · max 1302ms · heap 63MB · trend -48% over the window
+```
+
+`doctor` also reports the last run's phases and the index file size, and the MCP
+`status` tool adds this server's own uptime, call count and p95 latency — so a slow
+agent session is visible instead of felt.
 
 Without `npm link`, every command also runs as `node src/cli.ts <command>`.
 

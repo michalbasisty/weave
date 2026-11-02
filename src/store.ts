@@ -2,6 +2,7 @@ import { buildGraph } from './build.ts';
 import * as registry from './registry.ts';
 import { GRAPH_VERSION, type Graph } from './model.ts';
 import { newestMtime } from './scan.ts';
+import { appendPerf, perfReport, readPerf } from './perf.ts';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -44,6 +45,17 @@ export function reindex(root: string): Graph {
   }
   saveGraph(root, g);
   noteCounts(root, g);
+  if (g.perf) {
+    appendPerf(root, {
+      at: g.builtAt,
+      files: g.fileCount,
+      nodes: g.nodes.length,
+      edges: g.edges.length,
+      totalMs: g.perf.totalMs,
+      phases: g.perf.phases,
+      heapMb: g.perf.heapMb,
+    });
+  }
   return g;
 }
 

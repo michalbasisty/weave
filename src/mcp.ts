@@ -136,6 +136,8 @@ function handle(msg: Rpc, getGraph: (project?: string) => Graph, multi: boolean)
       case 'ping':
         return reply({});
       case 'tools/call': {
+        const started = performance.now();
+        try {
         const name = msg.params?.name;
         const a = msg.params?.arguments ?? {};
         g = getGraph(a.project ? String(a.project) : undefined);
@@ -167,12 +169,17 @@ function handle(msg: Rpc, getGraph: (project?: string) => Graph, multi: boolean)
             text = plan(g, String(a.slug), a.task ? String(a.task) : undefined);
             break;
           case 'status':
-            text = doctor(g);
+            text = doctor(g) + '\n' + runtimeLine(g);
             break;
           default:
             return fail(-32602, `unknown tool ${name}; available: ${TOOL_DEFS.map((t) => t.name).join(', ')}`);
         }
         return reply({ content: [{ type: 'text', text }] });
+        } finally {
+          runtime.calls++;
+          runtime.ms.push(performance.now() - started);
+          if (runtime.ms.length > 200) runtime.ms.shift();
+        }
       }
       default:
         return fail(-32601, `method not found: ${msg.method}`);
@@ -187,8 +194,20 @@ function handle(msg: Rpc, getGraph: (project?: string) => Graph, multi: boolean)
   }
 }
 
-function asFiles(v: unknown): string[] {
-  if (Array.isArray(v)) return v.map(String).filter(Boolean);
+/** Per-process counters: what the agent actually costs, not what we hoped. */
+const runtime = { start: Date.now(), calls: 0, ms: [] as number[] };
+
+function runtimeLine(g: Graph): string {
+  const up = Math.round((Date.now() - runtime.start) / 1000);
+  if (!runtime.calls) return `runtime      up ${up}s · no tool calls yet`;
+  const sorted = [...runtime.ms].sort((a, b) => a - b);
+  const avg = runtime.ms.reduce((a, b) => a + b, 0) / runtime.ms.length;
+  const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
+  const lastIndex = g.perf ? ` · last index ${g.perf.totalMs}ms` : '';
+  return `runtime      up ${up}s · ${runtime.calls} call(s) · avg ${avg.toFixed(1)}ms · p95 ${p95.toFixed(1)}ms${lastIndex}`;
+}
+
+function asFiles(v: unknown): string[] {  if (Array.isArray(v)) return v.map(String).filter(Boolean);
   if (typeof v === 'string' && v) return [v];
   return [];
 }

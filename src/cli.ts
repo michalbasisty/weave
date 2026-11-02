@@ -7,7 +7,8 @@ import { newestMtime } from './scan.ts';
 import { findJUnitFile, parseJUnit, type Case } from './junit.ts';
 import { renderExplore } from './render.ts';
 import * as registry from './registry.ts';
-import { analyze, changeView, context, doctor, evidence, evidenceFacts, impact, listChanges, plan, search } from './query.ts';
+import { appendPerf, perfReport, readPerf } from './perf.ts';
+import { analyze, changeView, context, doctor, evidence, evidenceFacts, impact, listChanges, phaseLine, plan, search } from './query.ts';
 import { serveMcp } from './mcp.ts';
 import type { Graph } from './model.ts';
 
@@ -117,7 +118,19 @@ switch (cmd) {
     const parts = [...counts.entries()].filter(([k]) => k !== 'file').map(([k, v]) => `${k} ${v}`);
     console.log(`indexed ${g.fileCount} files, ${g.nodes.length} nodes, ${g.edges.length} edges in ${Date.now() - t0}ms`);
     console.log(parts.join('  '));
+    if (g.perf) console.log(phaseLine(g.perf));
     console.log(indexPath(root));
+    break;
+  }
+  case 'perf': {
+    const runs = Number(arg('runs', '0'));
+    if (runs > 0) {
+      for (let i = 1; i <= runs; i++) {
+        const g = reindex(root);
+        console.log(`run ${i}: ${g.perf?.totalMs ?? 0}ms  ${g.perf ? phaseLine(g.perf, true) : ''}`);
+      }
+    }
+    console.log(perfReport(readPerf(root)));
     break;
   }
   case 'context':
@@ -291,6 +304,7 @@ function helpText(): string {
   weave check   [file...]       fail when a change breaks a contract (no args: git diff)
   weave evidence [REQ...]       which requirements a JUnit report proves
   weave doctor                  graph health
+  weave perf    [--runs N]      index timings over time, or N fresh runs
   weave init                    connect Claude, Cursor, opencode, Codex
   weave forget  <name>          drop a project from the list
   weave mcp                     MCP server on stdio (--all: serve every project)

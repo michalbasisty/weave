@@ -543,6 +543,12 @@ export function search(g: Graph, q: string, limit = 20): string {
 
 // ---------------------------------------------------------------- doctor
 
+/** One line of phase timings, shared by `index`, `perf` and `doctor`. */
+export function phaseLine(p: { totalMs: number; phases: Record<string, number>; heapMb: number }, compact = false): string {
+  const parts = Object.entries(p.phases).map(([k, v]) => `${k} ${Math.round(v)}ms`);
+  return compact ? parts.join(' · ') : `${parts.join(' · ')} · heap ${p.heapMb}MB`;
+}
+
 export function doctor(g: Graph): string {
   const ix = new Index(g);
   const counts = new Map<string, number>();
@@ -560,7 +566,17 @@ export function doctor(g: Graph): string {
   lines.push(`pages with no e2e: ${pageNoTest.length}`);
   for (const p of pageNoTest.slice(0, MAX)) lines.push(`  ${p.name}`);
   lines.push(...coverageLines(g));
+  if (g.perf) {
+    lines.push('performance');
+    lines.push(`  last index   ${g.perf.totalMs}ms · ${phaseLine(g.perf, true)}`);
+    lines.push(`  graph file   ${graphSize(g)} · heap ${g.perf.heapMb}MB`);
+  }
   return lines.join('\n');
+}
+
+function graphSize(g: Graph): string {
+  const bytes = JSON.stringify(g).length;
+  return bytes > 1048576 ? `${(bytes / 1048576).toFixed(1)}MB` : `${Math.round(bytes / 1024)}KB`;
 }
 
 /** Recall, stated plainly: what the extractors found versus what the repo contains. */

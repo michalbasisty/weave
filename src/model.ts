@@ -53,6 +53,8 @@ export interface Graph {
   /** Endpoint names present in the previous index: lets `check` prove what a change removed. */
   prevEndpoints?: string[];
   coverage?: Coverage;
+  /** Phase timings of the run that produced this index. */
+  perf?: { totalMs: number; phases: Record<string, number>; heapMb: number };
 }
 
 export interface Targets {
