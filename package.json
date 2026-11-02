@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "description": "Repo map for coding agents: UI pages -> HTTP endpoints -> modules -> database tables, plus spec requirements and tests.",
+  "repository": "github:michalbasisty/weave",
   "engines": { "node": ">=22.6" },
   "bin": { "weave": "./src/cli.ts" },
   "scripts": {

@@ -219,7 +219,7 @@ weave check --strict-tests   # also fail when a touched endpoint has no test
 ```yaml
 - uses: actions/setup-node@v4
   with: { node-version: 22 }
-- uses: your-org/weave@v1
+- uses: michalbasisty/weave@main
   with: { root: '.', strict-tests: 'true' }
 ```
 
