@@ -181,7 +181,11 @@ this page, so every choice here optimises for reading, not for parsing.
 
 Select anything and the right pane shows its description, a one-line blast radius
 ("connected to 3 endpoints, 1 test"), and its relations split into outbound and inbound.
-`/` focuses the filter, `↑`/`↓` walk the list, `Esc` clears.
+
+Two controls next to the view switcher keep it usable on any screen: a **density**
+toggle (comfortable / compact) and **hide the list** to read a detail at full width.
+Both survive a reload. Click a file path to copy it. `/` focuses the filter, `↑`/`↓`
+walk the list, `Esc` clears.
 
 **Every node explains itself.** Descriptions are read from the source, not written twice:
 

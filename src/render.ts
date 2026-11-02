@@ -17,6 +17,10 @@ export function renderExplore(projects: { name: string; graph: import('./model.t
   <span class="brand">weave</span>
   <select id="proj" aria-label="Project"></select>
   <nav id="tabs" class="seg" aria-label="View"></nav>
+  <div class="tools">
+    <button id="dense" class="iconbtn" title="Compact or comfortable rows" aria-label="Row density"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M2 3.5h10M2 7h10M2 10.5h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button>
+    <button id="collapse" class="iconbtn" title="Hide the list" aria-label="Hide the list"><svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true"><path d="M8.5 3.5 5 7l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </div>
   <input id="q" class="q" placeholder="Filter — press /" aria-label="Filter" autocomplete="off" spellcheck="false">
 </header>
 <main>
@@ -73,10 +77,24 @@ button{font:inherit;color:inherit}
 .seg button .n{font-size:var(--f6);opacity:.7;margin-left:var(--s1)}
 .q{margin-left:auto;width:200px;padding:6px var(--s3);border:1px solid var(--line);border-radius:var(--s2);background:var(--panel);color:var(--fg);font:inherit;font-size:var(--f5)}
 .q:focus{outline:2px solid var(--acc);outline-offset:-1px}
+.tools{display:flex;gap:var(--s1);margin-left:var(--s2)}
+.iconbtn{width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--line);background:var(--panel);color:var(--fg2);border-radius:var(--s2);cursor:pointer;font-size:var(--f5);line-height:1}
+.iconbtn:hover{border-color:var(--acc);color:var(--acc)}
+.iconbtn[aria-pressed=true]{background:var(--acc-bg);border-color:var(--acc);color:var(--acc)}
+/* density: one switch, two paddings */
+body.dense{--s3:8px;--s4:12px;--s5:16px;--s6:28px;--f5:11.5px;--f6:10px}
+body.dense .item .s{-webkit-line-clamp:1}
+body.dense .fdesc{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
+body.dense .chip{padding:3px 7px}
+body.dense .rel{padding:1px 0}
+main.collapsed .dhead,main.collapsed .body{max-width:860px;margin-left:auto;margin-right:auto}
+.countbar{display:flex;justify-content:space-between;align-items:baseline;padding:var(--s2) var(--s3);font-size:var(--f6);color:var(--fg3);text-transform:uppercase;letter-spacing:.07em;border-bottom:1px solid var(--line2)}
 main{display:grid;grid-template-columns:minmax(340px,460px) 1fr;height:calc(100% - var(--h) - 34px)}
 main.solo{grid-template-columns:1fr}
 main.solo .list{display:none}
 main.solo .detail{max-width:960px}
+main.collapsed{grid-template-columns:1fr}
+main.collapsed .list{display:none}
 @media (max-width:1100px){main{grid-template-columns:minmax(300px,380px) 1fr}}
 @media (max-width:880px){main{grid-template-columns:1fr;height:auto}.q{width:120px}}
 @media (max-width:720px){.brand{display:none}.bar{gap:var(--s2);padding:0 var(--s3)}}
@@ -128,7 +146,8 @@ main.solo .detail{max-width:960px}
 .dhead{position:sticky;top:0;z-index:5;background:var(--bg);padding:var(--s5) var(--s5) var(--s3);border-bottom:1px solid var(--line)}
 .dhead h1{margin:0;font:600 var(--f1)/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
 .dmeta{margin-top:var(--s2);display:flex;gap:var(--s3);align-items:baseline;flex-wrap:wrap;font-size:var(--f5);color:var(--fg3)}
-.dmeta .path{font-family:ui-monospace,monospace;word-break:break-all;color:var(--fg2)}
+.dmeta .path{font-family:ui-monospace,monospace;word-break:break-all;color:var(--fg2);cursor:copy;border-bottom:1px dashed transparent}
+.dmeta .path:hover{border-bottom-color:var(--line);color:var(--fg)}
 .body{padding:0 var(--s5) var(--s6)}
 .lead{font-size:var(--f3);line-height:1.62;margin:var(--s4) 0 var(--s5);max-width:70ch}
 .lead.muted{font-size:var(--f4);font-style:italic;color:var(--fg3)}
@@ -196,6 +215,18 @@ function load(i){pi=i;S=D.projects[i];sel=null;q='';$('#q').value='';
   $('#foot').textContent=name+' · '+S.nodes.length+' nodes · '+S.edges.length+' edges · '+new Date(S.builtAt).toLocaleString();
   tabs();list();detail();
 }
+/* chrome state survives a reload; a sandboxed frame may block storage, so never throw */
+const store={get(k,d){try{const v=localStorage.getItem('weave:'+k);return v===null?d:v==='1'}catch{return d}},
+             set(k,v){try{localStorage.setItem('weave:'+k,v?'1':'0')}catch{}}};
+let dense=store.get('dense',false),collapsed=store.get('collapsed',false);
+function applyChrome(){
+  document.body.classList.toggle('dense',dense);
+  document.querySelector('main').classList.toggle('collapsed',collapsed&&view!=='overview');
+  $('#dense').setAttribute('aria-pressed',dense);
+  $('#collapse').setAttribute('aria-pressed',collapsed);
+  $('#collapse').style.visibility=view==='overview'?'hidden':'visible';
+}
+function head(noun,n,hint){return '<div class="countbar"><span>'+n+' '+noun+'</span><span>'+esc(hint||'')+'</span></div>'}
 function repoName(){return S.root.replace(/\\\\/g,'/').split('/').filter(Boolean).pop()||S.root}
 function tabs(){
   $('#tabs').innerHTML=VIEWS.map(([k,t])=>{
@@ -243,7 +274,7 @@ function listOverview(){
 function listFlows(){
   const rows=S.flows.filter(f=>match(f.p)||f.e.some(e=>match(lbl(e)))||f.t.some(t=>match(lbl(t))));
   if(!rows.length)return none('No flows match.');
-  return rows.map(f=>{
+  return head('pages',rows.length,'page → endpoints → tables')+rows.map(f=>{
     const pg=ix.get(f.p);
     return '<div class="flow">'+tagged(f.p,'page')+
       (pg&&pg.d?'<p class="fdesc">'+esc(pg.d)+'</p>':'<p class="fdesc" style="font-style:italic;opacity:.6">No description in the source.</p>')+
@@ -254,27 +285,32 @@ function listFlows(){
 }
 
 /* ---------------------------------------------------------------- indexes */
+function pick(kind){
+  return S.nodes.filter(n=>n.k===kind&&(match(n.n)||match(n.f)||match(n.d))).sort((a,b)=>a.n.localeCompare(b.n));
+}
+function rowOf(n){
+  return '<button class="item" data-go="'+esc(n.i)+'">'+
+    '<div class="row"><div class="n">'+esc(n.n)+'</div>'+(testedBadge(n.i))+'</div>'+
+    (n.d?'<div class="s">'+esc(n.d)+'</div>':'')+
+    (n.f?'<div class="m">'+esc(n.f)+'</div>':'')+'</button>';
+}
 function rowsOf(kind){
-  return S.nodes.filter(n=>n.k===kind&&(match(n.n)||match(n.f)||match(n.d)))
-    .sort((a,b)=>a.n.localeCompare(b.n))
-    .map(n=>'<button class="item" data-go="'+esc(n.i)+'">'+
-      '<div class="row"><div class="n">'+esc(n.n)+'</div>'+(testedBadge(n.i))+'</div>'+
-      (n.d?'<div class="s">'+esc(n.d)+'</div>':'')+
-      (n.f?'<div class="m">'+esc(n.f)+'</div>':'')+'</button>').join('');
+  const rows=pick(kind);
+  return rows.length?head(kind,rows.length,'sorted by name')+rows.map(rowOf).join(''):none('No '+kind+' match.');
 }
 function testedBadge(id){
   if(kindOf(id)!=='endpoint')return '';
   const tested=(inn.get(id)||[]).some(([a,k])=>k==='hits'||k==='covers');
   return '<span class="tag'+(tested?'':' bad')+'">'+(tested?'tested':'no test')+'</span>';
 }
-function listPages(){const h=rowsOf('page');return h||none('No pages match.')}
-function listTables(){const h=rowsOf('table');return h||none('No tables match.')}
-function listEndpoints(){const h=rowsOf('endpoint');return h||none('No endpoints match.')}
+function listPages(){return rowsOf('page')}
+function listTables(){return rowsOf('table')}
+function listEndpoints(){return rowsOf('endpoint')}
 
 function listSpecs(){
   const rows=S.changes.filter(c=>match(c.c)||match(c.sum)||c.open.some(o=>match(o)));
   if(!rows.length)return none('No change records match.');
-  return rows.map(c=>{const pct=Math.round((c.done/Math.max(1,c.total))*100);
+  return head('changes',rows.length,'newest first')+rows.map(c=>{const pct=Math.round((c.done/Math.max(1,c.total))*100);
     return '<button class="item" data-go="'+esc(c.c)+'"><div class="row"><div class="n">'+esc(c.c)+'</div>'+
       '<span class="tag">'+c.done+'/'+c.total+'</span></div>'+
       (c.sum?'<div class="s">'+esc(c.sum)+'</div>':'')+
@@ -287,14 +323,14 @@ function listRisk(){
     .sort((a,b)=>b.d-a.d).slice(0,80);
   if(!rows.length)return none('Nothing depends on anything yet.');
   const max=rows[0].d;
-  return rows.map(r=>'<button class="item" data-go="'+esc(r.n.i)+'"><div class="row"><div class="n">'+esc(r.n.n)+'</div>'+
+  return head('nodes',rows.length,'most depended-on first')+rows.map(r=>'<button class="item" data-go="'+esc(r.n.i)+'"><div class="row"><div class="n">'+esc(r.n.n)+'</div>'+
     '<span class="tag">'+r.d+' dep'+(r.d===1?'':'s')+'</span></div>'+
     (r.n.d?'<div class="s">'+esc(r.n.d)+'</div>':'')+
     '<div class="prog"><i style="width:'+Math.max(6,Math.round(r.d/max*100))+'%"></i></div></button>').join('');
 }
 function listIssues(){
   if(!S.issues.length)return '<div class="empty"><b>No issues found</b><p>No broken call sites, no endpoint without a test, no page without e2e, no requirement whose text changed.</p></div>';
-  return S.issues.map(g=>'<div class="callout '+(g.kind==='error'?'err':'warn')+'" style="margin:12px 8px"><h4>'+esc(g.title)+'</h4>'+
+  return head('groups',S.issues.length,'every group links into the graph')+S.issues.map(g=>'<div class="callout '+(g.kind==='error'?'err':'warn')+'" style="margin:12px 8px"><h4>'+esc(g.title)+'</h4>'+
     '<div class="v">'+g.items.slice(0,10).map(i=>chip(i)).join('')+
     (g.items.length>10?'<span class="arrow">+'+(g.items.length-10)+'</span>':'')+'</div></div>').join('');
 }
@@ -302,7 +338,9 @@ function none(msg){return '<div class="empty"><b>'+esc(msg)+'</b><p>Clear the fi
 
 function list(){
   const solo=view==='overview';
-  document.querySelector('main').classList.toggle('solo',solo);
+  const main=document.querySelector('main');
+  main.classList.toggle('solo',solo);
+  applyChrome();
   const box=$('#list');
   if(solo){box.innerHTML='';visible=[];return;}
   const keep=box.scrollTop;
@@ -381,6 +419,15 @@ $('#detail').addEventListener('click',e=>{const b=e.target.closest('[data-go]');
 $('#tabs').addEventListener('click',e=>{const b=e.target.closest('[data-v]');if(b){view=b.dataset.v;sel=null;tabs();list();detail()}});
 $('#proj').addEventListener('change',e=>load(Number(e.target.value)));
 $('#q').addEventListener('input',e=>{q=e.target.value.trim().toLowerCase();list()});
+$('#dense').addEventListener('click',()=>{dense=!dense;store.set('dense',dense);applyChrome()});
+$('#collapse').addEventListener('click',()=>{collapsed=!collapsed;store.set('collapsed',collapsed);applyChrome()});
+$('#detail').addEventListener('click',e=>{const p=e.target.closest('.path');if(p)copyPath(p)});
+function copyPath(el){
+  const text=el.textContent.replace(/\s*copied$/,'');
+  try{navigator.clipboard.writeText(text)}catch{}
+  el.dataset.copied='1';el.textContent=text+' copied';
+  setTimeout(()=>{delete el.dataset.copied;el.textContent=text},1200);
+}
 
 function pick(id){
   // From the overview there is no master list: open the tab this node belongs to.

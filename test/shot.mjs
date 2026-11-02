@@ -30,6 +30,14 @@ for (const scheme of ['light', 'dark']) {
   await page.click('.flow [data-go]');
   await page.waitForTimeout(150);
   await page.screenshot({ path: join(out, `${scheme}-detail.png`) });
+
+  // compact rows, then the list hidden
+  await page.click('#dense');
+  await page.waitForTimeout(120);
+  await page.screenshot({ path: join(out, `${scheme}-compact.png`) });
+  await page.click('#collapse');
+  await page.waitForTimeout(120);
+  await page.screenshot({ path: join(out, `${scheme}-collapsed.png`) });
   console.log(scheme, errors.length ? `ERRORS: ${errors.join(' | ')}` : 'no console errors');
   await ctx.close();
 }
