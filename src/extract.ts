@@ -98,13 +98,16 @@ const MOUNT = /app\.use\s*\(\s*['"`](\/api[^'"`]*)['"`]\s*,\s*(\w+)\s*\)/;
 
 export function extractEndpoints(files: SourceFile[], b: Builder): Endpoint[] {
   const known = new Set(files.map((f) => f.rel));
-  const routeFiles = files.filter((f) => /router\.(?:get|post|put|patch|delete)\s*\(/.test(f.text));
+  // Only code can declare a route: documentation and specs quote examples.
+  const isCode = (rel: string) => /\.(t|j)sx?$/.test(rel);
+  const routeFiles = files.filter((f) => isCode(f.rel) && /router\.(?:get|post|put|patch|delete)\s*\(/.test(f.text));
   const endpointList: Endpoint[] = [];
 
   // Find the app file: the one mounting the most /api routers.
   let appFile: SourceFile | undefined;
   let best = 0;
   for (const f of files) {
+    if (!isCode(f.rel)) continue;
     const n = [...f.text.matchAll(new RegExp(MOUNT.source, 'g'))].length;
     if (n > best) {
       best = n;

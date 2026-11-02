@@ -599,11 +599,12 @@ export function coverageLines(g: Graph, full = false): string[] {
   if (c.trpc && (c.trpc.files || c.trpc.found)) {
     out.push(`  tRPC routers  ${c.trpc.found}/${c.trpc.files} parsed (${pct(c.trpc.found, c.trpc.files)}%)`);
   }
-  const silent = [...c.routes.silent, ...c.specs.silent, ...(c.next?.silent ?? []), ...(c.trpc?.silent ?? [])];
+  const silent = [...c.routes.silent, ...c.specs.silent, ...(c.next?.silent ?? []), ...(c.trpc?.silent ?? []), ...(c.calls.silent ?? [])];
   if (silent.length) {
-    out.push(`  GAPS          ${silent.length} file(s) look like contracts but produced nothing:`);
-    for (const f of silent.slice(0, full ? 40 : 6)) out.push(`    ${f}`);
-    out.push('    an answer that does not mention these may be incomplete — this is where a regex missed');
+    out.push(`  GAPS          ${silent.length} file(s) call an API we did not map (external service, or a pattern we miss):`);
+    for (const f of silent.slice(0, full ? 40 : 8)) out.push(`    ${f}`);
+    if (!full && silent.length > 8) out.push(`    +${silent.length - 8} more — weave doctor --all`);
+    out.push('    an answer that does not mention these may be incomplete');
   }
   return out;
 }

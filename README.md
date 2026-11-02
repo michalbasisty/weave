@@ -283,10 +283,12 @@ weave check --strict-tests   # also fail when a touched endpoint has no test
 **In CI**, this repository ships `action.yml`:
 
 ```yaml
+- uses: actions/checkout@v4
+  with: { fetch-depth: 0 }        # the base ref must be readable
 - uses: actions/setup-node@v4
   with: { node-version: 22 }
 - uses: michalbasisty/weave@main
-  with: { root: '.', strict-tests: 'true' }
+  with: { root: '.', strict-tests: 'true', against: origin/main }
 ```
 
 Exit 1 when:

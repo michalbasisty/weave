@@ -14,6 +14,10 @@ inputs:
     description: Also fail when a touched endpoint has no direct test.
     required: false
     default: 'false'
+  against:
+    description: Git ref whose endpoint set is compared with this branch (needs fetch-depth 0).
+    required: false
+    default: origin/main
 
 runs:
   using: composite
@@ -31,9 +35,9 @@ runs:
     - name: Check
       shell: bash
       run: |
-        node "${{ github.action_path }}/src/cli.ts" check --root "${{ inputs.root }}"
+        node "${{ github.action_path }}/src/cli.ts" check --root "${{ inputs.root }}" --against "${{ inputs.against }}"
         if [ "${{ inputs.strict-tests }}" = "true" ]; then
-          node "${{ github.action_path }}/src/cli.ts" check --root "${{ inputs.root }}" --strict-tests
+          node "${{ github.action_path }}/src/cli.ts" check --root "${{ inputs.root }}" --against "${{ inputs.against }}" --strict-tests
         fi
 
     - name: Coverage

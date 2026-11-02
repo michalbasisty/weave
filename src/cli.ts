@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { dirname, basename, join, resolve } from 'node:path';
 import { isFresh, indexPath, loadGraph, noteCounts, reindex } from './store.ts';
+import { buildGraph } from './build.ts';
 import { newestMtime } from './scan.ts';
 import { findJUnitFile, parseJUnit, type Case } from './junit.ts';
 import { renderExplore } from './render.ts';
@@ -18,7 +20,7 @@ function arg(name: string, fallback = ''): string {
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 }
 
-const VALUE_FLAGS = new Set(['--root', '--project', '--limit', '--budget', '--out']);
+const VALUE_FLAGS = new Set(['--root', '--project', '--limit', '--budget', '--out', '--against', '--runs', '--file']);
 
 /** Split argv once: the first bare token is the command, the rest are its arguments. */
 function parseArgs(argv: string[]): { cmd: string; pos: string[] } {
@@ -362,7 +364,7 @@ function home(): void {
 
 // ---------------------------------------------------------------- check
 
-function gitChanged(root: string): string[] {
+function gitChanged(root: string, against = ''): string[] {
   const run = (cmd: string) => {
     try {
       return execSync(cmd, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
@@ -370,25 +372,51 @@ function gitChanged(root: string): string[] {
       return '';
     }
   };
-  const out = run('git diff --name-only HEAD') || run('git status --porcelain');
+  // On a clean CI checkout `git diff HEAD` is empty, so a base ref is the only
+  // thing that makes the file-scoped checks fire there.
+  const range = against ? `${against}...HEAD` : 'HEAD';
+  const out = run(`git diff --name-only ${range}`) || (against ? '' : run('git status --porcelain'));
   return out
     .split('\n')
     .map((l) => l.trim().replace(/^[AMDR?]{1,2}\s+/, ''))
     .filter((l) => l && !l.startsWith('.weave/'));
 }
 
+/** The endpoint set of a git ref, indexed in a throwaway worktree. */
+function endpointsAt(root: string, ref: string): Set<string> | null {
+  const safe = ref.replace(/[^\w./~^-]/g, '');
+  if (!safe) return null;
+  const tmp = join(tmpdir(), `weave-base-${process.pid}-${Date.now()}`);
+  try {
+    execSync(`git worktree add --detach --quiet "${tmp}" "${safe}"`, { cwd: root, stdio: 'ignore' });
+    const g = buildGraph(tmp);
+    return new Set(g.nodes.filter((n) => n.kind === 'endpoint').map((n) => n.name));
+  } catch {
+    return null;
+  } finally {
+    try {
+      execSync(`git worktree remove --force "${tmp}"`, { cwd: root, stdio: 'ignore' });
+    } catch {
+      // the worktree is already gone
+    }
+  }
+}
+
 function checkCmd(root: string, args: string[]): number {
   const strict = process.argv.includes('--strict-tests');
+  const against = arg('against', '').replace(/[^\w./~^-]/g, '');
   // Always rebuild: grading a stale graph is worse than spending a second.
   const g = reindex(root);
-  const files = args.length ? args : gitChanged(root);
+  const files = args.length ? args : gitChanged(root, against);
   const f = files.length ? analyze(g, files) : null;
 
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // Endpoints that existed in the previous index and are gone now.
-  const prev = new Set(g.prevEndpoints ?? []);
+  // Endpoints that existed in the comparison base and are gone now.
+  const base = against ? endpointsAt(root, against) : null;
+  if (against && !base) warnings.push(`could not read ${against} — comparing against the last local index instead`);
+  const prev = base ?? new Set(g.prevEndpoints ?? []);
   const now = new Set(g.nodes.filter((n) => n.kind === 'endpoint').map((n) => n.name));
   const removed = [...prev].filter((e) => !now.has(e));
   const callSites = g.nodes.filter((n) => n.kind === 'call');
@@ -428,7 +456,7 @@ function checkCmd(root: string, args: string[]): number {
   const scope = f
     ? `${f.files.length} file(s) → ${f.endpoints.length} endpoint(s), ${f.pages.length} page(s), ${f.tests.length} test(s)`
     : `${now.size} endpoint(s) indexed, no changed file named`;
-  console.log(`check: ${scope}${removed.length ? `, ${removed.length} endpoint(s) removed` : ''}`);
+  console.log(`check: ${scope}${against ? ` vs ${against}` : ''}${removed.length ? `, ${removed.length} endpoint(s) removed` : ''}`);
   for (const e of errors) console.log(`  FAIL ${e}`);
   for (const w of warnings) console.log(`  warn ${w}`);
   for (const c of f?.commands ?? []) console.log(`  run  ${c}`);

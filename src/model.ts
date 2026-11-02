@@ -35,7 +35,7 @@ export const GRAPH_VERSION = 3;
 /** How much of the repo the extractors actually saw. Recall, not precision. */
 export interface Coverage {
   routes: { files: number; found: number; silent: string[] };
-  calls: { total: number; resolved: number; dynamic?: number };
+  calls: { total: number; resolved: number; dynamic?: number; silent?: string[] };
   pages: { declared: number; mapped: number; skipped: number };
   specs: { files: number; parsed: number; silent: string[] };
   prisma: { models: number; tables: number };

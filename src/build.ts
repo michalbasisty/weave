@@ -64,6 +64,7 @@ export function buildGraph(root: string): Graph {
   // matches no endpoint is a broken contract: keep it, never drop it — unless its
   // path starts with a variable, which is unknowable rather than broken.
   let dynamicCalls = 0;
+  const lineCache = new Map(files.map((f) => [f.rel, f.lines]));
   for (const c of calls) {
     if (c.path.trimStart().startsWith('${')) {
       dynamicCalls++;
@@ -76,6 +77,9 @@ export function buildGraph(root: string): Graph {
       b.edge(id.file(c.file), e.id, 'calls', c.dynamic ? 'inferred' : 'exact');
       continue;
     }
+    // A call site may be marked as known-broken debt instead of blocking a merge.
+    const lines = lineCache.get(c.file);
+    if (lines && lines[c.line - 1]?.includes('weave-ignore')) continue;
     const callId = id.call(c.method, c.path);
     b.node({ id: callId, kind: 'call', name: `${c.method} ${c.path}`, file: c.file, line: c.line });
     b.edge(id.file(c.file), callId, 'calls_missing', c.dynamic ? 'inferred' : 'exact');
@@ -142,6 +146,22 @@ function withCoverage(
 
   const orphan = g.nodes.filter((n) => n.kind === 'call').length;
 
+  // A file that calls an API in a way none of our patterns recognise is the one
+  // gap we cannot see from the nodes: measure it from the source instead.
+  // Patterns are call-shaped on purpose — a bare word like `got` matches prose.
+  const CALLISH = /\bfetch\s*\(|\baxios\s*\.\s*(get|post|put|patch|delete|request)\s*\(|\buse(Query|Mutation|SWR|InfiniteQuery)\s*\(|\$fetch\s*\(|\btrpc\s*\.|\bky\s*\(|\bgot\s*\(/;
+  const callFiles = new Set(calls.map((c) => c.file));
+  const silentCalls = files
+    .filter(
+      (f) =>
+        !isTest(f.rel) &&
+        /\.(t|j)sx?$/.test(f.rel) &&
+        !/\/(generated|__generated__|dist|build)\//.test(f.rel) &&
+        CALLISH.test(f.text) &&
+        !callFiles.has(f.rel),
+    )
+    .map((f) => f.rel);
+
   const taskFiles = specFiles.filter((f) => /\/tasks\.md$/.test(f.rel) && !/\/templates\//.test(f.rel));
   const parsed = new Set(tasks.map((t) => t.change));
   const silentSpecs = taskFiles
@@ -150,7 +170,7 @@ function withCoverage(
 
   g.coverage = {
     routes: { files: routeLike.length, found: routeLike.length - silentRoutes.length, silent: silentRoutes.slice(0, 12) },
-    calls: { total: calls.length - dynamicCalls, resolved: calls.length - dynamicCalls - orphan, dynamic: dynamicCalls },
+    calls: { total: calls.length - dynamicCalls, resolved: calls.length - dynamicCalls - orphan, dynamic: dynamicCalls, silent: silentCalls.slice(0, 12) },
     pages: { declared: declaredRoutes, mapped: declaredRoutes - skippedRoutes, skipped: skippedRoutes },
     specs: { files: taskFiles.length, parsed: parsed.size, silent: silentSpecs },
     prisma: { models: g.nodes.filter((n) => n.kind === 'model').length, tables: g.nodes.filter((n) => n.kind === 'table').length },
