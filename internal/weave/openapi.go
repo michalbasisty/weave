@@ -13,10 +13,25 @@ import (
 
 var (
 	reSpecFile  = regexp.MustCompile(`(?i)(^|/)(openapi|swagger)(\.\d+)?\.json$`)
+	reSpecYAML  = regexp.MustCompile(`(?i)(^|/)(openapi|swagger|api[-_.]?spec|spec)(\.\d+)?\.ya?ml$`)
 	reBraceParm = regexp.MustCompile(`\{([^}]+)\}`)
 	reEndSlash  = regexp.MustCompile(`/$`)
 	apiMethods  = []string{"get", "post", "put", "patch", "delete", "head", "options"}
 )
+
+// SpecMaxBytes is the size a spec may reach: the general 512 KB cap would drop the
+// large generated specs (Stripe, GitHub), and a dropped spec is a silent gap.
+const SpecMaxBytes = 4 << 20
+
+// specFile is a file named like an API spec, in a format this build may not read.
+// The walk admits it so the gap can be reported instead of assumed absent.
+func specFile(rel string) bool { return reSpecFile.MatchString(rel) || reSpecYAML.MatchString(rel) }
+
+// isSpecText is the cheap test that lets a spec be recognised by its content, not
+// its name: repos commit `api/spec.json`, `docs/petstore.json`, `openapi-1.0.json`.
+func isSpecText(t string) bool {
+	return strings.Contains(t, `"paths"`) && (strings.Contains(t, `"openapi"`) || strings.Contains(t, `"swagger"`))
+}
 
 // truthy is JavaScript truthiness for a parsed JSON value.
 func truthy(v jsjson.Value, present bool) bool {
@@ -98,12 +113,22 @@ func opDesc(op jsjson.Value) string {
 	return ""
 }
 
-// ExtractOpenAPI reads openapi.json / swagger.json files.
+// ExtractOpenAPI reads OpenAPI/Swagger JSON specs, wherever they are named, and
+// names the YAML specs it cannot read so the gap is not silent.
 func ExtractOpenAPI(files []SourceFile, b *Builder) ExtractStats {
 	st := ExtractStats{Silent: []string{}}
 	for i := range files {
 		f := &files[i]
-		if !reSpecFile.MatchString(f.Rel) || len(f.Text) > 4*1024*1024 {
+		if len(f.Text) > SpecMaxBytes {
+			continue
+		}
+		switch {
+		case reSpecFile.MatchString(f.Rel), strings.HasSuffix(f.Rel, ".json") && isSpecText(f.Text):
+			// a spec
+		case reSpecYAML.MatchString(f.Rel) && strings.Contains(f.Text, "paths:"):
+			st.Ignored = append(st.Ignored, f.Rel)
+			continue
+		default:
 			continue
 		}
 		st.Files++

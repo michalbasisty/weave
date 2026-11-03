@@ -225,6 +225,9 @@ func cmdCheck() int {
 }
 
 // sameShape: call sites are relative to the mount, so compare tail segments.
+// A parameter segment matches anything, so a match needs at least one literal
+// segment in common: without that, `/stats` matched `users/:id` and a commit that
+// removed an unrelated endpoint was reported as breaking a caller.
 func sameShape(a, b string) bool {
 	sa := strings.Fields(a)
 	sb := strings.Fields(b)
@@ -240,15 +243,20 @@ func sameShape(a, b string) bool {
 	if n == 0 {
 		return false
 	}
+	literal := false
 	for i := 1; i <= n; i++ {
 		p := xa[len(xa)-i]
 		q := xb[len(xb)-i]
-		if strings.HasPrefix(p, ":") || strings.HasPrefix(q, ":") || p == "*" || q == "*" || p == q {
+		param := strings.HasPrefix(p, ":") || strings.HasPrefix(q, ":") || p == "*" || q == "*"
+		if param || p == q {
+			if !param && p == q {
+				literal = true
+			}
 			continue
 		}
 		return false
 	}
-	return true
+	return literal
 }
 
 func segments(path string) []string {

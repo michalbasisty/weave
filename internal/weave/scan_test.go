@@ -71,9 +71,12 @@ func TestWalkSkipsAndOrder(t *testing.T) {
 	}
 	write("big.json", MaxBytes+1)
 	write("edge.json", MaxBytes)
+	// A spec is read past the general cap and in a format the extractor only reports.
+	write("docs/openapi.yaml", 10)
+	write("api/openapi.json", MaxBytes+1)
 
 	// readdirSync(dir).sort(): UTF-16 order puts the emoji (D83D) before U+FF21.
-	want := []string{"B.ts", "UP.TS", "a/b.ts", "a-c.ts", "edge.json", "x.d.ts", "\xf0\x9f\x98\x80.ts", "\xef\xbc\xa1.ts"}
+	want := []string{"B.ts", "UP.TS", "a/b.ts", "a-c.ts", "api/openapi.json", "docs/openapi.yaml", "edge.json", "x.d.ts", "\xf0\x9f\x98\x80.ts", "\xef\xbc\xa1.ts"}
 	if got := rels(Walk(root)); strings.Join(got, " ") != strings.Join(want, " ") {
 		t.Fatalf("walk = %v, want %v", got, want)
 	}

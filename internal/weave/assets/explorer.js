@@ -193,7 +193,7 @@ function nextTask(c){
 function ring(k,on){return '<span class="ring" data-k="'+esc(k)+'"'+(on?' data-on="1"':'')+' aria-hidden="true"></span>'}
 function nm(id){
   const n=ix.get(id),k=kindOf(id);
-  if(k==='endpoint'){const p=splitEp(n.n);return '<span class="ep"><span class="mt">'+esc(p[0])+'</span><span>'+esc(p[1])+'</span></span>'}
+  if(k==='endpoint'){const p=splitEp(n.n);return '<span class="ep"><span class="mt">'+esc(p[0])+'</span><span>'+esc(p[1]).replace(/\//g,'/<wbr>')+'</span></span>'}
   if(k==='change')return esc(changeTitle(id).title);
   if(k==='task'&&n.t)return esc(taskTitle(n.t));
   if(k==='req'&&n.t)return '<span class="mt">'+esc(n.n)+'</span> '+esc(plain(n.t));
@@ -216,7 +216,7 @@ function row(id,aside,lines){
     '<span class="rn">'+nm(id)+'</span>'+(aside?'<span class="ra">'+aside+'</span>':'')+
     (lines||[]).filter(Boolean).map(l=>'<span class="rl">'+l+'</span>').join('')+'</a>';
 }
-function grp(title,meta,cls){return '<div class="grp'+(cls?' '+cls:'')+'"><span class="gt">'+esc(title)+'</span><span class="gm">'+esc(meta)+'</span></div>'}
+function grp(title,meta,cls){return '<div class="grp'+(cls?' '+cls:'')+'"><span class="gt">'+esc(title)+'</span><span class="gm" title="'+esc(meta)+'">'+esc(meta)+'</span></div>'}
 function empty(t,p){return '<div class="empty"><p class="et">'+esc(t)+'</p><p>'+p+'</p></div>'}
 function bar(done,total,label){
   const pct=Math.round(done/Math.max(1,total)*100);
@@ -287,7 +287,7 @@ function laneEmpty(k){
 function apiList(){
   const all=S.nodes.filter(n=>n.k==='endpoint');
   const untested=all.filter(n=>!isTested(n.i)).length;
-  const filter='<button class="toggle" type="button" id="untested" aria-pressed="'+untestedOnly+'">No test only <span class="cn">'+untested+'</span></button>';
+  const filter='<button class="toggle" type="button" id="untested" aria-pressed="'+untestedOnly+'">Untested only <span class="cn">'+untested+'</span></button>';
   const keep=n=>!untestedOnly||!isTested(n.i);
   const eps=all.filter(keep);
   let h=lhead('Endpoints',eps.length,filter);
@@ -321,25 +321,50 @@ function changesList(){
 function changeRow(c){
   const t=changeTitle(c.c),left=c.total-c.done;
   return '<a class="row chg" data-go="'+esc(c.c)+'" href="'+enc(c.c)+'">'+ring('change',c.done>=c.total)+
-    '<span class="rn">'+esc(t.title)+'</span><span class="ra num">'+c.done+'/'+c.total+'</span>'+
-    '<span class="rl">'+esc(t.date)+(left?' · '+left+' open':' · done')+'</span>'+bar(c.done,c.total,c.done+' of '+c.total+' tasks done')+'</a>';
+    '<span class="rn">'+esc(t.title)+'</span>'+
+    '<span class="rl">'+esc(t.date)+(left?' · '+left+' open':' · done')+'</span>'+
+    '<span class="bp">'+bar(c.done,c.total,c.done+' of '+c.total+' tasks done')+'<span class="nb">'+c.done+'/'+c.total+'</span></span></a>';
 }
 function checksList(){
   const broken=issue('broken_calls'),gone=stillCalled();
-  const nb=broken.length+gone.length;
-  let h=lhead('Checks',nb+gapCount(),'');
+  const nb=broken.length+gone.length,gapsN=gapCount();
+  // The badge is the gate: broken items only. Gaps are named in the aside, where a
+  // reader can see they are proof that is missing, not work that is failing.
+  let h=lhead('Checks',nb,'<span class="lh">'+nb+' broken · '+gapsN+' gaps in proof</span>');
   h+=grp('Broken',nb?cnt(nb,'item'):'nothing',nb?'bad':'');
   if(!nb)h+='<p class="calm">'+ICON.check+'<span>Nothing <code>weave check</code> would fail: every frontend call matches an endpoint.</span></p>';
   h+=broken.map(id=>row(id,'',['matches no endpoint · '+esc(where(id))])).join('');
   h+=gone.map(x=>'<div class="row gone">'+ring('endpoint')+'<span class="rn"><s>'+esc(x.n)+'</s></span><span class="rl">removed since '+esc(S.delta.ref)+', still called by '+cnt(x.c,'file')+'</span></div>').join('');
-  const gaps=[['untested_endpoints','Endpoints with no direct test'],['pages_without_e2e','Screens with no end-to-end test'],['suspect_reqs','Requirements changed after their code']];
-  for(const g of gaps){
+
+  // Untested endpoints are the bulk of the list, so they get the grouping and the
+  // ranking the Endpoints lane already has: by module, then by how many screens call.
+  const unt=issue('untested_endpoints');
+  const callers=id=>relIn(id,'calls').filter(x=>kindOf(x)==='page').length;
+  if(unt.length){
+    const untSet=new Set(unt),owned=new Set(),groups=[];
+    for(const m of S.modules){
+      const ids=m.e.filter(id=>untSet.has(id));
+      for(const id of ids)owned.add(id);
+      if(ids.length)groups.push({m,ids});
+    }
+    groups.sort((a,b)=>b.ids.length-a.ids.length);
+    const loose=unt.filter(id=>!owned.has(id));
+    const gapRow=id=>row(id,callers(id)?cnt(callers(id),'screen'):'no screen calls it',[]);
+    h+=grp('Endpoints with no direct test',String(unt.length),'gap');
+    for(const g of groups){
+      h+=grp(nameOf(g.m.m),cnt(g.ids.length,'endpoint'),'gap sub');
+      h+=g.ids.sort((a,b)=>callers(b)-callers(a)||nameOf(a).localeCompare(nameOf(b))).map(gapRow).join('');
+    }
+    if(loose.length)h+=grp('No module',cnt(loose.length,'endpoint'),'gap sub')+loose.sort((a,b)=>callers(b)-callers(a)).map(gapRow).join('');
+  }
+  const rest=[['pages_without_e2e','Screens with no end-to-end test'],['suspect_reqs','Requirements changed after their code']];
+  for(const g of rest){
     const items=issue(g[0]);
     if(!items.length)continue;
     h+=grp(g[1],String(items.length),'gap');
     h+=items.map(id=>row(id,'',[])).join('');
   }
-  if(!gapCount())h+='<p class="calm">'+ICON.check+'<span>No gaps in proof: every endpoint and screen has a test.</span></p>';
+  if(!gapsN)h+='<p class="calm">'+ICON.check+'<span>No gaps in proof: every endpoint and screen has a test.</span></p>';
   return h;
 }
 function where(id){const n=ix.get(id);return n&&n.f?n.f+(n.l?':'+n.l:''):''}
@@ -352,21 +377,36 @@ function today(){
   let h='<div class="today"><header class="hero"><h1 tabindex="-1">'+esc(repoName())+'</h1>';
   h+=nb
     ?'<p class="gate bad">'+ICON.cross+'<span><b>'+cnt(nb,'broken contract')+'.</b> <code>weave check</code> fails until '+(nb===1?'it is':'they are')+' fixed.</span></p>'
-    :'<p class="gate ok">'+ICON.check+'<span><b>The gate passes.</b> Every frontend call matches an endpoint.</span></p>';
-  h+='</header>'+network(true);
+    :'<p class="gate ok">'+ICON.check+'<span><b>The contract gate passes.</b> Every frontend call matches an endpoint.</span></p>';
+  h+='</header>'+network(true)+proofRow();
   h+='<div class="cols"><div class="work">';
   h+=sinceBlock();
   h+='<section class="blk"><h2>Next up</h2>'+worklist(broken,gone,open)+'</section>';
+  h+=quietDelta();
   h+='</div>'+health()+'</div>';
   if(!S.counts.pages&&!S.counts.endpoints)h+='<p class="note">No routes were found. weave reads Express, Next.js route handlers, tRPC routers and OpenAPI specs; <code>weave doctor</code> names the files it could not parse.</p>';
   return h+'</div>';
 }
+// No news is one quiet line after the work, not a heading that pushes it down.
+function quietDelta(){
+  const d=S.delta;
+  if(!d)return '';
+  if(d.added.length+d.removed.length+d.moved.length)return '';
+  return '<p class="line brief">No change on the map since <code>'+esc(d.ref)+'</code>.</p>';
+}
+// Proof is stated where the counts are read, not only in the side panel.
+function proofRow(){
+  const te=testedCount('endpoint','hits','covers'),tp=testedCount('page','exercises'),c=S.counts;
+  return '<p class="proofrow"><span><b>'+te+'</b> of '+c.endpoints+' endpoints have a direct test</span>'+
+    '<span><b>'+tp+'</b> of '+c.pages+' screens have an end-to-end test</span>'+
+    '<a href="#checks">Gaps in proof</a></p>';
+}
 function sinceBlock(){
   const d=S.delta;
-  let h='<section class="blk"><h2>Since the last commit</h2>';
-  if(!d)return h+'<p class="line">No baseline: this repo has no git history weave could read, or the page was written with <code>--no-delta</code>.</p></section>';
+  if(!d)return '<section class="blk"><h2>Since the last commit</h2><p class="line">No baseline: this repo has no git history weave could read, or the page was written with <code>--no-delta</code>.</p></section>';
   const total=d.added.length+d.removed.length+d.moved.length;
-  if(!total)return h+'<p class="line">Nothing on the map changed since <code>'+esc(d.ref)+'</code>: no screen, endpoint, module, table, change or requirement was added, removed or moved.</p></section>';
+  if(!total)return '';
+  let h='<section class="blk"><h2>Since the last commit</h2>';
   // What changed, counted by kind, then the few rows that explain it.
   const kindWord=(list,verb)=>{
     const by=new Map();
@@ -409,7 +449,7 @@ function worklist(broken,gone,open){
   let h='<ol class="next">'+items.slice(0,cap).map((it,i)=>
     '<li class="'+(it.bad?'bad':'')+(it.parked?'parked':'')+'"><a href="'+it.href+'"><span class="nn" aria-hidden="true">'+(i+1)+'</span>'+
     '<span class="nt"><b>'+esc(it.title)+'</b>'+(it.task?'<span class="nk">'+(it.task[0]?'<span class="tid">'+esc(it.task[0])+'</span>':'')+esc(it.task[1])+'</span>':'')+
-    '<span class="ns">'+esc(it.sub)+'</span></span>'+(it.c?'<span class="np">'+bar(it.c.done,it.c.total,it.c.done+' of '+it.c.total+' tasks done')+'</span>':'')+'</a></li>').join('')+'</ol>';
+    '<span class="ns">'+esc(it.sub)+'</span></span>'+(it.c?'<span class="np">'+bar(it.c.done,it.c.total,it.c.done+' of '+it.c.total+' tasks done')+'<span class="nb">'+it.c.done+'/'+it.c.total+'</span></span>':'')+'</a></li>').join('')+'</ol>';
   const more=[];
   if(open.length>0)more.push('<a href="#changes">'+cnt(open.length,'change')+' in progress'+ICON.next+'</a>');
   if(gapCount())more.push('<a href="#checks">All gaps in proof'+ICON.next+'</a>');
@@ -418,13 +458,11 @@ function worklist(broken,gone,open){
 }
 function health(){
   const c=S.counts,cov=S.cov,calls=cov.calls;
-  const te=testedCount('endpoint','hits','covers'),tp=testedCount('page','exercises');
   const sus=issue('suspect_reqs').length;
-  let h='<aside class="health" aria-label="Health"><h2>Proof</h2>';
-  h+=meter('Endpoints with a direct test',te,c.endpoints,'api');
-  h+=meter('Screens with an end-to-end test',tp,c.pages,'screen');
+  // The two proof meters now sit in the row under the strip; this panel is the read-out.
+  let h='<aside class="health" aria-label="What weave could read"><h2>What weave could read</h2>';
   if(sus)h+='<p class="hl">'+cnt(sus,'requirement')+' changed after the code was written. <a href="#checks">Review</a></p>';
-  h+='<h2>What weave could read</h2><dl class="read">';
+  h+='<dl class="read">';
   h+='<div><dt>Route files</dt><dd>'+cov.routes.found+' / '+cov.routes.files+'</dd></div>';
   h+='<div><dt>Frontend calls matched</dt><dd>'+calls.resolved+' / '+calls.total+'</dd></div>';
   h+='<div><dt>Task files</dt><dd>'+cov.specs.parsed+' / '+cov.specs.files+'</dd></div></dl>';
@@ -435,10 +473,6 @@ function health(){
   else h+='<p class="hl">Nothing it was shown went unread.</p>';
   return h+'</aside>';
 }
-function meter(label,n,total,lane){
-  return '<div class="meter" data-lane="'+lane+'"><div class="ml"><span>'+esc(label)+'</span><b>'+n+' / '+total+'</b></div>'+bar(n,total,n+' of '+total)+'</div>';
-}
-
 /* ---------------------------------------------------------------- detail */
 function renderDetail(){
   const box=$('#detail');
@@ -457,23 +491,71 @@ const INTRO={
 };
 function introFor(){
   const key=place==='map'?lane:place;
-  let h='<div class="intro"><h1 tabindex="-1">'+esc(place==='map'?laneBy(lane).name:place==='changes'?'Changes':'Checks')+'</h1><p>'+INTRO[key]+'</p>';
-  const top=place==='map'?topConnected(laneBy(lane).k):[];
-  if(top.length)h+='<h2>Busiest</h2>'+refList(top,5);
-  if(place==='changes'){
-    const open=S.changes.filter(c=>c.done<c.total);
-    h+='<p class="line">'+cnt(open.length,'change')+' in progress, '+(S.changes.length-open.length)+' done.</p>';
-  }
-  if(place==='checks'){
-    const nb=brokenCount(),groups=issue('untested_endpoints').length+issue('pages_without_e2e').length+issue('suspect_reqs').length;
-    h+='<dl class="read"><div><dt>Broken (the gate fails)</dt><dd'+(nb?' class="bad"':'')+'>'+nb+'</dd></div>'+
-      '<div><dt>Endpoints with no direct test</dt><dd>'+issue('untested_endpoints').length+'</dd></div>'+
-      '<div><dt>Screens with no end-to-end test</dt><dd>'+issue('pages_without_e2e').length+'</dd></div>'+
-      '<div><dt>Requirements changed after the code</dt><dd>'+issue('suspect_reqs').length+'</dd></div></dl>'+
-      '<p class="line">Red marks only what the gate fails. '+cnt(groups,'gap')+' in proof is information: no test reaches those yet.</p>';
-  }
-  h+='<p class="hint">Pick an item on the left to see where it sits on the line.</p>';
+  const title=place==='map'?laneBy(lane).name:place==='changes'?'Changes':'Checks';
+  let h='<div class="intro"><h1 tabindex="-1">'+esc(title)+'</h1><p>'+INTRO[key]+'</p>';
+  if(place==='map')h+=laneProof(key);
+  else if(place==='changes')h+=whatNext();
+  else h+=gapsByCaller();
+  h+='<p class="hint">'+HINT[key]+'</p>';
   return h+'</div>';
+}
+const HINT={
+  screens:'Open a screen to see what it calls and what proves it.',
+  endpoints:'Open an endpoint to see which screens call it and what handles it.',
+  modules:'Open a module to see the endpoints it handles and the tables it uses.',
+  tables:'Open a table to see the modules that read or write it.',
+  changes:'Open a change to see its tasks, requirements and reach.',
+  checks:'Open an item to see where it sits on the line.'
+};
+// The empty pane answers the place's question instead of pointing at the list.
+function laneProof(k){
+  const c=S.counts,callers=id=>relIn(id,'calls').filter(x=>kindOf(x)==='page').length;
+  if(k==='endpoints'){
+    const te=testedCount('endpoint','hits','covers');
+    const unt=issue('untested_endpoints').map(id=>({id,n:callers(id)})).sort((a,b)=>b.n-a.n);
+    let h='<p class="line"><b>'+te+'</b> of '+c.endpoints+' endpoints have a direct test.</p>';
+    const top=unt.filter(x=>x.n).slice(0,5);
+    if(top.length)h+='<h2>Called from a screen, no test</h2><ul class="refs">'+top.map(x=>'<li>'+ref(x.id)+'<span class="tw">'+cnt(x.n,'screen')+'</span></li>').join('')+'</ul>';
+    return h;
+  }
+  if(k==='screens'){
+    const tp=testedCount('page','exercises');
+    const noe=issue('pages_without_e2e').map(id=>({id,n:relOut(id,'calls').length})).sort((a,b)=>b.n-a.n);
+    let h='<p class="line"><b>'+tp+'</b> of '+c.pages+' screens have an end-to-end test.</p>';
+    const top=noe.slice(0,5);
+    if(top.length)h+='<h2>Most wired, no end-to-end test</h2><ul class="refs">'+top.map(x=>'<li>'+ref(x.id)+'<span class="tw">'+cnt(x.n,'endpoint')+'</span></li>').join('')+'</ul>';
+    return h;
+  }
+  // Modules and tables are listed alphabetically, so a busiest list is new information.
+  const top=topConnected(laneBy(k).k);
+  return top.length?'<h2>Busiest</h2>'+refList(top,5):'';
+}
+function whatNext(){
+  const open=S.changes.filter(c=>c.done<c.total);
+  if(!open.length)return '<p class="line">Every change record is done.</p>';
+  let h='<h2>Next task in each open change</h2><ul class="todo">';
+  for(const c of open.slice(0,5)){
+    const t=changeTitle(c.c),nt=nextTask(c);
+    const task=nt?taskParts(nt.t.t||nt.t.n):null;
+    h+='<li><a class="ref" data-go="'+esc(c.c)+'" href="'+enc(c.c)+'">'+ring('change')+'<span>'+esc(t.title)+'</span></a>'+
+      (task?'<span class="tk">'+esc(task[0]?task[0]+' ':'')+esc(task[1])+'</span>':'')+
+      '<span class="tw">'+c.done+' of '+c.total+' done'+taskFiles(nt)+(nt&&nt.deferred?' · only deferred tasks left':'')+'</span></li>';
+  }
+  return h+'</ul>';
+}
+function taskFiles(nt){
+  const t=nt&&nt.t,n=t&&t.i?relOut(t.i,'touches').length:0;
+  return n?' · touches '+cnt(n,'file'):'';
+}
+function gapsByCaller(){
+  const callers=id=>relIn(id,'calls').filter(x=>kindOf(x)==='page').length;
+  const unt=issue('untested_endpoints').map(id=>({id,n:callers(id)})).sort((a,b)=>b.n-a.n);
+  const noe=issue('pages_without_e2e').length;
+  if(!unt.length&&!noe)return '<p class="line">No gaps in proof.</p>';
+  let h='<p class="line"><b>'+unt.length+'</b> endpoints have no direct test'+(noe?', and <b>'+noe+'</b> screens no end-to-end test':'')+'.</p>';
+  const top=unt.filter(x=>x.n).slice(0,5);
+  if(top.length)h+='<h2>Untested, most called</h2><ul class="refs">'+top.map(x=>'<li>'+ref(x.id)+'<span class="tw">'+cnt(x.n,'screen')+'</span></li>').join('')+'</ul>';
+  return h;
 }
 function topConnected(k){
   return S.nodes.filter(n=>n.k===k)

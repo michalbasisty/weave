@@ -15,6 +15,9 @@ import (
 //go:embed assets/explorer.css
 var explorerCSS string
 
+//go:embed assets/wiki.css
+var wikiCSS string
+
 //go:embed assets/explorer.js
 var explorerJS string
 

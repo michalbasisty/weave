@@ -238,16 +238,21 @@ radius at most; lists and sections have no container at all.
   never hidden.
 
 ### Line strip
-- **Shape:** four stations on one line; each station a ring on the segment, a bold count and the line
-  name under it, the relationship word between (`call`, `handled in`, `use`).
-- **Behaviour:** every station is a link to that lane of the Map; the current lane is a filled ring.
-  On a phone the counts stack under the rings and the relationship words are dropped.
+- **Shape:** four stations on one line; each station a ring on the segment, a 28 px mono count
+  above the line name, and the relationship word set *on* the wire (`CALL`, `HANDLED IN`, `USE`),
+  uppercase, knocked out of the segment it labels.
+- **Behaviour:** every station is a link to that lane of the Map; the current lane is a filled ring
+  and its count takes the line colour. On a phone the verbs are dropped, the counts drop to 18 px,
+  and the strip stays on one line.
 
 ### Rows (screen, endpoint, table, change, check)
-- **Shape:** a ring, a name, an optional aside (tested tick, `2/8`), and one or two metadata lines;
-  52 px minimum, one-pixel rule between rows, no card.
+- **Shape:** a ring, a name, an optional aside (tested tick, caller count), and one or two metadata
+  lines; 52 px minimum, one-pixel rule between rows, no card.
 - **States:** hover sunken; current sunken with a filled ring and a 600-weight name.
-- **Endpoints:** method and path are two columns, so a path that wraps stays under the path.
+- **Endpoints:** method and path are two columns, so a path that wraps stays under the path; paths
+  break after a `/`, never mid-segment.
+- **Changes:** one 6 px bar with its `8/9` count immediately after it; the same bar and count pair
+  appears in "Next up", the change header and the Meters. No other bar geometry exists.
 
 ### Trace (signature)
 - **Shape:** one line through four stations: Screens → Endpoints → Modules → Tables. The item's own
@@ -261,6 +266,17 @@ radius at most; lists and sections have no container at all.
   shows the change, its next task, the date and progress; a bar on the right.
 - **Order:** gate failures, then the live task of each change in progress, then test gaps, then changes
   whose only open tasks are deferred (hollow number, "only deferred tasks left").
+- **Empty delta:** "No change on the map since `HEAD`" is one quiet line *after* the work list; an
+  empty "Since the last commit" section is never rendered above it.
+
+### Proof
+- **Shape:** one line under the strip: `35 of 248 endpoints have a direct test · 14 of 37 screens
+  have an end-to-end test`, with a link to Checks. The right-hand panel holds only what weave could
+  read, so the two never repeat a number.
+- **Empty panes:** Map shows the lane's proof (tested share, then the most-called untested items);
+  Changes shows the next task in each open change, with its file count; Checks shows gaps ranked by
+  the number of screens that call them. "Busiest" survives only where the list is alphabetical
+  (modules, tables), because there it is new information.
 
 ### Proof panel
 - **Shape:** one surface box, 340 px, 24 px padding, 6 px radius; two meters and a three-row readout
@@ -298,7 +314,9 @@ item. The project switcher appears only when the file holds more than one reposi
 
 - Native `<a>`, `<button>`, `<input>`, `<details>`; the four places are links with `aria-current`,
   not tabs with fake roles. The current breadcrumb is `aria-current="page"`.
-- `:focus-visible` draws a 2 px ring in the link colour, and in the signboard ink on navy.
+- `:focus-visible` draws a 2 px ring in the link colour, and in the signboard ink on navy. Inside the
+  signboard it uses `outline-offset: -2px` so the ring is drawn within the 56 px bar rather than
+  clipped by the viewport edge.
 - Every ring is `aria-hidden`; the meaning it carries is in the adjacent text (`tested`, `no direct
   test`, `done`).
 - Counts and status are text, never colour alone: "no direct test" is words next to an ink label,
@@ -312,6 +330,9 @@ item. The project switcher appears only when the file holds more than one reposi
 
 ## Accepted debt
 
+- An endpoint ring is green because it is the endpoint line, while the tick beside a tested endpoint
+  is also green. One hue carries "this lane" and "this is proved"; the words carry the difference.
+  Changing it would break the Four Colours Rule, so it is recorded rather than fixed.
 - `innerHTML` re-render per interaction. Measured fine at 2 000 nodes; revisit above roughly 10 000.
 - The "Since the last commit" delta needs git and a baseline index; on a large repo the first build
   of that baseline costs a few seconds (cached per commit under `.weave/baselines/`).
@@ -323,6 +344,18 @@ item. The project switcher appears only when the file holds more than one reposi
 
 ## Research log
 
+- **Critique run (Impeccable, dual-agent):** 27/40 on Nielsen's heuristics (Good, 67.5%); the
+  detector returned 0 findings but cannot see `var()` colours, so contrast and focus were measured in
+  Chromium instead (30/30 pass, lowest 5.53:1). Three refusals became the 2026-11-03 rework: an
+  unselected detail pane that repeated the list, a 213-row Checks list with no grouping, and one
+  progress fact drawn four different ways. Shipped against that: the proof row under the strip, the
+  collapse of an empty delta, per-place empty panes, Checks grouped by module and ranked by callers,
+  one 6 px bar with its count adjacent, a legible focus ring on the four tabs, "Untested only", and
+  the strip promoted to the page's signature (28 px counts, verbs knocked out of the wire).
+- **Lazyweb references viewed (2026-11-03):** Dalus (three-pane map: tree / canvas / inspector),
+  incident.io (one palette for actions, navigation and live entities), Better Stack (filter chips
+  over grouped tables). Only layout grammar was taken: earn the wide pane, one entry point, group
+  before you rank. No palette or filter chip shipped in this round.
 - **Route:** the owner rejected the previous page twice ("ui still looks ugly and unreadable by
   human", "easily I can get lost in it"), so this is a redesign, not a refinement: product truth,
   payload and capabilities were kept, the visual world and the information architecture were replaced.

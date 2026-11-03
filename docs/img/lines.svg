@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 268" width="1200" height="268" role="img" aria-label="A repository drawn as four lines: 37 screens call 248 endpoints, handled in 36 modules, that use 60 tables.">
+  <style>
+    :root { --ground:#f5f6f8; --ink:#131a26; --ink2:#3a4454; --ink3:#5a6474; --rule:#dbe0e8;
+            --screen:#2a5cc4; --endpoint:#12805a; --module:#a8650a; --table:#8a3ea0; --ok:#17723f; }
+    @media (prefers-color-scheme: dark) {
+      :root { --ground:#0b111d; --ink:#e8ecf3; --ink2:#bcc5d4; --ink3:#8f9bb0; --rule:#22304a;
+              --screen:#7aa2f2; --endpoint:#4cc493; --module:#e3a64c; --table:#c992dc; --ok:#4cc493; }
+    }
+    .bg { fill: var(--ground); }
+    .wire { stroke-width: 8; fill: none; }
+    .station { fill: var(--ground); stroke-width: 7; }
+    .verb { font: 600 13px "Segoe UI", system-ui, sans-serif; fill: var(--ink3); letter-spacing: .14em; }
+    .verb-bg { fill: var(--ground); }
+    .count { font: 700 44px "Cascadia Mono", Consolas, ui-monospace, monospace; fill: var(--ink); font-variant-numeric: tabular-nums; }
+    .label { font: 400 15px "Segoe UI", system-ui, sans-serif; fill: var(--ink2); }
+    .caption { font: 400 13px "Cascadia Mono", Consolas, ui-monospace, monospace; fill: var(--ink3); }
+    .tick { stroke: var(--ok); stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .tick-t { font: 600 14px "Segoe UI", system-ui, sans-serif; fill: var(--ink2); }
+  </style>
+
+  <rect class="bg" x="0" y="0" width="1200" height="268" rx="10"/>
+
+  <path class="wire" stroke="var(--screen)"   d="M92 96 H392"/>
+  <path class="wire" stroke="var(--endpoint)" d="M424 96 H724"/>
+  <path class="wire" stroke="var(--module)"   d="M756 96 H1056"/>
+
+  <circle class="station" stroke="var(--screen)"   cx="60"  cy="96" r="15"/>
+  <circle class="station" stroke="var(--endpoint)" cx="408" cy="96" r="15"/>
+  <circle class="station" stroke="var(--module)"   cx="740" cy="96" r="15"/>
+  <circle class="station" stroke="var(--table)"    cx="1088" cy="96" r="15"/>
+
+  <rect class="verb-bg" x="204" y="87" width="76"  height="18" rx="2"/>
+  <rect class="verb-bg" x="532" y="87" width="112" height="18" rx="2"/>
+  <rect class="verb-bg" x="864" y="87" width="52"  height="18" rx="2"/>
+  <text class="verb" x="242" y="100" text-anchor="middle">CALL</text>
+  <text class="verb" x="588" y="100" text-anchor="middle">HANDLED IN</text>
+  <text class="verb" x="890" y="100" text-anchor="middle">USE</text>
+
+  <text class="count" x="60"   y="172" text-anchor="middle">37</text>
+  <text class="count" x="408"  y="172" text-anchor="middle">248</text>
+  <text class="count" x="740"  y="172" text-anchor="middle">36</text>
+  <text class="count" x="1088" y="172" text-anchor="middle">60</text>
+  <text class="label" x="60"   y="196" text-anchor="middle">screens</text>
+  <text class="label" x="408"  y="196" text-anchor="middle">endpoints</text>
+  <text class="label" x="740"  y="196" text-anchor="middle">modules</text>
+  <text class="label" x="1088" y="196" text-anchor="middle">tables</text>
+
+  <path class="tick" d="M36 232 l6 7 l12 -15"/>
+  <text class="tick-t" x="68" y="238">every frontend call matched an endpoint</text>
+  <text class="caption" x="1164" y="238" text-anchor="end">954 files · Express + Prisma + React · indexed in 330 ms</text>
+</svg>

@@ -68,6 +68,9 @@ type FileStats struct {
 	Files  int      `json:"files"`
 	Found  int      `json:"found"`
 	Silent []string `json:"silent"`
+	// Ignored is a contract this build cannot read (an OpenAPI spec in YAML), named
+	// so the gap is reported rather than assumed absent.
+	Ignored []string `json:"ignored,omitempty"`
 }
 
 // CallStats is coverage.calls.
@@ -106,6 +109,7 @@ type Coverage struct {
 	Specs    SpecStats   `json:"specs"`
 	Prisma   PrismaStats `json:"prisma"`
 	Next     *FileStats  `json:"next,omitempty"`
+	NextPage *FileStats  `json:"nextPages,omitempty"`
 	Trpc     *FileStats  `json:"trpc,omitempty"`
 	OpenAPI  *FileStats  `json:"openapi,omitempty"`
 	Patterns *int        `json:"patterns,omitempty"`
@@ -322,6 +326,9 @@ func (s *FileStats) appendJS(b []byte) []byte {
 	w.int("files", s.Files)
 	w.int("found", s.Found)
 	w.strs("silent", orEmpty(s.Silent))
+	if len(s.Ignored) != 0 {
+		w.strs("ignored", s.Ignored)
+	}
 	return w.end()
 }
 
@@ -366,7 +373,7 @@ func (c *Coverage) AppendJS(b []byte) []byte {
 	for _, f := range []struct {
 		k string
 		s *FileStats
-	}{{"next", c.Next}, {"trpc", c.Trpc}, {"openapi", c.OpenAPI}} {
+	}{{"next", c.Next}, {"nextPages", c.NextPage}, {"trpc", c.Trpc}, {"openapi", c.OpenAPI}} {
 		if f.s != nil {
 			w.key(f.k)
 			w.b = f.s.appendJS(w.b)
@@ -561,7 +568,7 @@ func (d *decoder) node(v jsjson.Value, path string) *GNode {
 
 func (d *decoder) fileStats(v jsjson.Value, path string) FileStats {
 	o := d.obj(v, path)
-	return FileStats{Files: d.int(o, "files", path), Found: d.int(o, "found", path), Silent: d.strs(o, "silent", path)}
+	return FileStats{Files: d.int(o, "files", path), Found: d.int(o, "found", path), Silent: d.strs(o, "silent", path), Ignored: d.strs(o, "ignored", path)}
 }
 
 func (d *decoder) coverage(o *jsjson.Object) *Coverage {
@@ -583,7 +590,7 @@ func (d *decoder) coverage(o *jsjson.Object) *Coverage {
 	for _, f := range []struct {
 		k string
 		p **FileStats
-	}{{"next", &c.Next}, {"trpc", &c.Trpc}, {"openapi", &c.OpenAPI}} {
+	}{{"next", &c.Next}, {"nextPages", &c.NextPage}, {"trpc", &c.Trpc}, {"openapi", &c.OpenAPI}} {
 		if v, ok := o.Get(f.k); ok {
 			s := d.fileStats(v, "coverage."+f.k)
 			*f.p = &s

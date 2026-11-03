@@ -19,6 +19,11 @@ inputs:
     required: false
     default: origin/main
 
+  wiki:
+    description: Fail when the committed wiki (docs/wiki) no longer describes this tree. Run `weave wiki --out docs/wiki` locally first.
+    required: false
+    default: 'false'
+
 runs:
   using: composite
   steps:
@@ -54,3 +59,16 @@ runs:
       if: always()
       shell: bash
       run: '"$WEAVE_BIN" doctor --root "${{ inputs.root }}"'
+
+    - name: Wiki is current
+      if: ${{ inputs.wiki == 'true' }}
+      shell: bash
+      run: |-
+        set -euo pipefail
+        root="${{ inputs.root }}"
+        "$WEAVE_BIN" wiki --root "$root" --out docs/wiki
+        if ! git -C "$root" diff --quiet -- docs/wiki; then
+          echo "::error::docs/wiki describes an older tree. Commit the regenerated pages."
+          git -C "$root" --no-pager diff --stat -- docs/wiki
+          exit 1
+        fi

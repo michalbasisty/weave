@@ -165,6 +165,70 @@ func TestCheckFailsOnRenamedRoute(t *testing.T) {
 	}
 }
 
+// runBoth captures stdout and stderr together: a hook writes its failure to stderr,
+// which is exactly what the agent reads back.
+func runBoth(t *testing.T, args ...string) (string, int) {
+	t.Helper()
+	cmd := exec.Command(bin, args...)
+	out, err := cmd.CombinedOutput()
+	code := 0
+	if ee, ok := err.(*exec.ExitError); ok {
+		code = ee.ExitCode()
+	} else if err != nil {
+		t.Fatalf("run %v: %v", args, err)
+	}
+	return string(out), code
+}
+
+// The hook is the in-session gate: a broken contract must exit 2 with the failure on
+// stderr (what a Claude Code Stop hook reads back), and every run must leave a fire.
+func TestHookFailsOnABrokenContractAndRecordsIt(t *testing.T) {
+	root := fixture(t)
+	file := filepath.Join(root, "packages/backend/src/modules/orders/orders.routes.ts")
+	original, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out, code := run(t, "index", "--root", root); code != 0 {
+		t.Fatalf("index: %s", out)
+	}
+
+	if out, code := runBoth(t, "hook", "--root", root); code != 0 {
+		t.Fatalf("hook on a clean tree should exit 0, got %d:\n%s", code, out)
+	}
+
+	if err := os.WriteFile(file, []byte(strings.Replace(string(original), "router.get('/'", "router.get('/list'", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defer os.WriteFile(file, original, 0o644)
+
+	out, code := runBoth(t, "hook", "--root", root)
+	if code != 2 {
+		t.Fatalf("hook should exit 2 for a Stop hook to block, got %d:\n%s", code, out)
+	}
+	if !strings.Contains(out, "removed endpoint still called") {
+		t.Fatalf("hook did not name the removed endpoint:\n%s", out)
+	}
+
+	fires := filepath.Join(root, ".weave", "fires.jsonl")
+	raw, err := os.ReadFile(fires)
+	if err != nil {
+		t.Fatalf("no fire recorded: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("want 2 fires, got %d:\n%s", len(lines), raw)
+	}
+	if !strings.Contains(lines[1], `"result":"fail"`) {
+		t.Fatalf("second fire is not a failure: %s", lines[1])
+	}
+
+	report, rcode := run(t, "fires", "--root", root)
+	if rcode != 0 || !strings.Contains(report, "1 failure") {
+		t.Fatalf("fires should report one failure (code %d):\n%s", rcode, report)
+	}
+}
+
 func TestDeltaAgainstSavedGraph(t *testing.T) {
 	root := fixture(t)
 	file := filepath.Join(root, "packages/backend/src/modules/orders/orders.routes.ts")

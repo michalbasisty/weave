@@ -369,6 +369,42 @@ func ExtractModels(files []SourceFile, b *Builder, usedIn []SourceFile) []Model 
 	return out
 }
 
+// reFetchMethod finds the method of a fetch options object.
+var reFetchMethod = regexp.MustCompile(`method\s*:\s*['"](\w+)['"]`)
+
+// fetchMethodAhead reads the options object when it spans lines: a service worker
+// writes `fetch(url, {\n method: 'POST' })`, which the line-local match read as GET
+// and reported as a call to nothing.
+func fetchMethodAhead(lines []string, n int, path string) string {
+	line := lines[n]
+	at := strings.Index(line, path)
+	if at < 0 {
+		return ""
+	}
+	// Start at the options brace, not the first `{`: a template segment `${id}`
+	// opens a brace earlier on the same line.
+	rest := line[at+len(path):]
+	open := strings.IndexByte(rest, '{')
+	if open < 0 {
+		return ""
+	}
+	end := n + 12
+	if end > len(lines) {
+		end = len(lines)
+	}
+	body := rest[open+1:]
+	if n+1 < end {
+		body += "\n" + strings.Join(lines[n+1:end], "\n")
+	}
+	if close := strings.IndexByte(body, '}'); close >= 0 {
+		body = body[:close]
+	}
+	if m := reFetchMethod.FindStringSubmatch(body); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
 // ---------------------------------------------------------------- web: pages + calls
 
 // Call is one API call site.
@@ -376,6 +412,29 @@ type Call struct {
 	Method, Path, File string
 	Line               int
 	Dynamic            bool
+}
+
+// unknowablePath is a call whose path cannot be resolved statically: a variable in
+// its first segment (`/${source}`), or a variable glued to literal text
+// (`/reports${params}`, `/tasks${qs}`). A whole-segment variable (`/tasks/${id}`) is
+// resolvable, so it stays.
+func unknowablePath(p string) bool {
+	// A query string is not part of the path: `/tasks?status=${s}` is resolvable,
+	// `/tasks${qs}` is not.
+	if q := strings.IndexByte(p, '?'); q >= 0 {
+		p = p[:q]
+	}
+	segs := strings.Split(strings.TrimLeft(jsstr.TrimStart(p), "/"), "/")
+	for i, s := range segs {
+		j := strings.Index(s, "${")
+		if j < 0 {
+			continue
+		}
+		if i == 0 || j > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // ExtractCalls finds axios-style, fetch and tRPC client calls, one per line and kind.
@@ -392,6 +451,9 @@ func ExtractCalls(files []SourceFile) []Call {
 			path, method, ok := fetchMatch(line)
 			if !ok || (!strings.HasPrefix(path, "/") && !strings.Contains(path, "/api/")) {
 				continue
+			}
+			if method == "" {
+				method = fetchMethodAhead(f.Lines, n, path)
 			}
 			if method == "" {
 				method = "GET"

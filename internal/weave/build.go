@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/michalbasisty/weave/internal/jsstr"
 	"github.com/michalbasisty/weave/internal/perf"
 )
 
@@ -47,6 +46,7 @@ func BuildGraph(root string) *Graph {
 
 	endpoints := ExtractEndpoints(files, b)
 	nextStats := ExtractNextRoutes(files, b)
+	nextPageStats := ExtractNextPages(files, b, isNextRepo(files))
 	trpcStats := ExtractTRPC(files, b)
 	apiStats := ExtractOpenAPI(files, b)
 
@@ -118,8 +118,10 @@ func BuildGraph(root string) *Graph {
 	for i := range files {
 		lineCache[files[i].Rel] = files[i].Lines
 	}
+	// A call whose path starts with a variable is unknowable, not broken: QuickSearch
+	// asks `/${source}?search=…` for each source a role may read.
 	for i, c := range calls {
-		if strings.HasPrefix(jsstr.TrimStart(c.Path), "${") {
+		if unknowablePath(c.Path) {
 			dynamicCalls++
 			continue
 		}
@@ -195,7 +197,7 @@ func BuildGraph(root string) *Graph {
 	}
 
 	tm.Lap("evidence")
-	g := withCoverage(b.Finish(root, len(files)), files, allEndpoints, calls, dynamicCalls, pageInfo, nextStats, trpcStats, apiStats, len(customRoutes), t.Specs, tasks)
+	g := withCoverage(b.Finish(root, len(files)), files, allEndpoints, calls, dynamicCalls, pageInfo, nextStats, nextPageStats, trpcStats, apiStats, len(customRoutes), t.Specs, tasks)
 	tm.Lap("coverage")
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
@@ -230,10 +232,21 @@ func first12(s []string) []string {
 	return append([]string{}, s...)
 }
 
+// isNextRepo reports whether a package.json names next: the only signal that
+// `pages/x.tsx` is a route rather than a folder of React screens.
+func isNextRepo(files []SourceFile) bool {
+	for i := range files {
+		if strings.HasSuffix(files[i].Rel, "package.json") && strings.Contains(files[i].Text, `"next"`) {
+			return true
+		}
+	}
+	return false
+}
+
 // withCoverage records what the extractors actually covered. Precision is easy to
 // claim; recall is the number that decides whether an answer can be trusted, so it
 // is measured and shown.
-func withCoverage(g *Graph, files []SourceFile, endpoints []Endpoint, calls []Call, dynamicCalls int, pages PageInfo, nextStats, trpcStats, apiStats ExtractStats, patternRoutes int, specFiles []SourceFile, tasks []*Task) *Graph {
+func withCoverage(g *Graph, files []SourceFile, endpoints []Endpoint, calls []Call, dynamicCalls int, pages PageInfo, nextStats, nextPageStats, trpcStats, apiStats ExtractStats, patternRoutes int, specFiles []SourceFile, tasks []*Task) *Graph {
 	isTest := func(rel string) bool { return reCovTestName.MatchString(rel) || reCovTestDir.MatchString(rel) }
 	// Same rule as extraction: only code can declare a route. Documentation quotes
 	// examples, and a .md file that "produced nothing" is not a coverage gap.
@@ -276,6 +289,10 @@ func withCoverage(g *Graph, files []SourceFile, endpoints []Endpoint, calls []Ca
 	silentCalls := []string{}
 	for i := range files {
 		f := &files[i]
+		// A file that defines the client or the procedures is not a call site.
+		if hasProcedure(f.Text) || strings.Contains(f.Text, "createTRPC") {
+			continue
+		}
 		if !isTest(f.Rel) && isCode(f.Rel) && !reGenerated.MatchString(f.Rel) && !callFiles[f.Rel] && callish(f.Text) {
 			silentCalls = append(silentCalls, f.Rel)
 		}
@@ -299,6 +316,11 @@ func withCoverage(g *Graph, files []SourceFile, endpoints []Endpoint, calls []Ca
 		}
 	}
 
+	var nextPages *FileStats
+	if nextPageStats.Files != 0 {
+		nextPages = &FileStats{Files: nextPageStats.Files, Found: nextPageStats.Found, Silent: first12(nextPageStats.Silent)}
+	}
+
 	total := len(calls) - dynamicCalls
 	g.Coverage = &Coverage{
 		Routes:   FileStats{Files: routeLike, Found: routeLike - len(silentRoutes), Silent: first12(silentRoutes)},
@@ -307,8 +329,9 @@ func withCoverage(g *Graph, files []SourceFile, endpoints []Endpoint, calls []Ca
 		Specs:    SpecStats{Files: len(taskFiles), Parsed: len(parsed), Silent: silentSpecs},
 		Prisma:   PrismaStats{Models: models, Tables: tables},
 		Next:     &FileStats{Files: nextStats.Files, Found: nextStats.Found, Silent: first12(nextStats.Silent)},
+		NextPage: nextPages,
 		Trpc:     &FileStats{Files: trpcStats.Files, Found: trpcStats.Found, Silent: first12(trpcStats.Silent)},
-		OpenAPI:  &FileStats{Files: apiStats.Files, Found: apiStats.Found, Silent: first12(apiStats.Silent)},
+		OpenAPI:  &FileStats{Files: apiStats.Files, Found: apiStats.Found, Silent: first12(apiStats.Silent), Ignored: first12(apiStats.Ignored)},
 		Patterns: Ptr(patternRoutes),
 	}
 	return g

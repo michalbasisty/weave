@@ -50,12 +50,12 @@ h1,h2,h3{margin:0;font-family:var(--display);text-wrap:balance}
 /* ------------------------------------------------ header: the signboard */
 .top{display:flex;align-items:center;gap:var(--s5);min-height:56px;padding:0 var(--s5);background:var(--shell);color:var(--shell-ink)}
 .top :focus-visible{outline-color:var(--shell-ink)}
-.brand{font:700 var(--fs-l)/1 var(--display);color:var(--shell-ink);letter-spacing:-.01em}
+.brand{display:flex;align-items:center;min-height:44px;font:700 var(--fs-l)/1 var(--display);color:var(--shell-ink);letter-spacing:-.01em}
 .brand:hover{text-decoration:none}
 #proj{height:36px;border:1px solid var(--shell-rule);border-radius:var(--r);background:var(--shell-field);color:var(--shell-ink);padding:0 var(--s2);font:var(--fs-s) var(--ui);max-width:200px}
 #proj[hidden]{display:none}
 .tabs{display:flex;align-self:stretch;gap:var(--s2)}
-.tabs a{display:flex;align-items:center;gap:6px;padding:0 var(--s3);color:var(--shell-ink2);font:500 var(--fs-m) var(--ui);border-bottom:3px solid transparent;border-top:3px solid transparent;min-height:44px}
+.tabs a{display:flex;align-items:center;gap:6px;padding:0 var(--s3);color:var(--shell-ink2);font:500 var(--fs-m) var(--ui);border-bottom:3px solid transparent;border-top:3px solid transparent;min-height:44px;outline-offset:-2px}
 .tabs a:hover{color:var(--shell-ink);text-decoration:none}
 .tabs a[aria-current=page]{color:var(--shell-ink);border-bottom-color:var(--shell-ink);font-weight:600}
 .tc{font:600 var(--fs-xs)/1 var(--mono);padding:3px 6px;border-radius:999px;background:var(--shell-field);color:var(--shell-ink2);font-variant-numeric:tabular-nums}
@@ -104,12 +104,16 @@ main.solo #list{display:none}
 [data-lane=module]{--ln:var(--module)}
 [data-lane=data]{--ln:var(--data)}
 .net.big{padding:var(--s5) 0 var(--s4);background:transparent;border-bottom:0}
-.net.big .st{padding-top:30px}
-.net.big .st::before{top:10px;height:6px}
-.net.big .st .stn{width:26px;height:26px;border-width:6px;top:0}
-.net.big .st:last-child::before{width:26px}
-.net.big .sn{font-size:var(--fs-l)}
-.net.big .sn b{font-size:var(--fs-l)}
+.net.big .st{padding-top:40px}
+.net.big .st::before{top:11px;height:8px}
+.net.big .st .stn{width:30px;height:30px;border-width:7px;top:0}
+.net.big .st:last-child::before{width:30px}
+.net.big .sn{font-size:var(--fs-s);letter-spacing:.05em;color:var(--ink2)}
+.net.big .sn b{display:block;font:700 var(--fs-2xl)/.95 var(--mono);font-variant-numeric:tabular-nums;color:var(--ink);margin-bottom:3px;letter-spacing:-.01em}
+/* The verb is a station name on the wire, knocked out of the segment it labels. */
+.net.big .sv{position:absolute;top:15px;left:42px;transform:translateY(-50%);padding:0 8px;background:var(--ground);font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
+.net.big .st:hover .stn{background:var(--ln)}
+.net.big .st[aria-current=page] .sn b{color:var(--ln)}
 
 /* ------------------------------------------------ rings: a station per kind */
 .ring{display:inline-block;width:12px;height:12px;border-radius:50%;border:3px solid var(--k,var(--ink3));background:var(--surface);flex:0 0 auto}
@@ -133,6 +137,9 @@ main.solo #list{display:none}
 .grp{position:sticky;top:52px;z-index:2;display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2);padding:var(--s3) var(--s4) 6px;background:var(--surface);border-bottom:1px solid var(--rule2)}
 .grp .gt{font:600 var(--fs-s) var(--ui);color:var(--ink2)}
 .grp .gm{font:var(--fs-xs) var(--ui);color:var(--ink3);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%}
+/* A sub-group inside a gap list: not sticky, quieter than the section above it. */
+.grp.sub{position:static;padding-top:var(--s2);padding-bottom:4px;background:var(--ground)}
+.grp.sub .gt{font-weight:500;color:var(--ink3)}
 .grp.bad .gt{color:var(--bad)}
 details.grpwrap>summary{position:static;cursor:pointer;list-style:none}
 details.grpwrap>summary::-webkit-details-marker{display:none}
@@ -154,12 +161,13 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .ra.num{font:500 var(--fs-xs) var(--mono);color:var(--ink2);font-variant-numeric:tabular-nums}
 .rl{grid-column:2/-1;font-size:var(--fs-s);line-height:1.45;color:var(--ink3);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .ok{display:inline-flex;align-items:center;gap:3px;color:var(--ok)}
-.row.chg .bar{grid-column:2/-1;margin-top:6px}
+.row.chg .bp{grid-column:2/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--s2);margin-top:6px}
+.bp .nb,.np .nb{font:500 var(--fs-xs) var(--mono);font-variant-numeric:tabular-nums;color:var(--ink3)}
 .row.gone{color:var(--bad)}
 .calm{display:flex;gap:var(--s2);align-items:flex-start;margin:0;padding:var(--s3) var(--s4);font-size:var(--fs-s);color:var(--ink2);border-bottom:1px solid var(--rule2)}
 .calm .ico{color:var(--ok);margin-top:2px}
-.bar{display:block;height:4px;border-radius:2px;background:var(--rule2);overflow:hidden}
-.bar i{display:block;height:100%;background:var(--ink2);border-radius:2px}
+.bar{display:block;height:6px;border-radius:3px;background:var(--rule2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ink2);border-radius:3px}
 
 /* ------------------------------------------------ refs */
 .refs{list-style:none;margin:0;padding:0}
@@ -186,9 +194,14 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .blk+.blk{margin-top:var(--s6)}
 .blk h2,.health h2,.intro h2{font:600 var(--fs-l)/1.3 var(--display);margin:0 0 var(--s2)}
 .line{margin:0 0 var(--s2);font-size:var(--fs-m);color:var(--ink2);max-width:72ch}
+/* Proof is read with the strip, not discovered later in a side panel. */
+.proofrow{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s5);align-items:baseline;margin:0 0 var(--s5);padding:0 0 var(--s3);border-bottom:1px solid var(--rule);font-size:var(--fs-s);color:var(--ink2)}
+.proofrow b{font:600 var(--fs-m) var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+.proofrow a{margin-left:auto}
+.line.brief{margin-top:var(--s4);color:var(--ink3)}
 .next{list-style:none;margin:var(--s2) 0 0;padding:0;border-top:1px solid var(--rule)}
 .next li{border-bottom:1px solid var(--rule)}
-.next a{display:grid;grid-template-columns:28px minmax(0,1fr) 96px;gap:var(--s3);align-items:center;min-height:56px;padding:var(--s3) var(--s2) var(--s3) 0;color:var(--ink)}
+.next a{display:grid;grid-template-columns:28px minmax(0,1fr) 116px;gap:var(--s3);align-items:center;min-height:56px;padding:var(--s3) var(--s2) var(--s3) 0;color:var(--ink)}
 .next a:hover{background:var(--surface);text-decoration:none}
 .nn{width:26px;height:26px;border-radius:50%;background:var(--shell);color:#fff;display:flex;align-items:center;justify-content:center;font:600 var(--fs-xs) var(--mono)}
 .next .bad .nn{background:var(--bad)}
@@ -199,7 +212,9 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .nk{color:var(--ink2);font-size:var(--fs-c);overflow-wrap:anywhere}
 .ns{color:var(--ink3);font-size:var(--fs-s)}
 .tid{display:inline-block;min-width:3em;margin-right:6px;font:600 var(--fs-xs) var(--mono);color:var(--ink3)}
-.np .bar{width:96px}
+.np{display:grid;gap:5px}
+.np .bar{width:100%}
+.np .nb{text-align:right}
 .morelinks{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s5);margin:var(--s3) 0 0;font-size:var(--fs-s)}
 .morelinks a{display:inline-flex;align-items:center;gap:4px;min-height:32px}
 .delta{list-style:none;margin:var(--s2) 0 0;padding:0;border-top:1px solid var(--rule)}
@@ -245,6 +260,14 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .desc{margin:var(--s4) 0 0;max-width:70ch;color:var(--ink2);line-height:1.6}
 .intro p{color:var(--ink2);max-width:66ch;margin:var(--s2) 0 var(--s5)}
 .intro h1{font:650 var(--fs-xl)/1.3 var(--display)}
+.intro h2{font:600 var(--fs-m)/1.3 var(--display);margin:var(--s5) 0 var(--s2)}
+/* Each change's live task, so the empty pane answers instead of instructing. */
+.todo{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+.todo li{padding:var(--s3) 0;border-bottom:1px solid var(--rule)}
+.todo .tk{display:block;margin-top:2px;color:var(--ink2);font-size:var(--fs-s)}
+.todo .tw{color:var(--ink3);font-size:var(--fs-xs)}
+/* A reference with its own count under it, in the intro panes. */
+.refs .tw{display:block;margin:1px 0 0 18px;font-size:var(--fs-xs);color:var(--ink3)}
 .hint{font-size:var(--fs-s);color:var(--ink3);margin-top:var(--s5)}
 .progress{display:flex;align-items:center;gap:var(--s3);margin-top:var(--s4);font-size:var(--fs-s);color:var(--ink2)}
 .progress .bar{width:180px;height:6px}
@@ -266,8 +289,8 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .sec h2{display:flex;align-items:baseline;gap:var(--s2);font:600 var(--fs-m)/1.3 var(--display);margin:0 0 var(--s2)}
 details.sec>summary{cursor:pointer;list-style:none}
 details.sec>summary::-webkit-details-marker{display:none}
-details.sec>summary h2::after{content:"Show";margin-left:var(--s2);font:400 var(--fs-s) var(--ui);color:var(--link)}
-details.sec[open]>summary h2::after{content:"Hide"}
+details.sec>summary h2::after{content:"›";margin-left:var(--s2);font:400 var(--fs-m) var(--ui);color:var(--ink3)}
+details.sec[open]>summary h2::after{content:"⌄"}
 .sec .refs{columns:2 260px;column-gap:var(--s6)}
 .sec .refs li{break-inside:avoid}
 .tasks{list-style:none;margin:0;padding:0;max-width:80ch}
@@ -336,9 +359,14 @@ details.sec[open]>summary h2::after{content:"Hide"}
   .net{padding:var(--s3) var(--s3) var(--s2)}
   .net .sn{font-size:var(--fs-xs)}
   .net .sn b{display:block;font-size:var(--fs-s)}
-  .net.big .sn,.net.big .sn b{font-size:var(--fs-s)}
+  .net.big .sn{font-size:var(--fs-xs)}
+  .net.big .sn b{font-size:var(--fs-l)}
+  .net.big .st{padding-top:32px}
   .net.big .sv{display:none}
   .ihead h1,.ihead h1 .code{font-size:var(--fs-l)}
+  /* A phone gets the 44 px target the contract promises, not the desktop size. */
+  .path,.more,.toggle,.moresum{min-height:44px}
+  .path{display:flex;align-items:center;white-space:normal;overflow-wrap:anywhere}
 }
 @media (prefers-reduced-motion:no-preference){
   .row,.ref,.tabs a,.toggle,.path,.themebtn,.next a,.st{transition:color .15s ease-out,background-color .15s ease-out,border-color .15s ease-out}

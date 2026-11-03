@@ -56,12 +56,12 @@ h1,h2,h3{margin:0;font-family:var(--display);text-wrap:balance}
 /* ------------------------------------------------ header: the signboard */
 .top{display:flex;align-items:center;gap:var(--s5);min-height:56px;padding:0 var(--s5);background:var(--shell);color:var(--shell-ink)}
 .top :focus-visible{outline-color:var(--shell-ink)}
-.brand{font:700 var(--fs-l)/1 var(--display);color:var(--shell-ink);letter-spacing:-.01em}
+.brand{display:flex;align-items:center;min-height:44px;font:700 var(--fs-l)/1 var(--display);color:var(--shell-ink);letter-spacing:-.01em}
 .brand:hover{text-decoration:none}
 #proj{height:36px;border:1px solid var(--shell-rule);border-radius:var(--r);background:var(--shell-field);color:var(--shell-ink);padding:0 var(--s2);font:var(--fs-s) var(--ui);max-width:200px}
 #proj[hidden]{display:none}
 .tabs{display:flex;align-self:stretch;gap:var(--s2)}
-.tabs a{display:flex;align-items:center;gap:6px;padding:0 var(--s3);color:var(--shell-ink2);font:500 var(--fs-m) var(--ui);border-bottom:3px solid transparent;border-top:3px solid transparent;min-height:44px}
+.tabs a{display:flex;align-items:center;gap:6px;padding:0 var(--s3);color:var(--shell-ink2);font:500 var(--fs-m) var(--ui);border-bottom:3px solid transparent;border-top:3px solid transparent;min-height:44px;outline-offset:-2px}
 .tabs a:hover{color:var(--shell-ink);text-decoration:none}
 .tabs a[aria-current=page]{color:var(--shell-ink);border-bottom-color:var(--shell-ink);font-weight:600}
 .tc{font:600 var(--fs-xs)/1 var(--mono);padding:3px 6px;border-radius:999px;background:var(--shell-field);color:var(--shell-ink2);font-variant-numeric:tabular-nums}
@@ -110,12 +110,16 @@ main.solo #list{display:none}
 [data-lane=module]{--ln:var(--module)}
 [data-lane=data]{--ln:var(--data)}
 .net.big{padding:var(--s5) 0 var(--s4);background:transparent;border-bottom:0}
-.net.big .st{padding-top:30px}
-.net.big .st::before{top:10px;height:6px}
-.net.big .st .stn{width:26px;height:26px;border-width:6px;top:0}
-.net.big .st:last-child::before{width:26px}
-.net.big .sn{font-size:var(--fs-l)}
-.net.big .sn b{font-size:var(--fs-l)}
+.net.big .st{padding-top:40px}
+.net.big .st::before{top:11px;height:8px}
+.net.big .st .stn{width:30px;height:30px;border-width:7px;top:0}
+.net.big .st:last-child::before{width:30px}
+.net.big .sn{font-size:var(--fs-s);letter-spacing:.05em;color:var(--ink2)}
+.net.big .sn b{display:block;font:700 var(--fs-2xl)/.95 var(--mono);font-variant-numeric:tabular-nums;color:var(--ink);margin-bottom:3px;letter-spacing:-.01em}
+/* The verb is a station name on the wire, knocked out of the segment it labels. */
+.net.big .sv{position:absolute;top:15px;left:42px;transform:translateY(-50%);padding:0 8px;background:var(--ground);font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
+.net.big .st:hover .stn{background:var(--ln)}
+.net.big .st[aria-current=page] .sn b{color:var(--ln)}
 
 /* ------------------------------------------------ rings: a station per kind */
 .ring{display:inline-block;width:12px;height:12px;border-radius:50%;border:3px solid var(--k,var(--ink3));background:var(--surface);flex:0 0 auto}
@@ -139,6 +143,9 @@ main.solo #list{display:none}
 .grp{position:sticky;top:52px;z-index:2;display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2);padding:var(--s3) var(--s4) 6px;background:var(--surface);border-bottom:1px solid var(--rule2)}
 .grp .gt{font:600 var(--fs-s) var(--ui);color:var(--ink2)}
 .grp .gm{font:var(--fs-xs) var(--ui);color:var(--ink3);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%}
+/* A sub-group inside a gap list: not sticky, quieter than the section above it. */
+.grp.sub{position:static;padding-top:var(--s2);padding-bottom:4px;background:var(--ground)}
+.grp.sub .gt{font-weight:500;color:var(--ink3)}
 .grp.bad .gt{color:var(--bad)}
 details.grpwrap>summary{position:static;cursor:pointer;list-style:none}
 details.grpwrap>summary::-webkit-details-marker{display:none}
@@ -160,12 +167,13 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .ra.num{font:500 var(--fs-xs) var(--mono);color:var(--ink2);font-variant-numeric:tabular-nums}
 .rl{grid-column:2/-1;font-size:var(--fs-s);line-height:1.45;color:var(--ink3);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .ok{display:inline-flex;align-items:center;gap:3px;color:var(--ok)}
-.row.chg .bar{grid-column:2/-1;margin-top:6px}
+.row.chg .bp{grid-column:2/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:var(--s2);margin-top:6px}
+.bp .nb,.np .nb{font:500 var(--fs-xs) var(--mono);font-variant-numeric:tabular-nums;color:var(--ink3)}
 .row.gone{color:var(--bad)}
 .calm{display:flex;gap:var(--s2);align-items:flex-start;margin:0;padding:var(--s3) var(--s4);font-size:var(--fs-s);color:var(--ink2);border-bottom:1px solid var(--rule2)}
 .calm .ico{color:var(--ok);margin-top:2px}
-.bar{display:block;height:4px;border-radius:2px;background:var(--rule2);overflow:hidden}
-.bar i{display:block;height:100%;background:var(--ink2);border-radius:2px}
+.bar{display:block;height:6px;border-radius:3px;background:var(--rule2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ink2);border-radius:3px}
 
 /* ------------------------------------------------ refs */
 .refs{list-style:none;margin:0;padding:0}
@@ -192,9 +200,14 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .blk+.blk{margin-top:var(--s6)}
 .blk h2,.health h2,.intro h2{font:600 var(--fs-l)/1.3 var(--display);margin:0 0 var(--s2)}
 .line{margin:0 0 var(--s2);font-size:var(--fs-m);color:var(--ink2);max-width:72ch}
+/* Proof is read with the strip, not discovered later in a side panel. */
+.proofrow{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s5);align-items:baseline;margin:0 0 var(--s5);padding:0 0 var(--s3);border-bottom:1px solid var(--rule);font-size:var(--fs-s);color:var(--ink2)}
+.proofrow b{font:600 var(--fs-m) var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+.proofrow a{margin-left:auto}
+.line.brief{margin-top:var(--s4);color:var(--ink3)}
 .next{list-style:none;margin:var(--s2) 0 0;padding:0;border-top:1px solid var(--rule)}
 .next li{border-bottom:1px solid var(--rule)}
-.next a{display:grid;grid-template-columns:28px minmax(0,1fr) 96px;gap:var(--s3);align-items:center;min-height:56px;padding:var(--s3) var(--s2) var(--s3) 0;color:var(--ink)}
+.next a{display:grid;grid-template-columns:28px minmax(0,1fr) 116px;gap:var(--s3);align-items:center;min-height:56px;padding:var(--s3) var(--s2) var(--s3) 0;color:var(--ink)}
 .next a:hover{background:var(--surface);text-decoration:none}
 .nn{width:26px;height:26px;border-radius:50%;background:var(--shell);color:#fff;display:flex;align-items:center;justify-content:center;font:600 var(--fs-xs) var(--mono)}
 .next .bad .nn{background:var(--bad)}
@@ -205,7 +218,9 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .nk{color:var(--ink2);font-size:var(--fs-c);overflow-wrap:anywhere}
 .ns{color:var(--ink3);font-size:var(--fs-s)}
 .tid{display:inline-block;min-width:3em;margin-right:6px;font:600 var(--fs-xs) var(--mono);color:var(--ink3)}
-.np .bar{width:96px}
+.np{display:grid;gap:5px}
+.np .bar{width:100%}
+.np .nb{text-align:right}
 .morelinks{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s5);margin:var(--s3) 0 0;font-size:var(--fs-s)}
 .morelinks a{display:inline-flex;align-items:center;gap:4px;min-height:32px}
 .delta{list-style:none;margin:var(--s2) 0 0;padding:0;border-top:1px solid var(--rule)}
@@ -251,6 +266,14 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .desc{margin:var(--s4) 0 0;max-width:70ch;color:var(--ink2);line-height:1.6}
 .intro p{color:var(--ink2);max-width:66ch;margin:var(--s2) 0 var(--s5)}
 .intro h1{font:650 var(--fs-xl)/1.3 var(--display)}
+.intro h2{font:600 var(--fs-m)/1.3 var(--display);margin:var(--s5) 0 var(--s2)}
+/* Each change's live task, so the empty pane answers instead of instructing. */
+.todo{list-style:none;margin:0;padding:0;border-top:1px solid var(--rule)}
+.todo li{padding:var(--s3) 0;border-bottom:1px solid var(--rule)}
+.todo .tk{display:block;margin-top:2px;color:var(--ink2);font-size:var(--fs-s)}
+.todo .tw{color:var(--ink3);font-size:var(--fs-xs)}
+/* A reference with its own count under it, in the intro panes. */
+.refs .tw{display:block;margin:1px 0 0 18px;font-size:var(--fs-xs);color:var(--ink3)}
 .hint{font-size:var(--fs-s);color:var(--ink3);margin-top:var(--s5)}
 .progress{display:flex;align-items:center;gap:var(--s3);margin-top:var(--s4);font-size:var(--fs-s);color:var(--ink2)}
 .progress .bar{width:180px;height:6px}
@@ -272,8 +295,8 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .sec h2{display:flex;align-items:baseline;gap:var(--s2);font:600 var(--fs-m)/1.3 var(--display);margin:0 0 var(--s2)}
 details.sec>summary{cursor:pointer;list-style:none}
 details.sec>summary::-webkit-details-marker{display:none}
-details.sec>summary h2::after{content:"Show";margin-left:var(--s2);font:400 var(--fs-s) var(--ui);color:var(--link)}
-details.sec[open]>summary h2::after{content:"Hide"}
+details.sec>summary h2::after{content:"›";margin-left:var(--s2);font:400 var(--fs-m) var(--ui);color:var(--ink3)}
+details.sec[open]>summary h2::after{content:"⌄"}
 .sec .refs{columns:2 260px;column-gap:var(--s6)}
 .sec .refs li{break-inside:avoid}
 .tasks{list-style:none;margin:0;padding:0;max-width:80ch}
@@ -342,9 +365,14 @@ details.sec[open]>summary h2::after{content:"Hide"}
   .net{padding:var(--s3) var(--s3) var(--s2)}
   .net .sn{font-size:var(--fs-xs)}
   .net .sn b{display:block;font-size:var(--fs-s)}
-  .net.big .sn,.net.big .sn b{font-size:var(--fs-s)}
+  .net.big .sn{font-size:var(--fs-xs)}
+  .net.big .sn b{font-size:var(--fs-l)}
+  .net.big .st{padding-top:32px}
   .net.big .sv{display:none}
   .ihead h1,.ihead h1 .code{font-size:var(--fs-l)}
+  /* A phone gets the 44 px target the contract promises, not the desktop size. */
+  .path,.more,.toggle,.moresum{min-height:44px}
+  .path{display:flex;align-items:center;white-space:normal;overflow-wrap:anywhere}
 }
 @media (prefers-reduced-motion:no-preference){
   .row,.ref,.tabs a,.toggle,.path,.themebtn,.next a,.st{transition:color .15s ease-out,background-color .15s ease-out,border-color .15s ease-out}
@@ -568,7 +596,7 @@ function nextTask(c){
 function ring(k,on){return '<span class="ring" data-k="'+esc(k)+'"'+(on?' data-on="1"':'')+' aria-hidden="true"></span>'}
 function nm(id){
   const n=ix.get(id),k=kindOf(id);
-  if(k==='endpoint'){const p=splitEp(n.n);return '<span class="ep"><span class="mt">'+esc(p[0])+'</span><span>'+esc(p[1])+'</span></span>'}
+  if(k==='endpoint'){const p=splitEp(n.n);return '<span class="ep"><span class="mt">'+esc(p[0])+'</span><span>'+esc(p[1]).replace(/\//g,'/<wbr>')+'</span></span>'}
   if(k==='change')return esc(changeTitle(id).title);
   if(k==='task'&&n.t)return esc(taskTitle(n.t));
   if(k==='req'&&n.t)return '<span class="mt">'+esc(n.n)+'</span> '+esc(plain(n.t));
@@ -591,7 +619,7 @@ function row(id,aside,lines){
     '<span class="rn">'+nm(id)+'</span>'+(aside?'<span class="ra">'+aside+'</span>':'')+
     (lines||[]).filter(Boolean).map(l=>'<span class="rl">'+l+'</span>').join('')+'</a>';
 }
-function grp(title,meta,cls){return '<div class="grp'+(cls?' '+cls:'')+'"><span class="gt">'+esc(title)+'</span><span class="gm">'+esc(meta)+'</span></div>'}
+function grp(title,meta,cls){return '<div class="grp'+(cls?' '+cls:'')+'"><span class="gt">'+esc(title)+'</span><span class="gm" title="'+esc(meta)+'">'+esc(meta)+'</span></div>'}
 function empty(t,p){return '<div class="empty"><p class="et">'+esc(t)+'</p><p>'+p+'</p></div>'}
 function bar(done,total,label){
   const pct=Math.round(done/Math.max(1,total)*100);
@@ -662,7 +690,7 @@ function laneEmpty(k){
 function apiList(){
   const all=S.nodes.filter(n=>n.k==='endpoint');
   const untested=all.filter(n=>!isTested(n.i)).length;
-  const filter='<button class="toggle" type="button" id="untested" aria-pressed="'+untestedOnly+'">No test only <span class="cn">'+untested+'</span></button>';
+  const filter='<button class="toggle" type="button" id="untested" aria-pressed="'+untestedOnly+'">Untested only <span class="cn">'+untested+'</span></button>';
   const keep=n=>!untestedOnly||!isTested(n.i);
   const eps=all.filter(keep);
   let h=lhead('Endpoints',eps.length,filter);
@@ -696,25 +724,50 @@ function changesList(){
 function changeRow(c){
   const t=changeTitle(c.c),left=c.total-c.done;
   return '<a class="row chg" data-go="'+esc(c.c)+'" href="'+enc(c.c)+'">'+ring('change',c.done>=c.total)+
-    '<span class="rn">'+esc(t.title)+'</span><span class="ra num">'+c.done+'/'+c.total+'</span>'+
-    '<span class="rl">'+esc(t.date)+(left?' · '+left+' open':' · done')+'</span>'+bar(c.done,c.total,c.done+' of '+c.total+' tasks done')+'</a>';
+    '<span class="rn">'+esc(t.title)+'</span>'+
+    '<span class="rl">'+esc(t.date)+(left?' · '+left+' open':' · done')+'</span>'+
+    '<span class="bp">'+bar(c.done,c.total,c.done+' of '+c.total+' tasks done')+'<span class="nb">'+c.done+'/'+c.total+'</span></span></a>';
 }
 function checksList(){
   const broken=issue('broken_calls'),gone=stillCalled();
-  const nb=broken.length+gone.length;
-  let h=lhead('Checks',nb+gapCount(),'');
+  const nb=broken.length+gone.length,gapsN=gapCount();
+  // The badge is the gate: broken items only. Gaps are named in the aside, where a
+  // reader can see they are proof that is missing, not work that is failing.
+  let h=lhead('Checks',nb,'<span class="lh">'+nb+' broken · '+gapsN+' gaps in proof</span>');
   h+=grp('Broken',nb?cnt(nb,'item'):'nothing',nb?'bad':'');
   if(!nb)h+='<p class="calm">'+ICON.check+'<span>Nothing <code>weave check</code> would fail: every frontend call matches an endpoint.</span></p>';
   h+=broken.map(id=>row(id,'',['matches no endpoint · '+esc(where(id))])).join('');
   h+=gone.map(x=>'<div class="row gone">'+ring('endpoint')+'<span class="rn"><s>'+esc(x.n)+'</s></span><span class="rl">removed since '+esc(S.delta.ref)+', still called by '+cnt(x.c,'file')+'</span></div>').join('');
-  const gaps=[['untested_endpoints','Endpoints with no direct test'],['pages_without_e2e','Screens with no end-to-end test'],['suspect_reqs','Requirements changed after their code']];
-  for(const g of gaps){
+
+  // Untested endpoints are the bulk of the list, so they get the grouping and the
+  // ranking the Endpoints lane already has: by module, then by how many screens call.
+  const unt=issue('untested_endpoints');
+  const callers=id=>relIn(id,'calls').filter(x=>kindOf(x)==='page').length;
+  if(unt.length){
+    const untSet=new Set(unt),owned=new Set(),groups=[];
+    for(const m of S.modules){
+      const ids=m.e.filter(id=>untSet.has(id));
+      for(const id of ids)owned.add(id);
+      if(ids.length)groups.push({m,ids});
+    }
+    groups.sort((a,b)=>b.ids.length-a.ids.length);
+    const loose=unt.filter(id=>!owned.has(id));
+    const gapRow=id=>row(id,callers(id)?cnt(callers(id),'screen'):'no screen calls it',[]);
+    h+=grp('Endpoints with no direct test',String(unt.length),'gap');
+    for(const g of groups){
+      h+=grp(nameOf(g.m.m),cnt(g.ids.length,'endpoint'),'gap sub');
+      h+=g.ids.sort((a,b)=>callers(b)-callers(a)||nameOf(a).localeCompare(nameOf(b))).map(gapRow).join('');
+    }
+    if(loose.length)h+=grp('No module',cnt(loose.length,'endpoint'),'gap sub')+loose.sort((a,b)=>callers(b)-callers(a)).map(gapRow).join('');
+  }
+  const rest=[['pages_without_e2e','Screens with no end-to-end test'],['suspect_reqs','Requirements changed after their code']];
+  for(const g of rest){
     const items=issue(g[0]);
     if(!items.length)continue;
     h+=grp(g[1],String(items.length),'gap');
     h+=items.map(id=>row(id,'',[])).join('');
   }
-  if(!gapCount())h+='<p class="calm">'+ICON.check+'<span>No gaps in proof: every endpoint and screen has a test.</span></p>';
+  if(!gapsN)h+='<p class="calm">'+ICON.check+'<span>No gaps in proof: every endpoint and screen has a test.</span></p>';
   return h;
 }
 function where(id){const n=ix.get(id);return n&&n.f?n.f+(n.l?':'+n.l:''):''}
@@ -727,21 +780,36 @@ function today(){
   let h='<div class="today"><header class="hero"><h1 tabindex="-1">'+esc(repoName())+'</h1>';
   h+=nb
     ?'<p class="gate bad">'+ICON.cross+'<span><b>'+cnt(nb,'broken contract')+'.</b> <code>weave check</code> fails until '+(nb===1?'it is':'they are')+' fixed.</span></p>'
-    :'<p class="gate ok">'+ICON.check+'<span><b>The gate passes.</b> Every frontend call matches an endpoint.</span></p>';
-  h+='</header>'+network(true);
+    :'<p class="gate ok">'+ICON.check+'<span><b>The contract gate passes.</b> Every frontend call matches an endpoint.</span></p>';
+  h+='</header>'+network(true)+proofRow();
   h+='<div class="cols"><div class="work">';
   h+=sinceBlock();
   h+='<section class="blk"><h2>Next up</h2>'+worklist(broken,gone,open)+'</section>';
+  h+=quietDelta();
   h+='</div>'+health()+'</div>';
   if(!S.counts.pages&&!S.counts.endpoints)h+='<p class="note">No routes were found. weave reads Express, Next.js route handlers, tRPC routers and OpenAPI specs; <code>weave doctor</code> names the files it could not parse.</p>';
   return h+'</div>';
 }
+// No news is one quiet line after the work, not a heading that pushes it down.
+function quietDelta(){
+  const d=S.delta;
+  if(!d)return '';
+  if(d.added.length+d.removed.length+d.moved.length)return '';
+  return '<p class="line brief">No change on the map since <code>'+esc(d.ref)+'</code>.</p>';
+}
+// Proof is stated where the counts are read, not only in the side panel.
+function proofRow(){
+  const te=testedCount('endpoint','hits','covers'),tp=testedCount('page','exercises'),c=S.counts;
+  return '<p class="proofrow"><span><b>'+te+'</b> of '+c.endpoints+' endpoints have a direct test</span>'+
+    '<span><b>'+tp+'</b> of '+c.pages+' screens have an end-to-end test</span>'+
+    '<a href="#checks">Gaps in proof</a></p>';
+}
 function sinceBlock(){
   const d=S.delta;
-  let h='<section class="blk"><h2>Since the last commit</h2>';
-  if(!d)return h+'<p class="line">No baseline: this repo has no git history weave could read, or the page was written with <code>--no-delta</code>.</p></section>';
+  if(!d)return '<section class="blk"><h2>Since the last commit</h2><p class="line">No baseline: this repo has no git history weave could read, or the page was written with <code>--no-delta</code>.</p></section>';
   const total=d.added.length+d.removed.length+d.moved.length;
-  if(!total)return h+'<p class="line">Nothing on the map changed since <code>'+esc(d.ref)+'</code>: no screen, endpoint, module, table, change or requirement was added, removed or moved.</p></section>';
+  if(!total)return '';
+  let h='<section class="blk"><h2>Since the last commit</h2>';
   // What changed, counted by kind, then the few rows that explain it.
   const kindWord=(list,verb)=>{
     const by=new Map();
@@ -784,7 +852,7 @@ function worklist(broken,gone,open){
   let h='<ol class="next">'+items.slice(0,cap).map((it,i)=>
     '<li class="'+(it.bad?'bad':'')+(it.parked?'parked':'')+'"><a href="'+it.href+'"><span class="nn" aria-hidden="true">'+(i+1)+'</span>'+
     '<span class="nt"><b>'+esc(it.title)+'</b>'+(it.task?'<span class="nk">'+(it.task[0]?'<span class="tid">'+esc(it.task[0])+'</span>':'')+esc(it.task[1])+'</span>':'')+
-    '<span class="ns">'+esc(it.sub)+'</span></span>'+(it.c?'<span class="np">'+bar(it.c.done,it.c.total,it.c.done+' of '+it.c.total+' tasks done')+'</span>':'')+'</a></li>').join('')+'</ol>';
+    '<span class="ns">'+esc(it.sub)+'</span></span>'+(it.c?'<span class="np">'+bar(it.c.done,it.c.total,it.c.done+' of '+it.c.total+' tasks done')+'<span class="nb">'+it.c.done+'/'+it.c.total+'</span></span>':'')+'</a></li>').join('')+'</ol>';
   const more=[];
   if(open.length>0)more.push('<a href="#changes">'+cnt(open.length,'change')+' in progress'+ICON.next+'</a>');
   if(gapCount())more.push('<a href="#checks">All gaps in proof'+ICON.next+'</a>');
@@ -793,13 +861,11 @@ function worklist(broken,gone,open){
 }
 function health(){
   const c=S.counts,cov=S.cov,calls=cov.calls;
-  const te=testedCount('endpoint','hits','covers'),tp=testedCount('page','exercises');
   const sus=issue('suspect_reqs').length;
-  let h='<aside class="health" aria-label="Health"><h2>Proof</h2>';
-  h+=meter('Endpoints with a direct test',te,c.endpoints,'api');
-  h+=meter('Screens with an end-to-end test',tp,c.pages,'screen');
+  // The two proof meters now sit in the row under the strip; this panel is the read-out.
+  let h='<aside class="health" aria-label="What weave could read"><h2>What weave could read</h2>';
   if(sus)h+='<p class="hl">'+cnt(sus,'requirement')+' changed after the code was written. <a href="#checks">Review</a></p>';
-  h+='<h2>What weave could read</h2><dl class="read">';
+  h+='<dl class="read">';
   h+='<div><dt>Route files</dt><dd>'+cov.routes.found+' / '+cov.routes.files+'</dd></div>';
   h+='<div><dt>Frontend calls matched</dt><dd>'+calls.resolved+' / '+calls.total+'</dd></div>';
   h+='<div><dt>Task files</dt><dd>'+cov.specs.parsed+' / '+cov.specs.files+'</dd></div></dl>';
@@ -810,10 +876,6 @@ function health(){
   else h+='<p class="hl">Nothing it was shown went unread.</p>';
   return h+'</aside>';
 }
-function meter(label,n,total,lane){
-  return '<div class="meter" data-lane="'+lane+'"><div class="ml"><span>'+esc(label)+'</span><b>'+n+' / '+total+'</b></div>'+bar(n,total,n+' of '+total)+'</div>';
-}
-
 /* ---------------------------------------------------------------- detail */
 function renderDetail(){
   const box=$('#detail');
@@ -832,23 +894,71 @@ const INTRO={
 };
 function introFor(){
   const key=place==='map'?lane:place;
-  let h='<div class="intro"><h1 tabindex="-1">'+esc(place==='map'?laneBy(lane).name:place==='changes'?'Changes':'Checks')+'</h1><p>'+INTRO[key]+'</p>';
-  const top=place==='map'?topConnected(laneBy(lane).k):[];
-  if(top.length)h+='<h2>Busiest</h2>'+refList(top,5);
-  if(place==='changes'){
-    const open=S.changes.filter(c=>c.done<c.total);
-    h+='<p class="line">'+cnt(open.length,'change')+' in progress, '+(S.changes.length-open.length)+' done.</p>';
-  }
-  if(place==='checks'){
-    const nb=brokenCount(),groups=issue('untested_endpoints').length+issue('pages_without_e2e').length+issue('suspect_reqs').length;
-    h+='<dl class="read"><div><dt>Broken (the gate fails)</dt><dd'+(nb?' class="bad"':'')+'>'+nb+'</dd></div>'+
-      '<div><dt>Endpoints with no direct test</dt><dd>'+issue('untested_endpoints').length+'</dd></div>'+
-      '<div><dt>Screens with no end-to-end test</dt><dd>'+issue('pages_without_e2e').length+'</dd></div>'+
-      '<div><dt>Requirements changed after the code</dt><dd>'+issue('suspect_reqs').length+'</dd></div></dl>'+
-      '<p class="line">Red marks only what the gate fails. '+cnt(groups,'gap')+' in proof is information: no test reaches those yet.</p>';
-  }
-  h+='<p class="hint">Pick an item on the left to see where it sits on the line.</p>';
+  const title=place==='map'?laneBy(lane).name:place==='changes'?'Changes':'Checks';
+  let h='<div class="intro"><h1 tabindex="-1">'+esc(title)+'</h1><p>'+INTRO[key]+'</p>';
+  if(place==='map')h+=laneProof(key);
+  else if(place==='changes')h+=whatNext();
+  else h+=gapsByCaller();
+  h+='<p class="hint">'+HINT[key]+'</p>';
   return h+'</div>';
+}
+const HINT={
+  screens:'Open a screen to see what it calls and what proves it.',
+  endpoints:'Open an endpoint to see which screens call it and what handles it.',
+  modules:'Open a module to see the endpoints it handles and the tables it uses.',
+  tables:'Open a table to see the modules that read or write it.',
+  changes:'Open a change to see its tasks, requirements and reach.',
+  checks:'Open an item to see where it sits on the line.'
+};
+// The empty pane answers the place's question instead of pointing at the list.
+function laneProof(k){
+  const c=S.counts,callers=id=>relIn(id,'calls').filter(x=>kindOf(x)==='page').length;
+  if(k==='endpoints'){
+    const te=testedCount('endpoint','hits','covers');
+    const unt=issue('untested_endpoints').map(id=>({id,n:callers(id)})).sort((a,b)=>b.n-a.n);
+    let h='<p class="line"><b>'+te+'</b> of '+c.endpoints+' endpoints have a direct test.</p>';
+    const top=unt.filter(x=>x.n).slice(0,5);
+    if(top.length)h+='<h2>Called from a screen, no test</h2><ul class="refs">'+top.map(x=>'<li>'+ref(x.id)+'<span class="tw">'+cnt(x.n,'screen')+'</span></li>').join('')+'</ul>';
+    return h;
+  }
+  if(k==='screens'){
+    const tp=testedCount('page','exercises');
+    const noe=issue('pages_without_e2e').map(id=>({id,n:relOut(id,'calls').length})).sort((a,b)=>b.n-a.n);
+    let h='<p class="line"><b>'+tp+'</b> of '+c.pages+' screens have an end-to-end test.</p>';
+    const top=noe.slice(0,5);
+    if(top.length)h+='<h2>Most wired, no end-to-end test</h2><ul class="refs">'+top.map(x=>'<li>'+ref(x.id)+'<span class="tw">'+cnt(x.n,'endpoint')+'</span></li>').join('')+'</ul>';
+    return h;
+  }
+  // Modules and tables are listed alphabetically, so a busiest list is new information.
+  const top=topConnected(laneBy(k).k);
+  return top.length?'<h2>Busiest</h2>'+refList(top,5):'';
+}
+function whatNext(){
+  const open=S.changes.filter(c=>c.done<c.total);
+  if(!open.length)return '<p class="line">Every change record is done.</p>';
+  let h='<h2>Next task in each open change</h2><ul class="todo">';
+  for(const c of open.slice(0,5)){
+    const t=changeTitle(c.c),nt=nextTask(c);
+    const task=nt?taskParts(nt.t.t||nt.t.n):null;
+    h+='<li><a class="ref" data-go="'+esc(c.c)+'" href="'+enc(c.c)+'">'+ring('change')+'<span>'+esc(t.title)+'</span></a>'+
+      (task?'<span class="tk">'+esc(task[0]?task[0]+' ':'')+esc(task[1])+'</span>':'')+
+      '<span class="tw">'+c.done+' of '+c.total+' done'+taskFiles(nt)+(nt&&nt.deferred?' · only deferred tasks left':'')+'</span></li>';
+  }
+  return h+'</ul>';
+}
+function taskFiles(nt){
+  const t=nt&&nt.t,n=t&&t.i?relOut(t.i,'touches').length:0;
+  return n?' · touches '+cnt(n,'file'):'';
+}
+function gapsByCaller(){
+  const callers=id=>relIn(id,'calls').filter(x=>kindOf(x)==='page').length;
+  const unt=issue('untested_endpoints').map(id=>({id,n:callers(id)})).sort((a,b)=>b.n-a.n);
+  const noe=issue('pages_without_e2e').length;
+  if(!unt.length&&!noe)return '<p class="line">No gaps in proof.</p>';
+  let h='<p class="line"><b>'+unt.length+'</b> endpoints have no direct test'+(noe?', and <b>'+noe+'</b> screens no end-to-end test':'')+'.</p>';
+  const top=unt.filter(x=>x.n).slice(0,5);
+  if(top.length)h+='<h2>Untested, most called</h2><ul class="refs">'+top.map(x=>'<li>'+ref(x.id)+'<span class="tw">'+cnt(x.n,'screen')+'</span></li>').join('')+'</ul>';
+  return h;
 }
 function topConnected(k){
   return S.nodes.filter(n=>n.k===k)

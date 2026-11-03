@@ -1,0 +1,63 @@
+/* The wiki is read, not operated: one column, a measure, and the project's ink. */
+:root{
+  --ground:#f5f6f8;--surface:#ffffff;--sunk:#eceff4;
+  --ink:#131a26;--ink2:#3a4454;--ink3:#5a6474;
+  --rule:#dbe0e8;--rule2:#e8ebf0;
+  --shell:#14233f;--shell-ink:#ffffff;--shell-ink2:#c3cede;
+  --link:#1d4bb0;--ok:#17723f;--bad:#b4261a;
+  --ui:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+  --mono:"Cascadia Mono","Cascadia Code",Consolas,ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --ground:#0b111d;--surface:#101827;--sunk:#18233a;
+    --ink:#e8ecf3;--ink2:#bcc5d4;--ink3:#8f9bb0;
+    --rule:#22304a;--rule2:#1a2439;
+    --shell:#18294f;--shell-ink2:#b9c6dd;
+    --link:#9cb9f5;--ok:#4cc493;--bad:#f2907f;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font:400 .9375rem/1.55 var(--ui)}
+a{color:var(--link);text-decoration:none}
+a:hover{text-decoration:underline}
+code,.path{font-family:var(--mono);font-size:.8125rem}
+.bar{display:flex;align-items:center;gap:12px;background:var(--shell);color:var(--shell-ink);padding:0 24px;height:56px}
+.brand{color:var(--shell-ink);font:700 1.125rem/1 var(--ui);letter-spacing:-.01em}
+.brand:hover{text-decoration:none}
+.bar .repo{color:var(--shell-ink2);font-size:.8125rem}
+.bar .stamp{margin-left:auto;color:var(--shell-ink2);font:400 .75rem var(--mono)}
+.crumbs{background:var(--surface);border-bottom:1px solid var(--rule);padding:0 24px;height:44px;display:flex;align-items:center;gap:8px;font-size:.8125rem;color:var(--ink3)}
+.crumbs a{color:var(--ink2)}
+main{max-width:78ch;margin:0 auto;padding:32px 24px 56px}
+h1{font:650 1.75rem/1.15 var(--ui);letter-spacing:-.015em;margin:0 0 8px;overflow-wrap:anywhere}
+.lede{color:var(--ink2);margin:0 0 24px;max-width:66ch}
+.counts{color:var(--ink3);font:400 .8125rem var(--mono);margin:-12px 0 24px}
+h2{font:600 1.125rem/1.3 var(--ui);margin:32px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
+section{margin:0}
+ul.rel,ul.doors,ul.notes,ul.run{list-style:none;margin:8px 0 0;padding:0}
+ul.rel li,ul.doors li,ul.notes li,ul.run li{padding:6px 0;border-bottom:1px solid var(--rule2)}
+ul.rel li:last-child,ul.notes li:last-child,ul.run li:last-child{border-bottom:0}
+.doors li{padding:10px 0}
+table{width:100%;border-collapse:collapse;margin:8px 0 0}
+th{text-align:left;font:600 .8125rem var(--ui);color:var(--ink3);padding:6px 8px 6px 0;border-bottom:1px solid var(--rule)}
+td{padding:6px 8px 6px 0;border-bottom:1px solid var(--rule2);vertical-align:top;overflow-wrap:anywhere}
+.yes{color:var(--ok);font-size:.8125rem}
+.no{color:var(--ink3);font-size:.8125rem}
+.empty{color:var(--ink3);margin:8px 0 0;max-width:62ch}
+.notes .when{color:var(--ink3);font:400 .75rem var(--mono);margin-right:6px}
+.notes .files{display:block;color:var(--ink3);font:400 .75rem var(--mono)}
+.path{margin:8px 0 0;color:var(--ink2)}
+.path code{background:var(--sunk);padding:2px 6px;border-radius:4px}
+.run code{display:block;background:var(--sunk);color:var(--ink2);padding:6px 8px;border-radius:4px;overflow-wrap:anywhere}
+footer{max-width:78ch;margin:0 auto;padding:24px;border-top:1px solid var(--rule);color:var(--ink3);font-size:.8125rem}
+footer p{margin:4px 0}
+@media (max-width:420px){
+  .bar{padding:0 16px}
+  main{padding:24px 16px 40px}
+  h1{font-size:1.375rem}
+}
+details.fold{margin:8px 0 0}
+details.fold>summary{cursor:pointer;color:var(--link);font-size:.875rem;padding:6px 0}
+details.fold[open]>summary{margin-bottom:4px}

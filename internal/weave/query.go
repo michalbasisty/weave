@@ -263,8 +263,12 @@ type Facts struct {
 	Modules    []string `json:"modules"`
 	// Endpoints is everything the modules reach; FileEndpoints is what these files
 	// themselves declare or call. Context answers for a file, so it reads the second.
-	Endpoints     []*GNode    `json:"endpoints"`
-	FileEndpoints []*GNode    `json:"fileEndpoints"`
+	Endpoints     []*GNode `json:"endpoints"`
+	FileEndpoints []*GNode `json:"fileEndpoints"`
+	// ViaEndpoints is what the direct importers call: the blast radius of a shared
+	// module, which calls nothing itself (`services/api.ts`). One extra hop, and only
+	// when the file reaches nothing on its own.
+	ViaEndpoints  []*GNode    `json:"viaEndpoints,omitempty"`
 	Pages         []PageHit   `json:"pages"`
 	Tables        []string    `json:"tables"`
 	Tests         []string    `json:"tests"`
@@ -632,6 +636,19 @@ func Analyze(g *Graph, inputs []string) *Facts {
 		return out
 	}
 
+	// A shared client calls nothing itself, so the endpoints its importers call are
+	// the only honest answer to "what breaks if I change this".
+	via := newSet()
+	if endpoints.size() == 0 {
+		for _, dep := range dependents.list {
+			for _, e := range ix.From(FileID(dep), "calls") {
+				if n := ix.Node(e.To); n != nil && n.Kind == KindEndpoint {
+					via.add(e.To)
+				}
+			}
+		}
+	}
+
 	return &Facts{
 		Files:         files.items(),
 		Dependents:    dependents.items(),
@@ -639,6 +656,7 @@ func Analyze(g *Graph, inputs []string) *Facts {
 		Modules:       modules.items(),
 		Endpoints:     nodes(endpoints),
 		FileEndpoints: nodes(fileEndpoints),
+		ViaEndpoints:  nodes(via),
 		Pages:         append([]PageHit{}, pages.list...),
 		Tables:        tables.items(),
 		Tests:         tests.items(),
@@ -736,8 +754,18 @@ func Impact(g *Graph, inputs []string) string {
 		out = append(out, "run")
 		out = append(out, indent("  ", f.Commands)...)
 	}
-	if len(f.Endpoints) == 0 && len(f.Pages) == 0 && len(f.Tables) == 0 {
-		out = append(out, "no endpoint, page or table reaches this file — change looks isolated")
+	if len(f.ViaEndpoints) > 0 {
+		out = append(out, "via       "+strconv.Itoa(len(f.ViaEndpoints))+" endpoint(s) called by files that import this one (one more hop)")
+		for _, e := range head(f.ViaEndpoints, maxRows) {
+			out = append(out, "  "+e.Name+"  "+loc(e))
+		}
+	}
+	if len(f.Endpoints) == 0 && len(f.Pages) == 0 && len(f.Tables) == 0 && len(f.ViaEndpoints) == 0 {
+		if len(f.Dependents) > 0 {
+			out = append(out, "no endpoint, page or table is reached, directly or through its "+strconv.Itoa(len(f.Dependents))+" importer(s)")
+		} else {
+			out = append(out, "no endpoint, page or table reaches this file — change looks isolated")
+		}
 	}
 	return strings.Join(out, "\n")
 }
@@ -754,6 +782,19 @@ func Context(g *Graph, inputs []string, budgetTokens float64, depth string) stri
 		return "no file matched: " + strings.Join(inputs, ", ")
 	}
 	limit := math.Max(400, budgetTokens*4)
+	// The legend for `~` is reserved before anything else is packed, or the budget
+	// would drop it and leave an unexplained marker in the answer.
+	const inferredLegend = "~         inferred link — a lead, not a fact"
+	inferred := false
+	for _, p := range f.Pages {
+		if p.Conf == ConfInferred {
+			inferred = true
+			break
+		}
+	}
+	if inferred {
+		limit -= float64(jsstr.Len(inferredLegend) + 1)
+	}
 	lines := []string{}
 	used := 0
 	push := func(s string) bool {
@@ -806,6 +847,9 @@ func Context(g *Graph, inputs []string, budgetTokens float64, depth string) stri
 	if len(f.Endpoints) > len(f.FileEndpoints) {
 		push("reach     " + strconv.Itoa(len(f.Endpoints)) + " endpoint(s) through these modules — impact(files)")
 	}
+	if len(f.ViaEndpoints) > 0 {
+		push("via       " + strconv.Itoa(len(f.ViaEndpoints)) + " endpoint(s) called by files that import this one — impact(files)")
+	}
 
 	if len(f.Tables) > 0 {
 		s := "tables    " + strings.Join(head(f.Tables, 8), ", ")
@@ -851,6 +895,19 @@ func Context(g *Graph, inputs []string, budgetTokens float64, depth string) stri
 		}
 	}
 
+	if len(f.Commands) > 0 {
+		// The command is the action, so it is placed before the test list and is
+		// kept when the budget runs out: a "run" header with no command under it is
+		// worse than no header at all.
+		if push("run") {
+			for _, c := range f.Commands {
+				if !push("  " + c) {
+					break
+				}
+			}
+		}
+	}
+
 	if len(f.FileTests) > 0 {
 		push("tests     " + strconv.Itoa(len(f.FileTests)))
 		for _, t := range head(f.FileTests, 6) {
@@ -877,17 +934,13 @@ func Context(g *Graph, inputs []string, budgetTokens float64, depth string) stri
 		}
 		push("also      " + strings.Join(others, ", ") + " share these endpoints")
 	}
-	if len(f.Commands) > 0 {
-		push("run")
-		for _, c := range f.Commands {
-			if !push("  " + c) {
-				break
-			}
-		}
-	}
 
 	if depth == "code" {
 		pushCode(g, f, push)
+	}
+	if inferred {
+		// Appended, not pushed: the budget was reserved for it above.
+		lines = append(lines, inferredLegend)
 	}
 	return strings.Join(lines, "\n")
 }
@@ -1042,7 +1095,7 @@ func Plan(g *Graph, slug, taskID string) string {
 		}
 	}
 	if task == nil {
-		return slug + ": all " + strconv.Itoa(len(tasks)) + " task(s) done — call verify"
+		return slug + ": all " + strconv.Itoa(len(tasks)) + " task(s) done — run weave check"
 	}
 
 	out := []string{"next  " + lastWord(task.Name) + "  " + metaText(task, "title")}
@@ -1488,11 +1541,18 @@ func CoverageLines(g *Graph, full bool) []string {
 	if c.Next != nil && (c.Next.Files != 0 || c.Next.Found != 0) {
 		out = append(out, "  next routes   "+itoa(c.Next.Found)+"/"+itoa(c.Next.Files)+" route files produced endpoints ("+pct(c.Next.Found, c.Next.Files)+"%)")
 	}
+	if c.NextPage != nil && c.NextPage.Files != 0 {
+		out = append(out, "  next pages    "+itoa(c.NextPage.Found)+"/"+itoa(c.NextPage.Files)+" page files produced pages ("+pct(c.NextPage.Found, c.NextPage.Files)+"%)")
+	}
 	if c.Trpc != nil && (c.Trpc.Files != 0 || c.Trpc.Found != 0) {
 		out = append(out, "  tRPC routers  "+itoa(c.Trpc.Found)+"/"+itoa(c.Trpc.Files)+" parsed ("+pct(c.Trpc.Found, c.Trpc.Files)+"%)")
 	}
 	if c.OpenAPI != nil && c.OpenAPI.Files != 0 {
 		out = append(out, "  openapi       "+itoa(c.OpenAPI.Found)+"/"+itoa(c.OpenAPI.Files)+" specs produced endpoints ("+pct(c.OpenAPI.Found, c.OpenAPI.Files)+"%)")
+	}
+	if c.OpenAPI != nil && len(c.OpenAPI.Ignored) != 0 {
+		out = append(out, "  openapi       "+itoa(len(c.OpenAPI.Ignored))+" YAML spec(s) not read — JSON only:")
+		out = append(out, indent("    ", c.OpenAPI.Ignored)...)
 	}
 	if c.Patterns != nil && *c.Patterns != 0 {
 		out = append(out, "  patterns      "+itoa(*c.Patterns)+" endpoint(s) from .weave/patterns.json")

@@ -161,6 +161,48 @@ func cmdInit() int {
 		}
 	}
 
+	// The Stop hook is the one place the agent cannot skip the gate: exit 2 keeps the
+	// turn going and hands stderr back to the model.
+	if hasFlag("hooks") {
+		rel := filepath.Join(".claude", "settings.json")
+		p := filepath.Join(root, rel)
+		doc, ok := readDoc(p)
+		if !ok {
+			doc = map[string]any{}
+		}
+		hooks, _ := doc["hooks"].(map[string]any)
+		if hooks == nil {
+			hooks = map[string]any{}
+		}
+		stop, _ := hooks["Stop"].([]any)
+		cmdLine := `"` + exe + `" hook --root .`
+		present := false
+		for _, e := range stop {
+			m, _ := e.(map[string]any)
+			inner, _ := m["hooks"].([]any)
+			for _, h := range inner {
+				hm, _ := h.(map[string]any)
+				if s, _ := hm["command"].(string); strings.Contains(s, "hook") && strings.Contains(s, "weave") {
+					present = true
+				}
+			}
+		}
+		if !present {
+			stop = append(stop, map[string]any{"hooks": []any{map[string]any{"type": "command", "command": cmdLine}}})
+		}
+		hooks["Stop"] = stop
+		doc["hooks"] = hooks
+		if writeValue(p, doc) {
+			if present {
+				skipped = append(skipped, rel+" (hook already there)")
+			} else {
+				did = append(did, rel+" += Stop hook")
+			}
+		} else {
+			skipped = append(skipped, rel+" (unwritable)")
+		}
+	}
+
 	gi := filepath.Join(root, ".gitignore")
 	if pathExists(gi) {
 		text, err := os.ReadFile(gi)
@@ -196,10 +238,13 @@ agents that read AGENTS.md, paste this:
   command to run them. Use impact(files) for the full blast radius.
 
 enforce it without the agent's cooperation (any of these, same command):
+  claude code      : weave init --hooks   (writes a Stop hook that runs the gate)
   git pre-commit   : "%s" check --root .
-  claude code hook : {"matcher":"Edit|Write","hooks":[{"type":"command","command":"\"%s\" check --root ."}]}
-  kiro hook        : .kiro/hooks/weave.json  -> trigger PostFileSave, command above
+  kiro hook        : .kiro/hooks/weave.json  -> trigger PostFileSave, same command
   ci               : "%s" index --root . && "%s" check --root .
+
+what the hook has seen (after a week: if it never fires, it is not earning its place):
+  weave fires --since 7
 
 mark code with the requirement it implements (exact traceability, any language):
   // @req REQ-ORDERS-3
@@ -211,6 +256,6 @@ prove a requirement is tested (needed for `+"`weave evidence`"+` and the check g
   playwright npx playwright test --reporter=junit
   phpunit    vendor/bin/phpunit --log-junit .weave/junit.xml
   then: weave evidence
-`, exe, exe, exe, exe, exe, exe)
+`, exe, exe, exe, exe, exe)
 	return 0
 }

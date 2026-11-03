@@ -71,7 +71,7 @@ func Walk(root string) []SourceFile {
 			}
 			if st.IsDir() {
 				visit(abs, r)
-			} else if st.Size() <= MaxBytes && code[Ext(name)] {
+			} else if (st.Size() <= MaxBytes && code[Ext(name)]) || (specFile(r) && st.Size() <= SpecMaxBytes) {
 				b, err := os.ReadFile(abs)
 				if err != nil {
 					continue
@@ -115,7 +115,7 @@ func WalkInfo(root string) []FileInfo {
 			}
 			if st.IsDir() {
 				visit(abs, r)
-			} else if st.Size() <= MaxBytes && code[Ext(name)] {
+			} else if (st.Size() <= MaxBytes && code[Ext(name)]) || (specFile(r) && st.Size() <= SpecMaxBytes) {
 				out = append(out, FileInfo{Rel: r, Abs: abs, Size: st.Size(), Mtime: st.ModTime().UnixNano()})
 			}
 		}
