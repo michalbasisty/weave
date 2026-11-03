@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" role="img" aria-label="Published reduction in agent output tokens from other code-index MCP tools: repowise 31.6 percent, CodeGraph 24.4, Serena 14.8, Graphify 8.9, code-review-graph 6.0. weave has no equivalent end-to-end measurement yet.">
+  <style>
+    :root { --ground:#f5f6f8; --ink:#131a26; --ink2:#3a4454; --ink3:#5a6474; --rule:#dbe0e8; --rule2:#e8ebf0;
+            --other:#8f9bb0; --weave:#1d4bb0; }
+    @media (prefers-color-scheme: dark) {
+      :root { --ground:#0b111d; --ink:#e8ecf3; --ink2:#bcc5d4; --ink3:#8f9bb0; --rule:#22304a; --rule2:#1a2439;
+              --other:#41506b; --weave:#9cb9f5; }
+    }
+    .bg { fill: var(--ground); }
+    .title { font: 600 19px "Segoe UI", system-ui, sans-serif; fill: var(--ink); }
+    .sub { font: 400 13px "Segoe UI", system-ui, sans-serif; fill: var(--ink3); }
+    .name { font: 400 14px "Segoe UI", system-ui, sans-serif; fill: var(--ink2); }
+    .bar { fill: var(--other); }
+    .value { font: 700 15px "Cascadia Mono", Consolas, ui-monospace, monospace; font-variant-numeric: tabular-nums; fill: var(--ink2); }
+    .note { font: 400 12px "Cascadia Mono", Consolas, ui-monospace, monospace; fill: var(--ink3); }
+    .axis { stroke: var(--rule); stroke-width: 1; }
+    .dash { stroke: var(--weave); stroke-width: 2; stroke-dasharray: 5 5; }
+  </style>
+
+  <rect class="bg" x="0" y="0" width="1200" height="360" rx="10"/>
+  <text class="title" x="40" y="44">What other index tools report</text>
+  <text class="sub" x="40" y="68">reduction in agent output tokens, 44-task benchmark published by those tools · not comparable to weave's own figures</text>
+
+  <line class="axis" x1="300" y1="96" x2="300" y2="268"/>
+  <line class="axis" x1="300" y1="96" x2="1080" y2="96" stroke-dasharray="2 4"/>
+
+  <text class="name" x="40" y="122">repowise</text>
+  <rect class="bar" x="300" y="106" width="630" height="20" rx="3"/>
+  <text class="value" x="942" y="121">31.6%</text>
+
+  <text class="name" x="40" y="160">CodeGraph</text>
+  <rect class="bar" x="300" y="144" width="487" height="20" rx="3"/>
+  <text class="value" x="799" y="159">24.4%</text>
+
+  <text class="name" x="40" y="198">Serena</text>
+  <rect class="bar" x="300" y="182" width="295" height="20" rx="3"/>
+  <text class="value" x="607" y="197">14.8%</text>
+
+  <text class="name" x="40" y="236">Graphify</text>
+  <rect class="bar" x="300" y="220" width="178" height="20" rx="3"/>
+  <text class="value" x="490" y="235">8.9%</text>
+
+  <text class="name" x="40" y="274">code-review-graph</text>
+  <rect class="bar" x="300" y="258" width="120" height="20" rx="3"/>
+  <text class="value" x="432" y="273">6.0%</text>
+
+  <line class="axis" x1="300" y1="312" x2="1080" y2="312" stroke-dasharray="2 4"/>
+  <text class="name" x="40" y="318">weave</text>
+  <line class="dash" x1="300" y1="312" x2="520" y2="312"/>
+  <text class="note" x="532" y="308">no end-to-end agent benchmark yet:</text>
+  <text class="note" x="532" y="324">we publish answer size (the chart above), not behaviour</text>
+
+  <text class="note" x="300" y="344">0%</text>
+  <text class="note" x="1080" y="344" text-anchor="end">32% fewer tokens</text>
+</svg>

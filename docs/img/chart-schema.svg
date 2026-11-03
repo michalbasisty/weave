@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 336" width="1200" height="336" role="img" aria-label="MCP tool schema loaded before the first prompt: weave 1017 tokens, filesystem 3500, Notion 9000, GitHub 18000.">
+  <style>
+    :root { --ground:#f5f6f8; --ink:#131a26; --ink2:#3a4454; --ink3:#5a6474; --rule:#dbe0e8; --rule2:#e8ebf0;
+            --weave:#1d4bb0; --other:#8f9bb0; }
+    @media (prefers-color-scheme: dark) {
+      :root { --ground:#0b111d; --ink:#e8ecf3; --ink2:#bcc5d4; --ink3:#8f9bb0; --rule:#22304a; --rule2:#1a2439;
+              --weave:#9cb9f5; --other:#41506b; }
+    }
+    .bg { fill: var(--ground); }
+    .title { font: 600 19px "Segoe UI", system-ui, sans-serif; fill: var(--ink); }
+    .sub { font: 400 13px "Segoe UI", system-ui, sans-serif; fill: var(--ink3); }
+    .name { font: 400 14px "Segoe UI", system-ui, sans-serif; fill: var(--ink2); }
+    .track { fill: var(--rule2); }
+    .barW { fill: var(--weave); }
+    .barO { fill: var(--other); }
+    .value { font: 700 15px "Cascadia Mono", Consolas, ui-monospace, monospace; font-variant-numeric: tabular-nums; fill: var(--ink2); }
+    .note { font: 400 12px "Cascadia Mono", Consolas, ui-monospace, monospace; fill: var(--ink3); }
+    .axis { stroke: var(--rule); stroke-width: 1; }
+  </style>
+
+  <rect class="bg" x="0" y="0" width="1200" height="336" rx="10"/>
+  <text class="title" x="40" y="44">What every session pays before the first prompt</text>
+  <text class="sub" x="40" y="68">MCP tool schemas, in context on every turn · lower is better</text>
+
+  <line class="axis" x1="300" y1="96" x2="300" y2="284"/>
+
+  <text class="name" x="40" y="118">weave — 10 tools</text>
+  <rect class="track" x="300" y="102" width="700" height="18" rx="4"/>
+  <rect class="barW" x="300" y="102" width="40" height="18" rx="4"/>
+  <text class="value" x="352" y="117" fill="var(--weave)">1,017</text>
+
+  <text class="name" x="40" y="160">filesystem</text>
+  <rect class="track" x="300" y="144" width="700" height="18" rx="4"/>
+  <rect class="barO" x="300" y="144" width="136" height="18" rx="4"/>
+  <text class="value" x="448" y="159">3,500</text>
+
+  <text class="name" x="40" y="202">Notion</text>
+  <rect class="track" x="300" y="186" width="700" height="18" rx="4"/>
+  <rect class="barO" x="300" y="186" width="350" height="18" rx="4"/>
+  <text class="value" x="662" y="201">9,000</text>
+
+  <text class="name" x="40" y="244">GitHub — 93 tools</text>
+  <rect class="track" x="300" y="228" width="700" height="18" rx="4"/>
+  <rect class="barO" x="300" y="228" width="700" height="18" rx="4"/>
+  <text class="value" x="1012" y="243">18,000</text>
+
+  <line class="axis" x1="300" y1="284" x2="1000" y2="284"/>
+  <text class="note" x="300" y="304">0</text>
+  <text class="note" x="1000" y="304" text-anchor="end">18,000 tokens</text>
+  <text class="note" x="40" y="324">weave measured from its own schema; the others from published measurements of those servers</text>
+</svg>

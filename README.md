@@ -383,7 +383,7 @@ go          go test -json ./... | go-junit-report > .weave/junit.xml
 
 ## Why it is cheap
 
-<img src="docs/img/tokens.svg" alt="Two measured comparisons: a route question answers in 66 tokens where grep returns no hits; a screen's context answers in 346 tokens where reading the same facts costs 61,687." width="100%">
+<img src="docs/img/chart-cost.svg" alt="Tokens needed for the same answers: weave search 66, weave context 346, the screen's file alone 4,657, the same facts gathered by hand from 11 files 61,687." width="100%">
 
 - **One call replaces explore + grep + read.** `context` names the page, endpoints, tables, spec change and tests inside a 350-token budget. Measured over 24 screens on a 954-file monorepo: **346 tokens median** for the pack, against **4,657** for the screen's own file and **61,687** for the same facts read the old way (11 files: the screen, its endpoints, their tests).
 - **Some questions grep cannot answer.** `GET /api/v1/tasks/:id` appears in source as `/:id` under a mount, so grep returns **0 hits**; `weave search` answers it in **66 tokens**. Where the literal does exist, grep plus opening the matched files cost 12,872 and 18,245 tokens for the same answer.
@@ -393,6 +393,27 @@ go          go test -json ./... | go-junit-report > .weave/junit.xml
 - **No per-language parsers.** Regex over the contracts a framework already publishes.
 
 The whole tool costs **1,017 tokens of MCP schema** per session (10 tools); GitHub's MCP server loads about 18,000 across 93. Warm MCP calls are ~3 ms, `check` takes 406 ms on a one-file rename, a fresh index 330 ms, and the 489-page wiki 440 ms.
+
+## How it compares
+
+Two different questions, so two different charts. Neither one is a claim that weave is
+faster than another tool: they measure different things and the captions say which.
+
+**Cost to install.** An MCP server's tool schemas sit in context on every turn, whether you
+call them or not. weave's ten tools are 1,017 tokens.
+
+<img src="docs/img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 1017 tokens, filesystem 3500, Notion 9000, GitHub 18000." width="100%">
+
+**What other index tools report.** Their authors' own benchmark: how much agent output
+tokens fell when the tool was available. weave has no equivalent end-to-end benchmark yet,
+and the chart says so rather than borrowing someone else's number.
+
+<img src="docs/img/chart-others.svg" alt="Reduction in agent output tokens reported by other tools: repowise 31.6%, CodeGraph 24.4%, Serena 14.8%, Graphify 8.9%, code-review-graph 6.0%." width="100%">
+
+The honest summary: the strongest thing weave has is not a percentage. It is that a route
+question (`GET /api/v1/tasks/:id`, written in the source as `/:id` under a mount) cannot be
+answered by grep at all, and that the gate fails a build with the caller's `file:line` in
+406 ms. Those are capabilities, and they are measured above.
 
 ## What it extracts, and how exact it is
 

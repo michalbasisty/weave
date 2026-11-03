@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 396" width="1200" height="396" role="img" aria-label="Tokens needed for the same answers: weave search 66, weave context 346, the screen's file alone 4657, the same facts read by hand from 11 files 61687.">
+  <style>
+    :root { --ground:#f5f6f8; --ink:#131a26; --ink2:#3a4454; --ink3:#5a6474; --rule:#dbe0e8; --rule2:#e8ebf0;
+            --weave:#1d4bb0; --manual:#b4261a; }
+    @media (prefers-color-scheme: dark) {
+      :root { --ground:#0b111d; --ink:#e8ecf3; --ink2:#bcc5d4; --ink3:#8f9bb0; --rule:#22304a; --rule2:#1a2439;
+              --weave:#9cb9f5; --manual:#f2907f; }
+    }
+    .bg { fill: var(--ground); }
+    .title { font: 600 19px "Segoe UI", system-ui, sans-serif; fill: var(--ink); }
+    .sub { font: 400 13px "Segoe UI", system-ui, sans-serif; fill: var(--ink3); }
+    .axis { stroke: var(--rule); stroke-width: 1; }
+    .tick { font: 400 11px "Cascadia Mono", Consolas, ui-monospace, monospace; fill: var(--ink3); }
+    .label { font: 400 14px "Segoe UI", system-ui, sans-serif; fill: var(--ink2); }
+    .value { font: 700 16px "Cascadia Mono", Consolas, ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+    .dotW { fill: var(--weave); }
+    .dotM { fill: var(--manual); }
+    .lineW { stroke: var(--weave); stroke-width: 2; }
+    .lineM { stroke: var(--manual); stroke-width: 2; }
+    .lg { font: 400 12px "Segoe UI", system-ui, sans-serif; fill: var(--ink3); }
+  </style>
+
+  <rect class="bg" x="0" y="0" width="1200" height="396" rx="10"/>
+  <text class="title" x="40" y="44">The same answer costs 66 tokens or 61,687</text>
+  <text class="sub" x="40" y="68">tokens, log scale · measured on a 954-file Express + Prisma + React repo</text>
+
+  <g>
+    <line class="axis" x1="300" y1="96" x2="300" y2="318"/>
+    <line class="axis" x1="300" y1="318" x2="1129" y2="318"/>
+    <line class="axis" x1="507" y1="96" x2="507" y2="318" stroke-dasharray="2 4"/>
+    <line class="axis" x1="715" y1="96" x2="715" y2="318" stroke-dasharray="2 4"/>
+    <line class="axis" x1="922" y1="96" x2="922" y2="318" stroke-dasharray="2 4"/>
+    <line class="axis" x1="1129" y1="96" x2="1129" y2="318" stroke-dasharray="2 4"/>
+    <text class="tick" x="300" y="336" text-anchor="middle">10</text>
+    <text class="tick" x="507" y="336" text-anchor="middle">100</text>
+    <text class="tick" x="715" y="336" text-anchor="middle">1k</text>
+    <text class="tick" x="922" y="336" text-anchor="middle">10k</text>
+    <text class="tick" x="1129" y="336" text-anchor="middle">100k</text>
+    <text class="tick" x="1129" y="354" text-anchor="end">tokens</text>
+  </g>
+
+  <text class="label" x="40" y="126">Where is GET /api/v1/tasks/:id handled?</text>
+  <text class="sub" x="40" y="144">weave search · one line with file:line</text>
+  <line class="lineW" x1="300" y1="132" x2="657" y2="132"/>
+  <circle class="dotW" cx="657" cy="132" r="6"/>
+  <text class="value" x="676" y="138" fill="var(--weave)">66</text>
+
+  <text class="label" x="40" y="184">What do I need before editing this screen?</text>
+  <text class="sub" x="40" y="202">weave context · page, endpoints, tables, tests, command</text>
+  <line class="lineW" x1="300" y1="190" x2="767" y2="190"/>
+  <circle class="dotW" cx="767" cy="190" r="6"/>
+  <text class="value" x="786" y="196" fill="var(--weave)">346</text>
+
+  <text class="label" x="40" y="242">The screen's own file, read in full</text>
+  <text class="sub" x="40" y="260">no endpoints, no tests, no command</text>
+  <line class="lineM" x1="300" y1="248" x2="986" y2="248"/>
+  <circle class="dotM" cx="986" cy="248" r="6"/>
+  <text class="value" x="1005" y="254" fill="var(--manual)">4,657</text>
+
+  <text class="label" x="40" y="300">The same facts gathered by hand</text>
+  <text class="sub" x="40" y="318">11 files: the screen, its endpoints, their tests — grep</text>
+  <line class="lineM" x1="300" y1="306" x2="1122" y2="306"/>
+  <circle class="dotM" cx="1122" cy="306" r="6"/>
+  <text class="value" x="1104" y="292" text-anchor="end" fill="var(--manual)">61,687</text>
+
+  <circle class="dotW" cx="52" cy="372" r="5"/>
+  <text class="lg" x="64" y="376">weave</text>
+  <circle class="dotM" cx="132" cy="372" r="5"/>
+  <text class="lg" x="144" y="376">without weave</text>
+  <text class="lg" x="1160" y="376" text-anchor="end">method: bench.ps1 · 24 screens · bytes ÷ 4</text>
+</svg>
