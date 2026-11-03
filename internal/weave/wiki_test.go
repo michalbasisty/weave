@@ -44,6 +44,43 @@ func TestWikiPagesResolveAndSayWhatTheyAre(t *testing.T) {
 		t.Errorf("module page does not list endpoints")
 	}
 
+	// The sidebar leads to a directory per section, and that directory lists the
+	// pages: a section you cannot browse is not a section.
+	ix := NewIndex(g)
+	for _, k := range wikiKinds {
+		body := readFile(t, filepath.Join(out, k.page))
+		for _, n := range ix.OfKind(k.kind) {
+			if !strings.Contains(body, k.base+"/"+Slug(n.Name)+".html") {
+				t.Errorf("%s does not link %s", k.page, n.Name)
+			}
+		}
+	}
+
+	// One entry per page for the assistant that reads the index before a page.
+	llms := readFile(t, filepath.Join(out, "llms.txt"))
+	for _, k := range wikiKinds {
+		for _, n := range ix.OfKind(k.kind) {
+			if !strings.Contains(llms, "("+k.base+"/"+Slug(n.Name)+".html)") {
+				t.Errorf("llms.txt has no entry for %s", n.Name)
+			}
+		}
+	}
+
+	// Search runs from every page, so its paths are relative to the site root.
+	search := readFile(t, filepath.Join(out, "search.js"))
+	for _, m := range regexp.MustCompile(`"((?:s|e|m|t|c)/[^"]+\.html)"`).FindAllStringSubmatch(search, -1) {
+		if _, err := os.Stat(filepath.Join(out, filepath.FromSlash(m[1]))); err != nil {
+			t.Errorf("search index points at missing %s", m[1])
+		}
+	}
+	if !strings.Contains(search, `"page"`) {
+		t.Errorf("search index has no kind labels")
+	}
+
+	if !strings.Contains(ep, `name="description"`) {
+		t.Errorf("endpoint page has no description")
+	}
+
 	if got := ReadWikiStamp(out); got != "0123456789abcdef" {
 		t.Errorf("stamp: got %q", got)
 	}

@@ -35,7 +35,9 @@ by tool     context 18 (5,619) · status 3 (1,248) · impact 1 (799) · search 2
    from `weave mcp` (it stays a CLI command). Nine tools instead of ten, one fewer decision
    point, and no loss in the log.
 4. **Do not add a wiki tool.** A page is for a person. An agent that wants the same facts
-   asks `context`; an agent that wants prose has its own reading budget.
+   asks `context`; an agent that wants prose has its own reading budget. The wiki ships an
+   `llms.txt` for a model that happens to be reading the site, but that is a file, not a
+   tool: it costs the server nothing and changes no schema.
 
 ## What is still unproven
 

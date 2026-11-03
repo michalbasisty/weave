@@ -5,6 +5,7 @@
   --rule:#dbe0e8;--rule2:#e8ebf0;
   --shell:#14233f;--shell-ink:#ffffff;--shell-ink2:#c3cede;--shell-field:#22355b;--shell-rule:#2c4170;
   --link:#1d4bb0;--ok:#17723f;--bad:#b4261a;--code:#eceff4;
+  --ring:#1d4bb0;--mark:#cfe0f8;
   --ui:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
   --mono:"Cascadia Mono","Cascadia Code",Consolas,ui-monospace,monospace;
 }
@@ -15,12 +16,15 @@
     --rule:#22304a;--rule2:#1a2439;
     --shell:#18294f;--shell-ink2:#b9c6dd;--shell-field:#24396b;--shell-rule:#36507f;
     --link:#9cb9f5;--ok:#4cc493;--bad:#f2907f;--code:#101827;
+    --ring:#9cb9f5;--mark:#2a3a5c;
   }
 }
-*{box-sizing:border-box}
+*{box-sizing:border-box;scrollbar-color:var(--rule) transparent;scrollbar-width:thin}
 html{scroll-padding-top:72px}
-body{margin:0;background:var(--ground);color:var(--ink);font:400 .9375rem/1.6 var(--ui)}
-a{color:var(--link);text-decoration:none}
+body{margin:0;background:var(--ground);color:var(--ink);font:400 .9375rem/1.6 var(--ui);caret-color:currentColor}
+::selection{background:var(--mark);color:var(--ink)}
+:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+a{color:var(--link);text-decoration:none;text-underline-offset:.15em}
 a:hover{text-decoration:underline}
 code,.path{font-family:var(--mono);font-size:.8125rem}
 .skip{position:absolute;left:-9999px}
@@ -34,11 +38,14 @@ code,.path{font-family:var(--mono);font-size:.8125rem}
 .find{position:relative;margin-left:auto;width:min(420px,46vw)}
 .find input{width:100%;height:36px;padding:0 10px;border:1px solid var(--shell-rule);border-radius:6px;background:var(--shell-field);color:var(--shell-ink);font:400 .875rem var(--ui)}
 .find input::placeholder{color:var(--shell-ink2)}
-#hits{position:absolute;top:40px;left:0;right:0;max-height:60vh;overflow:auto;background:var(--surface);border:1px solid var(--rule);border-radius:6px}
-#hits a{display:flex;gap:10px;align-items:baseline;padding:7px 10px;color:var(--ink);border-bottom:1px solid var(--rule2)}
+#hits{position:absolute;top:40px;left:0;right:0;max-height:60vh;overflow:auto;background:var(--surface);border:1px solid var(--rule);border-radius:6px;box-shadow:0 8px 24px -12px rgb(0 0 0/.45)}
+#hits a{display:grid;grid-template-columns:62px minmax(0,1fr);gap:1px 10px;align-items:baseline;padding:7px 10px;color:var(--ink);border-bottom:1px solid var(--rule2)}
 #hits a:last-child{border-bottom:0}
 #hits a[aria-selected=true],#hits a:hover{background:var(--sunk);text-decoration:none}
-#hits .k{font:600 .6875rem var(--mono);color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;min-width:62px}
+#hits .k{grid-row:1 / span 2;font:600 .6875rem var(--mono);color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
+#hits .n{font:400 .8125rem var(--mono);overflow-wrap:anywhere}
+#hits .h{color:var(--ink3);font-size:.75rem;overflow-wrap:anywhere}
+#hits .none{margin:0;padding:10px 12px;color:var(--ink3);font-size:.8125rem}
 .stamp{color:var(--shell-ink2);font:400 .75rem var(--mono)}
 
 /* three columns, the article owning the scroll */
@@ -50,9 +57,9 @@ code,.path{font-family:var(--mono);font-size:.8125rem}
 .side-sec .cn{font:400 .75rem var(--mono);color:var(--ink3)}
 .side-sec[aria-current=page]{color:var(--ink);background:var(--sunk)}
 .side-list{list-style:none;margin:2px 0 0;padding:0 0 0 8px}
-.side-list li a{display:block;padding:4px 8px;border-radius:4px;color:var(--ink2);font-size:.8125rem;overflow-wrap:anywhere}
+.side-list li a{display:block;padding:4px 8px;border-radius:4px;color:var(--ink2);font:400 .75rem/1.45 var(--mono);overflow-wrap:anywhere}
 .side-list li a:hover{background:var(--sunk);text-decoration:none;color:var(--ink)}
-.side-list li a[aria-current=page]{background:var(--sunk);color:var(--ink);font-weight:600;border-left:2px solid var(--link);padding-left:6px}
+.side-list li a[aria-current=page]{background:var(--sunk);color:var(--ink);font-weight:600}
 .side-grp{list-style:none;margin:8px 0 0}
 .side-grp>span{display:block;padding:2px 8px;font:600 .6875rem var(--mono);color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
 .side-grp ul{list-style:none;margin:0;padding:0}
@@ -61,35 +68,62 @@ main{min-width:0;padding:24px 0 64px}
 .crumbs{display:flex;gap:8px;align-items:center;font-size:.8125rem;color:var(--ink3);margin-bottom:16px}
 .crumbs a{color:var(--ink2)}
 h1{font:650 1.75rem/1.2 var(--ui);letter-spacing:-.015em;margin:0 0 8px;overflow-wrap:anywhere}
-.lede{color:var(--ink2);margin:0 0 24px;max-width:66ch}
-.counts{color:var(--ink3);font:400 .8125rem var(--mono);margin:-12px 0 24px}
+.lede{color:var(--ink2);margin:0 0 10px;max-width:66ch}
+.counts{color:var(--ink3);font:400 .8125rem var(--mono);margin:0 0 14px}
+/* a status, not an alarm: the dot is the signal, the sentence is the evidence */
+.gate{display:flex;gap:8px;align-items:baseline;margin:0 0 24px;color:var(--ink2);font-size:.9375rem}
+.gate::before{content:"";flex:none;width:7px;height:7px;border-radius:50%;background:var(--ok);transform:translateY(-1px)}
+.gate.bad{color:var(--bad)}
+.gate.bad::before{background:var(--bad)}
 h2{font:600 1.125rem/1.3 var(--ui);margin:32px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
 section{margin:0}
-ul.rel,ul.doors,ul.notes,ul.run{list-style:none;margin:8px 0 0;padding:0}
-ul.rel li,ul.doors li,ul.notes li,ul.run li{padding:6px 0;border-bottom:1px solid var(--rule2)}
+ul.rel,ul.notes,ul.run{list-style:none;margin:8px 0 0;padding:0}
+ul.rel li,ul.notes li,ul.run li{padding:6px 0;border-bottom:1px solid var(--rule2)}
 ul.rel li:last-child,ul.notes li:last-child,ul.run li:last-child{border-bottom:0}
+.num{font:400 .75rem var(--mono);color:var(--ink3);font-variant-numeric:tabular-nums;white-space:nowrap}
+ul.rel .num{margin-left:6px}
+
+/* the directory: a count, a name, and what the section answers */
+ul.browse{list-style:none;margin:8px 0 0;padding:0;border-top:1px solid var(--rule2)}
+ul.browse li{border-bottom:1px solid var(--rule2)}
+ul.browse a{display:grid;grid-template-columns:5ch minmax(0,1fr);gap:1px 12px;padding:12px 8px;margin:0 -8px;border-radius:5px;color:var(--ink)}
+ul.browse a:hover{background:var(--sunk);text-decoration:none}
+ul.browse .n{grid-row:1 / span 2;font:400 .9375rem var(--mono);color:var(--ink3);text-align:right;font-variant-numeric:tabular-nums}
+ul.browse .t{font-weight:600}
+ul.browse .w{color:var(--ink3);font-size:.8125rem}
+.more{color:var(--ink3);font-size:.8125rem;margin:10px 0 0}
 table{width:100%;border-collapse:collapse;margin:8px 0 0}
 th{text-align:left;font:600 .8125rem var(--ui);color:var(--ink3);padding:6px 8px 6px 0;border-bottom:1px solid var(--rule)}
-td{padding:6px 8px 6px 0;border-bottom:1px solid var(--rule2);vertical-align:top;overflow-wrap:anywhere}
+td{padding:6px 8px 6px 0;border-bottom:1px solid var(--rule2);vertical-align:top;overflow-wrap:break-word}
+.lbl{display:none}
+/* an identifier, not a sentence: mono keeps a long path from breaking mid-word */
+td:first-child a{font:400 .8125rem var(--mono)}
+@media (min-width:701px){
+  td:first-child{white-space:nowrap}
+  /* the last column absorbs the slack, so the facts stay next to the name */
+  td:last-child{width:100%}
+}
+.notes .files{overflow-wrap:anywhere}
 .yes{color:var(--ok);font-size:.8125rem}
 .no{color:var(--ink3);font-size:.8125rem}
 .empty{color:var(--ink3);margin:8px 0 0;max-width:62ch}
 details.fold{margin:8px 0 0}
 details.fold>summary{cursor:pointer;color:var(--link);font-size:.875rem;padding:6px 0}
 .notes .when{color:var(--ink3);font:400 .75rem var(--mono);margin-right:6px}
-.notes .files{display:block;color:var(--ink3);font:400 .75rem var(--mono)}
+.notes .files{display:block;color:var(--ink3);font:400 .75rem var(--mono);overflow-wrap:anywhere}
 .path{margin:8px 0 0;color:var(--ink2);min-width:0}
 .path code{background:var(--code);padding:2px 6px;border-radius:4px;overflow-wrap:anywhere}
 .run code{display:block;background:var(--code);color:var(--ink2);padding:6px 8px;border-radius:4px;overflow-wrap:anywhere}
 
 /* the code a page is about, right where the claim is */
 figure.code{margin:12px 0 0;border:1px solid var(--rule);border-radius:6px;overflow:hidden}
-figure.code figcaption{padding:6px 10px;background:var(--sunk);color:var(--ink3);font:400 .75rem var(--mono);border-bottom:1px solid var(--rule)}
-figure.code pre{margin:0;padding:10px;overflow:auto;background:var(--code);color:var(--ink2);font:400 .75rem/1.55 var(--mono);max-height:420px}
+figure.code figcaption{padding:6px 10px;background:var(--sunk);color:var(--ink3);font:400 .75rem/1.4 var(--mono);border-bottom:1px solid var(--rule);overflow-wrap:anywhere}
+/* wrap rather than clip: a snippet you cannot see the end of is not a reference */
+figure.code pre{margin:0;padding:10px;overflow:auto;background:var(--code);color:var(--ink2);font:400 .75rem/1.6 var(--mono);max-height:420px;white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2}
 figure.code pre b{color:var(--ink);background:var(--sunk);display:block}
 
 .pager{display:flex;gap:12px;margin:40px 0 0;padding-top:16px;border-top:1px solid var(--rule)}
-.pager a{flex:1;display:block;padding:10px 12px;border:1px solid var(--rule);border-radius:6px;color:var(--ink)}
+.pager a{flex:1 1 0;min-width:0;display:block;padding:10px 12px;border:1px solid var(--rule);border-radius:6px;color:var(--ink);font:400 .8125rem/1.45 var(--mono);overflow-wrap:anywhere}
 .pager a:hover{background:var(--sunk);text-decoration:none}
 .pager a span{display:block;font:600 .6875rem var(--ui);color:var(--ink3);text-transform:uppercase;letter-spacing:.06em}
 .pager .next{text-align:right}
@@ -108,9 +142,24 @@ footer{margin:28px 0 0;padding-top:12px;border-top:1px solid var(--rule);color:v
   .find{margin-left:0;width:100%}
   .stamp{display:none}
   .shell{display:block;padding:0 14px}
-  .side{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--rule);padding:10px 0;display:flex;gap:6px;overflow-x:auto}
+  /* the sections wrap onto a second row rather than scrolling out of sight */
+  .side{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--rule);padding:10px 0;display:flex;flex-wrap:wrap;gap:6px}
   .side-home,.side-sec{margin:0;white-space:nowrap}
   .side-list{display:none}
   main{padding:18px 0 48px}
   h1{font-size:1.375rem}
+}
+/* a table row becomes a labelled block: no sideways scroll on a phone */
+@media (max-width:700px){
+  table{margin-top:4px}
+  thead{display:none}
+  tbody,tr,td{display:block}
+  tr{padding:10px 0;border-bottom:1px solid var(--rule2)}
+  tr:last-child{border-bottom:0}
+  /* the label hangs in a gutter; the value keeps normal inline flow, so the code
+     spans inside it do not turn into separate columns */
+  td{display:block;min-height:1.6em;padding:2px 0 2px 12ch;border:0}
+  .lbl{display:inline-block;width:11ch;margin-left:-12ch;color:var(--ink3);font:400 .75rem/1.6 var(--ui)}
+  td:first-child{padding:0 0 4px}
+  td:first-child .lbl{display:none}
 }

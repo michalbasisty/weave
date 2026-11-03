@@ -30,19 +30,22 @@ type WikiResult struct {
 	Index string
 }
 
-// navKind is one sidebar section.
+// navKind is one section: a sidebar entry, a directory of pages, and the one page
+// that lists them all. A section you cannot browse is not a section.
 type navKind struct {
 	kind  string
 	label string
 	base  string // directory under the output root
+	page  string // the section's index page at the output root
+	about string // what the section holds, in one line
 }
 
 var wikiKinds = []navKind{
-	{KindPage, "Screens", "s"},
-	{KindEndpoint, "Endpoints", "e"},
-	{KindModule, "Modules", "m"},
-	{KindTable, "Tables", "t"},
-	{KindChange, "Changes", "c"},
+	{KindPage, "Screens", "s", "screens.html", "What each route in the app calls."},
+	{KindEndpoint, "Endpoints", "e", "endpoints.html", "Every path, the module that answers it, and whether a test calls it."},
+	{KindModule, "Modules", "m", "modules.html", "The backend unit that handles a set of endpoints."},
+	{KindTable, "Tables", "t", "tables.html", "Database tables and the modules that use them."},
+	{KindChange, "Changes", "c", "changes.html", "Spec changes, their tasks, and what is still open."},
 }
 
 type wikiWriter struct {
@@ -55,6 +58,7 @@ type wikiWriter struct {
 	// per-page state
 	rel  string
 	kind string
+	desc string // the page in one sentence, for search, meta and llms.txt
 	toc  []string
 	prev string
 	next string
@@ -91,13 +95,21 @@ func WriteWiki(g *Graph, opt WikiOptions) (*WikiResult, error) {
 	w.each(KindPage, func(n *GNode) { w.write("s/"+Slug(n.Name)+".html", w.screenPage(n)) })
 	w.each(KindTable, func(n *GNode) { w.write("t/"+Slug(n.Name)+".html", w.tablePage(n)) })
 	w.each(KindChange, func(n *GNode) { w.write("c/"+Slug(n.Name)+".html", w.changePage(n)) })
-	w.rel, w.kind, w.toc = "index.html", "", nil
+	// A directory page per section, so the sidebar leads somewhere and 248 endpoints
+	// do not live only inside a folded block on the home page.
+	for _, k := range wikiKinds {
+		w.rel, w.kind, w.toc, w.desc = k.page, k.kind, nil, ""
+		w.prev, w.next = "", ""
+		w.write(k.page, w.sectionPage(k))
+	}
+	w.rel, w.kind, w.toc, w.desc = "index.html", "", nil, ""
 	w.prev, w.next = "", ""
 	w.write("index.html", w.indexPage())
+	w.write("llms.txt", w.llmsTxt())
 	if err := w.writeStamp(); err != nil {
 		return nil, err
 	}
-	return &WikiResult{Pages: len(w.pages) + 1, Index: filepath.Join(opt.OutDir, "index.html")}, nil
+	return &WikiResult{Pages: len(w.pages), Index: filepath.Join(opt.OutDir, "index.html")}, nil
 }
 
 // each renders one kind in a stable order, so prev/next is the order a reader sees.
@@ -106,6 +118,7 @@ func (w *wikiWriter) each(kind string, fn func(*GNode)) {
 	sort.SliceStable(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
 	for i, n := range nodes {
 		w.rel, w.kind, w.toc = sectionDir(kind)+"/"+Slug(n.Name)+".html", kind, nil
+		w.desc = w.description(n)
 		w.prev, w.next = "", ""
 		if i > 0 {
 			w.prev = nodes[i-1].Name
@@ -198,7 +211,7 @@ func (w *wikiWriter) write(rel, body string) {
 	if os.MkdirAll(filepath.Dir(p), 0o755) != nil {
 		return
 	}
-	if os.WriteFile(p, []byte(body), 0o644) == nil {
+	if os.WriteFile(p, []byte(body), 0o644) == nil && strings.HasSuffix(rel, ".html") {
 		w.pages = append(w.pages, rel)
 	}
 }
@@ -231,6 +244,104 @@ func emptyState(why string) string { return `<p class="empty">` + esc(why) + `</
 // folded keeps a landing page scannable: a long list is one line until opened.
 func folded(summary, body string) string {
 	return `<details class="fold"><summary>` + esc(summary) + `</summary>` + "\n" + body + "</details>\n"
+}
+
+func mark(ok bool, yes, no string) string {
+	if ok {
+		return `<span class="yes">` + esc(yes) + `</span>`
+	}
+	return `<span class="no">` + esc(no) + `</span>`
+}
+
+func num(n int) string { return `<span class="num">` + strconv.Itoa(n) + `</span>` }
+
+func ratio(done, total int) string {
+	return `<span class="num">` + strconv.Itoa(done) + " / " + strconv.Itoa(total) + `</span>`
+}
+
+// oneLine is a page in one sentence. The search hint, the llms.txt entry and the
+// meta description say the same thing, so an agent and a person read the same claim.
+func (w *wikiWriter) oneLine(n *GNode) string {
+	switch n.Kind {
+	case KindEndpoint:
+		mod := "no module"
+		if ms := w.ix.targets(n.ID, "in_module"); len(ms) > 0 {
+			mod = ms[0].Name
+		}
+		s := "handled in " + mod + ", called from " + plural(len(w.screensCalling(n.ID)), "screen")
+		if w.tested(n.ID) {
+			return s + ", has a direct test"
+		}
+		return s + ", no direct test"
+	case KindPage:
+		s := "calls " + plural(len(w.targetIDs(n.ID, "calls")), "endpoint")
+		if w.hasE2E(n.ID) {
+			return s + ", driven by an end-to-end test"
+		}
+		return s + ", no end-to-end test"
+	case KindModule:
+		return plural(len(w.ix.To(n.ID, "in_module")), "endpoint") + ", " +
+			plural(len(w.targetIDs(n.ID, "uses")), "table")
+	case KindTable:
+		return "used by " + plural(len(w.sourceIDs(n.ID, "uses")), "module")
+	case KindChange:
+		done, open := w.changeProgress(n)
+		s := strconv.Itoa(done) + " of " + strconv.Itoa(done+open) + " tasks done"
+		if open > 0 {
+			s += ", " + strconv.Itoa(open) + " open"
+		}
+		return s
+	}
+	return ""
+}
+
+func (w *wikiWriter) description(n *GNode) string {
+	if s := w.oneLine(n); s != "" {
+		return n.Name + " — " + s
+	}
+	return n.Name
+}
+
+func (w *wikiWriter) changeProgress(n *GNode) (done, open int) {
+	for _, t := range w.ix.targets(n.ID, "has_task") {
+		if metaTruthy(t, "done") {
+			done++
+		} else {
+			open++
+		}
+	}
+	return done, open
+}
+
+// nextOpenTask is the first task in file order that is not done, as a labelled line.
+func (w *wikiWriter) nextOpenTask(n *GNode) string {
+	for _, t := range w.ix.targets(n.ID, "has_task") {
+		if !metaTruthy(t, "done") {
+			return `<code>` + esc(lastWord(t.Name)) + `</code> ` + mdInline(metaText(t, "title"))
+		}
+	}
+	return ""
+}
+
+func (w *wikiWriter) countsLine() string {
+	parts := []string{
+		plural(len(w.ix.OfKind(KindPage)), "screen"),
+		plural(len(w.ix.OfKind(KindEndpoint)), "endpoint"),
+		plural(len(w.ix.OfKind(KindModule)), "module"),
+		plural(len(w.ix.OfKind(KindTable)), "table"),
+		plural(len(w.ix.OfKind(KindChange)), "change record"),
+	}
+	return strings.Join(parts, " · ")
+}
+
+// crumb is the trail above a page: the section it lives in, then its own name.
+func (w *wikiWriter) crumb(rel, kind, name string) string {
+	for _, k := range wikiKinds {
+		if k.kind == kind {
+			return `<a href="` + w.href(rel, k.page) + `">` + esc(k.label) + `</a> › <span>` + esc(name) + `</span>`
+		}
+	}
+	return esc(name)
 }
 
 // mdInline escapes text and turns `backticked` spans into code, which is how task
@@ -286,6 +397,18 @@ func (w *wikiWriter) sourceIDs(id, kind string) []string {
 	return out
 }
 
+// screensCalling is the callers that are screens. An endpoint that calls another
+// is a call site too, but it is not the screen the lede is counting.
+func (w *wikiWriter) screensCalling(id string) []string {
+	var out []string
+	for _, from := range w.sourceIDs(id, "calls") {
+		if n := w.ix.Node(from); n != nil && n.Kind == KindPage {
+			out = append(out, from)
+		}
+	}
+	return out
+}
+
 func (w *wikiWriter) tested(id string) bool {
 	return len(w.ix.To(id, "hits")) > 0 || len(w.ix.To(id, "covers")) > 0
 }
@@ -320,15 +443,21 @@ func (w *wikiWriter) notes(id string) string {
 
 func (w *wikiWriter) tableRows(headers []string, rows [][]string) string {
 	var b strings.Builder
-	b.WriteString("<table>\n<thead><tr>")
+	b.WriteString(`<table role="table">` + "\n<thead><tr role=\"row\">")
 	for _, h := range headers {
-		b.WriteString("<th>" + esc(h) + "</th>")
+		b.WriteString(`<th scope="col" role="columnheader">` + esc(h) + "</th>")
 	}
 	b.WriteString("</tr></thead>\n<tbody>\n")
 	for _, r := range rows {
-		b.WriteString("<tr>")
-		for _, c := range r {
-			b.WriteString("<td>" + c + "</td>")
+		b.WriteString(`<tr role="row">`)
+		for i, c := range r {
+			// The label is real text, not generated content: a narrow screen stacks
+			// the row, and a screen reader reads the label with the value.
+			label := ""
+			if i < len(headers) {
+				label = `<span class="lbl">` + esc(headers[i]) + `</span>`
+			}
+			b.WriteString(`<td role="cell">` + label + c + "</td>")
 		}
 		b.WriteString("</tr>\n")
 	}
@@ -417,15 +546,29 @@ func (w *wikiWriter) chrome(rel, title, crumbs, main string) string {
 	}
 	meta := `<p class="meta">` + esc(w.stampLine()) + `</p>`
 	if w.opt.Commit != "" {
-		meta = `<p class="meta">built from <code>` + esc(stamp) + `</code> · ` + esc(w.stampLine()) + `</p>`
+		meta = `<p class="meta">built from <code>` + esc(stamp) + `</code> · ` + esc(w.stampLine()) + ` · <code>weave wiki</code> rebuilds it</p>`
 	}
+
+	// A description and a machine index are the two things a crawling assistant
+	// reads; both come from the same sentence a person sees.
+	desc := ""
+	if w.desc != "" {
+		desc = `<meta name="description" content="` + esc(w.desc) + `">` + "\n"
+	}
+	crumbNav := ""
+	if crumbs != "" {
+		crumbNav = `<nav class="crumbs" aria-label="Breadcrumb">` + crumbs + `</nav>` + "\n"
+	}
+	hits := `<div id="hits" role="listbox" aria-label="Search results" hidden></div><p id="hitcount" class="sr" aria-live="polite"></p>`
 
 	return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>` + esc(title) + ` · weave</title>
+` + desc + `<link rel="alternate" type="text/plain" href="` + w.href(rel, "llms.txt") + `" title="llms.txt">
 <link rel="stylesheet" href="` + css + `">
 </head>
 <body>
@@ -433,14 +576,13 @@ func (w *wikiWriter) chrome(rel, title, crumbs, main string) string {
 <header class="bar">
   <a class="brand" href="` + home + `">weave</a>
   <span class="repo">` + esc(w.repo) + `</span>
-  <div class="find"><input id="q" type="search" placeholder="Search the wiki — /" autocomplete="off" spellcheck="false" aria-label="Search the wiki"><div id="hits" role="listbox" hidden></div></div>
+  <div class="find"><input id="q" type="search" placeholder="Search the wiki — /" autocomplete="off" spellcheck="false" aria-label="Search the wiki" role="combobox" aria-expanded="false" aria-controls="hits">` + hits + `</div>
   <span class="stamp">` + esc(stamp) + `</span>
 </header>
 <div class="shell">
 ` + w.nav(rel) + `
 <main id="doc">
-<nav class="crumbs">` + crumbs + `</nav>
-` + main + `
+` + crumbNav + main + `
 ` + pager + `
 <footer>` + meta + `</footer>
 </main>
@@ -481,8 +623,10 @@ func (w *wikiWriter) nav(from string) string {
 		if k.kind == w.kind {
 			cur = ` aria-current="page"`
 		}
-		b.WriteString(`<a class="side-sec" href="` + home + `#` + strings.ToLower(k.label) + `"` + cur + `>` + esc(k.label) + ` <span class="cn">` + strconv.Itoa(len(nodes)) + `</span></a>` + "\n")
-		if k.kind != w.kind {
+		b.WriteString(`<a class="side-sec" href="` + w.href(from, k.page) + `"` + cur + `>` + esc(k.label) + ` <span class="cn">` + strconv.Itoa(len(nodes)) + `</span></a>` + "\n")
+		// On the section's own page the table below is the list; repeating 248
+		// links beside it is weight, not navigation.
+		if k.kind != w.kind || w.rel == k.page {
 			continue
 		}
 		item := func(n *GNode) string {
@@ -551,14 +695,16 @@ func (w *wikiWriter) currentName() string {
 	return ""
 }
 
-// searchIndex is every page in one array, as [name, kind, url] — terse because it is
-// written once and loaded by every page.
+// searchIndex is every page in one array, as [name, kind, url, hint] — terse because
+// it is written once and loaded by every page. Paths are relative to the site root;
+// search.js resolves them against its own location, so they work from any depth.
 func (w *wikiWriter) searchIndex(from string) string {
-	type hit [3]string
-	var hits []hit
+	type hit [4]string
+	hits := []hit{{"Overview", "page", w.href(from, "index.html"), w.repo + ": " + w.countsLine()}}
 	for _, k := range wikiKinds {
+		hits = append(hits, hit{k.label, "section", w.href(from, k.page), k.about})
 		for _, n := range w.ix.OfKind(k.kind) {
-			hits = append(hits, hit{n.Name, strings.ToLower(strings.TrimSuffix(k.label, "s")), w.href(from, k.base+"/"+Slug(n.Name)+".html")})
+			hits = append(hits, hit{n.Name, strings.ToLower(strings.TrimSuffix(k.label, "s")), w.href(from, k.base+"/"+Slug(n.Name)+".html"), w.oneLine(n)})
 		}
 	}
 	sort.SliceStable(hits, func(i, j int) bool { return hits[i][0] < hits[j][0] })
@@ -621,13 +767,7 @@ func ReadWikiStamp(outDir string) string {
 func (w *wikiWriter) endpointPage(n *GNode) string {
 	rel := "e/" + Slug(n.Name) + ".html"
 	moduleIDs := w.targetIDs(n.ID, "in_module")
-	callers := w.sourceIDs(n.ID, "calls")
-	screenIDs := []string{}
-	for _, id := range callers {
-		if c := w.ix.Node(id); c != nil && c.Kind == KindPage {
-			screenIDs = append(screenIDs, id)
-		}
-	}
+	screenIDs := w.screensCalling(n.ID)
 	tests := append(w.sourceIDs(n.ID, "hits"), w.sourceIDs(n.ID, "covers")...)
 
 	lede := "An HTTP endpoint"
@@ -675,7 +815,7 @@ func (w *wikiWriter) endpointPage(n *GNode) string {
 	body += w.section("Decisions", w.notes(n.ID))
 	body += w.section("Planned in", w.plannedIn(rel, w.nodeFiles(n.ID)))
 
-	return w.chrome(rel, n.Name, `<a href="`+w.href(rel, "index.html")+`">Endpoints</a> › `+esc(n.Name), body)
+	return w.chrome(rel, n.Name, w.crumb(rel, KindEndpoint, n.Name), body)
 }
 
 func srcFile(n *GNode) string {
@@ -720,7 +860,7 @@ func (w *wikiWriter) modulePage(n *GNode) string {
 		body += w.section("Run the proof", cmds)
 	}
 	body += w.section("Decisions", w.notes(n.ID))
-	return w.chrome(rel, n.Name, `<a href="`+w.href(rel, "index.html")+`">Modules</a> › `+esc(n.Name), body)
+	return w.chrome(rel, n.Name, w.crumb(rel, KindModule, n.Name), body)
 }
 
 func (w *wikiWriter) screenPage(n *GNode) string {
@@ -740,14 +880,21 @@ func (w *wikiWriter) screenPage(n *GNode) string {
 		lede += "No end-to-end test drives it."
 	}
 	body := `<h1>` + esc(n.Name) + `</h1>` + "\n<p class=\"lede\">" + lede + "</p>\n"
-	if n.File != nil {
-		body += w.section("Component", w.excerpt(*n.File, 1, 1, 30))
-	}
 	body += w.section("Calls", list(w.links(rel, eps)))
 	body += w.section("Reaches", list(w.links(rel, tables)))
 	body += w.section("Driven by", list(w.links(rel, tests)))
+	body += w.section("Source", pathLine(srcFile(n)))
 	body += w.section("Decisions", w.notes(n.ID))
-	return w.chrome(rel, n.Name, `<a href="`+w.href(rel, "index.html")+`">Screens</a> › `+esc(n.Name), body)
+	return w.chrome(rel, n.Name, w.crumb(rel, KindPage, n.Name), body)
+}
+
+// pathLine is where the thing is. An import block is not; that is why the screen
+// page shows its path instead of the first thirty lines of the component.
+func pathLine(file string) string {
+	if file == "" {
+		return ""
+	}
+	return `<p class="path"><code>` + esc(file) + `</code></p>`
 }
 
 func (w *wikiWriter) tablePage(n *GNode) string {
@@ -770,8 +917,9 @@ func (w *wikiWriter) tablePage(n *GNode) string {
 	body := `<h1>` + esc(n.Name) + `</h1>` + "\n<p class=\"lede\">" + lede + "</p>\n"
 	body += w.section("Used by", list(w.links(rel, mods)))
 	body += w.section("Reachable from", list(w.links(rel, eps)))
+	body += w.section("Source", pathLine(srcFile(n)))
 	body += w.section("Decisions", w.notes(n.ID))
-	return w.chrome(rel, n.Name, `<a href="`+w.href(rel, "index.html")+`">Tables</a> › `+esc(n.Name), body)
+	return w.chrome(rel, n.Name, w.crumb(rel, KindTable, n.Name), body)
 }
 
 func (w *wikiWriter) changePage(n *GNode) string {
@@ -789,19 +937,17 @@ func (w *wikiWriter) changePage(n *GNode) string {
 			}
 		}
 	}
-	done, open := 0, 0
 	var doneItems, openItems []string
 	for _, t := range tasks {
 		id := lastWord(t.Name)
 		line := `<code>` + esc(id) + `</code> ` + mdInline(metaText(t, "title"))
 		if metaTruthy(t, "done") {
-			done++
 			doneItems = append(doneItems, line)
 		} else {
-			open++
 			openItems = append(openItems, line)
 		}
 	}
+	done, open := w.changeProgress(n)
 	lede := "A change record: " + strconv.Itoa(done) + " of " + strconv.Itoa(len(tasks)) + " tasks done"
 	if open > 0 {
 		lede += ", " + strconv.Itoa(open) + " open"
@@ -813,7 +959,7 @@ func (w *wikiWriter) changePage(n *GNode) string {
 	body += w.section("Requirements", list(w.links(rel, reqIDs)))
 	body += w.section("Files it names", list(uniqueSorted(files)))
 	body += w.section("Decisions", w.notes(n.ID))
-	return w.chrome(rel, n.Name, `<a href="`+w.href(rel, "index.html")+`">Changes</a> › `+esc(n.Name), body)
+	return w.chrome(rel, n.Name, w.crumb(rel, KindChange, n.Name), body)
 }
 
 func (w *wikiWriter) plannedIn(rel string, files []string) string {
@@ -866,6 +1012,146 @@ func (w *wikiWriter) commands(tests []string) string {
 	return b.String()
 }
 
+// sectionPage is the directory of one kind: every item, the fact that decides
+// whether you open it, and a link. The home page links here; so does the sidebar.
+func (w *wikiWriter) sectionPage(k navKind) string {
+	nodes := w.ix.OfKind(k.kind)
+	if k.kind == KindChange {
+		// Names begin with their date: newest first is the order a person wants.
+		sort.SliceStable(nodes, func(i, j int) bool { return nodes[i].Name > nodes[j].Name })
+	} else {
+		sort.SliceStable(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
+	}
+	rel := k.page
+	var lede string
+	var headers []string
+	var rows [][]string
+
+	switch k.kind {
+	case KindPage:
+		e2e := 0
+		for _, n := range nodes {
+			if w.hasE2E(n.ID) {
+				e2e++
+			}
+		}
+		lede = plural(len(nodes), "screen") + ", " + strconv.Itoa(e2e) + " driven by an end-to-end test"
+		headers = []string{"Screen", "Calls", "End-to-end"}
+		for _, n := range nodes {
+			rows = append(rows, []string{
+				w.link(rel, n.ID),
+				num(len(w.targetIDs(n.ID, "calls"))),
+				mark(w.hasE2E(n.ID), "driven", "none"),
+			})
+		}
+	case KindEndpoint:
+		tested := 0
+		for _, n := range nodes {
+			if w.tested(n.ID) {
+				tested++
+			}
+		}
+		lede = plural(len(nodes), "endpoint") + " in " + plural(len(w.ix.OfKind(KindModule)), "module") +
+			", " + strconv.Itoa(tested) + " with a direct test"
+		headers = []string{"Endpoint", "Module", "Proof"}
+		for _, n := range nodes {
+			rows = append(rows, []string{
+				w.link(rel, n.ID),
+				esc(w.navGroup(k.kind, n)),
+				mark(w.tested(n.ID), "tested", "no test"),
+			})
+		}
+	case KindModule:
+		lede = plural(len(nodes), "module") + " handling " + plural(len(w.ix.OfKind(KindEndpoint)), "endpoint")
+		headers = []string{"Module", "Endpoints", "Tables"}
+		for _, n := range nodes {
+			rows = append(rows, []string{
+				w.link(rel, n.ID),
+				num(len(w.ix.To(n.ID, "in_module"))),
+				num(len(w.targetIDs(n.ID, "uses"))),
+			})
+		}
+	case KindTable:
+		lede = plural(len(nodes), "table") + " used by " + plural(len(w.ix.OfKind(KindModule)), "module")
+		headers = []string{"Table", "Used by", "Reachable from"}
+		for _, n := range nodes {
+			reach := map[string]bool{}
+			for _, m := range w.sourceIDs(n.ID, "uses") {
+				for _, e := range w.ix.To(m, "in_module") {
+					reach[e.From] = true
+				}
+			}
+			rows = append(rows, []string{
+				w.link(rel, n.ID),
+				num(len(w.sourceIDs(n.ID, "uses"))),
+				num(len(reach)),
+			})
+		}
+	case KindChange:
+		open := 0
+		headers = []string{"Change", "Tasks", "Next"}
+		for _, n := range nodes {
+			done, left := w.changeProgress(n)
+			if left > 0 {
+				open++
+			}
+			// The id only: 105 full task sentences are a wall, and the change page
+			// has each one next to the task it belongs to.
+			next := `<span class="no">none</span>`
+			for _, t := range w.ix.targets(n.ID, "has_task") {
+				if !metaTruthy(t, "done") {
+					next = `<code>` + esc(lastWord(t.Name)) + `</code>`
+					break
+				}
+			}
+			rows = append(rows, []string{
+				w.link(rel, n.ID),
+				ratio(done, done+left),
+				next,
+			})
+		}
+		lede = plural(len(nodes), "change record") + ", " + strconv.Itoa(open) + " still open"
+	}
+	if lede == "" {
+		lede = plural(len(nodes), strings.ToLower(k.label))
+	}
+
+	body := `<h1>` + esc(k.label) + `</h1>` + "\n<p class=\"lede\">" + lede + `.</p>` + "\n"
+	body += w.tableRows(headers, rows)
+	if len(nodes) == 0 {
+		body = `<h1>` + esc(k.label) + `</h1>` + "\n" + emptyState("The index has no "+strings.ToLower(k.label)+" yet.")
+	}
+	w.desc = w.repo + " " + strings.ToLower(k.label) + ": " + lede + "."
+	crumbs := `<a href="` + w.href(rel, "index.html") + `">Overview</a> › <span>` + esc(k.label) + `</span>`
+	return w.chrome(rel, k.label, crumbs, body)
+}
+
+// llmsTxt is the index an assistant reads before it opens a page: one line per
+// page, saying what the page answers. It is a file, not a tool.
+func (w *wikiWriter) llmsTxt() string {
+	var b strings.Builder
+	b.WriteString("# " + w.repo + " — weave wiki\n\n")
+	b.WriteString("> " + w.countsLine() + ", generated from the same index `weave check` reads.\n\n")
+	b.WriteString("Paths are relative to this file; every page is plain HTML and works offline.\n\n")
+	b.WriteString("## Sections\n")
+	for _, k := range wikiKinds {
+		b.WriteString("- [" + k.label + "](" + k.page + "): " + k.about + "\n")
+	}
+	b.WriteString("\n## Overview\n- [Overview](index.html): health, what needs attention, and the directory.\n")
+	for _, k := range wikiKinds {
+		nodes := w.ix.OfKind(k.kind)
+		if len(nodes) == 0 {
+			continue
+		}
+		sort.SliceStable(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
+		b.WriteString("\n## " + k.label + "\n")
+		for _, n := range nodes {
+			b.WriteString("- [" + n.Name + "](" + k.base + "/" + Slug(n.Name) + ".html): " + w.oneLine(n) + "\n")
+		}
+	}
+	return b.String()
+}
+
 func (w *wikiWriter) indexPage() string {
 	rel := "index.html"
 	eps := w.ix.OfKind(KindEndpoint)
@@ -880,67 +1166,130 @@ func (w *wikiWriter) indexPage() string {
 			broken++
 		}
 	}
-	gate := "The contract gate passes: every frontend call matches an endpoint."
+	gate := `<p class="gate">The contract gate passes: every frontend call matches an endpoint.</p>` + "\n"
 	if broken > 0 {
-		gate = plural(broken, "broken call") + " — <code>weave check</code> fails."
+		gate = `<p class="gate bad">` + plural(broken, "broken call") + ` — <code>weave check</code> fails.</p>` + "\n"
 	}
 
-	untested := []string{}
+	// A gap is not a failure, but it is the first thing to look at: rank the
+	// unproven endpoints by how many screens depend on them.
+	type gap struct {
+		id, why string
+		weight  int
+	}
+	// Two units, so two rankings: a screen is ranked by the endpoints it calls, an
+	// endpoint by the screens that call it.
+	var epGapsList, pageGapsList []gap
 	for _, e := range eps {
 		if !w.tested(e.ID) {
-			untested = append(untested, e.ID)
+			callers := len(w.screensCalling(e.ID))
+			epGapsList = append(epGapsList, gap{e.ID, plural(callers, "screen"), callers})
 		}
 	}
-	noE2E := []string{}
 	for _, p := range pages {
 		if !w.hasE2E(p.ID) {
-			noE2E = append(noE2E, p.ID)
+			callers := len(w.targetIDs(p.ID, "calls"))
+			pageGapsList = append(pageGapsList, gap{p.ID, plural(callers, "endpoint"), callers})
 		}
 	}
-
-	body := `<h1>` + esc(w.repo) + `</h1>` + "\n<p class=\"lede\">" + gate + "</p>\n"
-	body += `<p class="counts">` + strconv.Itoa(len(pages)) + ` screens · ` + strconv.Itoa(len(eps)) +
-		` endpoints · ` + strconv.Itoa(len(mods)) + ` modules · ` + strconv.Itoa(len(tables)) +
-		` tables · ` + strconv.Itoa(len(changes)) + ` change records</p>` + "\n"
-
-	body += w.section("Where to start", `<ul class="doors">
-<li><a href="`+w.href(rel, "index.html")+`#gaps">Gaps in proof</a> — what no test reaches, by the number of screens that call it</li>
-<li><a href="`+w.href(rel, "index.html")+`#changes">Changes</a> — what is open, and each change's next task</li>
-<li><a href="`+w.href(rel, "index.html")+`#modules">Modules</a> — the backend folders that handle endpoints</li>
-</ul>`)
-
-	gapBody := list(append(w.links(rel, untested), w.links(rel, noE2E)...))
-	if len(untested) == 0 && len(noE2E) == 0 {
+	byWeight := func(g []gap) {
+		sort.SliceStable(g, func(i, j int) bool {
+			if g[i].weight != g[j].weight {
+				return g[i].weight > g[j].weight
+			}
+			return g[i].id < g[j].id
+		})
+	}
+	byWeight(epGapsList)
+	byWeight(pageGapsList)
+	var gapItems []string
+	for _, g := range append(epGapsList, pageGapsList...) {
+		gapItems = append(gapItems, w.link(rel, g.id)+` <span class="num">`+esc(g.why)+`</span>`)
+	}
+	epGaps, pageGaps := len(epGapsList), len(pageGapsList)
+	gapBody := list(gapItems)
+	if epGaps+pageGaps == 0 {
 		gapBody = emptyState("Nothing: every endpoint has a direct test and every screen has an end-to-end test.")
 	}
-	gapSummary := plural(len(untested), "endpoint") + " with no direct test, " + plural(len(noE2E), "screen") + " with no end-to-end test"
-	body += `<a id="gaps"></a>` + w.section("Gaps in proof", folded(gapSummary, gapBody))
-
-	var enter [][]string
-	for _, e := range eps {
-		proof := `<span class="no">no direct test</span>`
-		if w.tested(e.ID) {
-			proof = `<span class="yes">tested</span>`
-		}
-		enter = append(enter, []string{w.link(rel, e.ID), proof})
+	var gapParts []string
+	if epGaps > 0 {
+		gapParts = append(gapParts, plural(epGaps, "endpoint")+" with no direct test")
 	}
-	sort.SliceStable(enter, func(i, j int) bool { return enter[i][0] < enter[j][0] })
-	body += `<a id="modules"></a>` + w.section("Modules", folded(plural(len(mods), "module"), w.countList(rel, mods)))
-	body += `<a id="changes"></a>` + w.section("Changes", folded(plural(len(changes), "change record"), w.countList(rel, changes)))
-	body += `<a id="endpoints"></a>` + w.section("Endpoints", folded(plural(len(eps), "endpoint"), w.tableRows([]string{"Endpoint", "Proof"}, enter)))
-	body += `<a id="screens"></a>` + w.section("Screens", folded(plural(len(pages), "screen"), w.countList(rel, pages)))
-	body += `<a id="tables"></a>` + w.section("Tables", folded(plural(len(tables), "table"), w.countList(rel, tables)))
+	if pageGaps > 0 {
+		gapParts = append(gapParts, plural(pageGaps, "screen")+" with no end-to-end test")
+	}
+	gapSummary := strings.Join(gapParts, ", ")
+	if gapSummary == "" {
+		gapSummary = "Nothing missing"
+	}
+
+	// Browse: the directory, above any list. Without it the home page is a set of
+	// folded counts that lead nowhere.
+	var browse strings.Builder
+	browse.WriteString("<ul class=\"browse\">\n")
+	counts := map[string]int{KindPage: len(pages), KindEndpoint: len(eps), KindModule: len(mods), KindTable: len(tables), KindChange: len(changes)}
+	for _, k := range wikiKinds {
+		browse.WriteString(`<li><a href="` + w.href(rel, k.page) + `"><span class="n">` + strconv.Itoa(counts[k.kind]) +
+			`</span><span class="t">` + esc(k.label) + `</span><span class="w">` + esc(k.about) + `</span></a></li>` + "\n")
+	}
+	browse.WriteString("</ul>\n")
+
+	body := `<h1>` + esc(w.repo) + `</h1>` + "\n"
+	body += `<p class="lede">Screens call HTTP endpoints, endpoints are handled in modules, and modules use database tables. Every page here comes from the index <code>weave check</code> reads.</p>` + "\n"
+	body += `<p class="counts">` + esc(w.countsLine()) + `</p>` + "\n"
+	body += gate
+	body += w.section("Browse", browse.String())
+	body += w.section("Open changes", w.openChanges(rel, changes))
+	body += `<a id="gaps"></a>` + w.section("Gaps in proof", folded(gapSummary, gapBody))
 	body += w.section("Decisions", w.allNotes(rel))
-	return w.chrome(rel, w.repo, "Wiki", body)
+	w.desc = w.repo + ": " + w.countsLine() + "."
+	return w.chrome(rel, w.repo, "", body)
 }
 
-func (w *wikiWriter) countList(rel string, nodes []*GNode) string {
-	items := []string{}
-	for _, n := range nodes {
-		items = append(items, w.link(rel, n.ID))
+// openChanges is the next action: the newest change records that still have work,
+// each with the task to pick up. Twelve fit a screen; the section page has them all.
+func (w *wikiWriter) openChanges(rel string, changes []*GNode) string {
+	type openChange struct {
+		n    *GNode
+		done int
+		open int
+		next string
 	}
-	sort.Strings(items)
-	return list(items)
+	var list []openChange
+	for _, c := range changes {
+		done, open := w.changeProgress(c)
+		if open == 0 {
+			continue
+		}
+		next := w.nextOpenTask(c)
+		if next == "" {
+			next = `<span class="no">none</span>`
+		}
+		list = append(list, openChange{c, done, open, next})
+	}
+	if len(list) == 0 {
+		return emptyState("Nothing open: every change record has all its tasks done.")
+	}
+	sort.SliceStable(list, func(i, j int) bool { return list[i].n.Name > list[j].n.Name })
+	const shown = 12
+	cut := len(list)
+	if cut > shown {
+		cut = shown
+	}
+	rows := make([][]string, 0, cut)
+	for _, c := range list[:cut] {
+		rows = append(rows, []string{
+			w.link(rel, c.n.ID),
+			ratio(c.done, c.done+c.open),
+			c.next,
+		})
+	}
+	body := w.tableRows([]string{"Change", "Tasks", "Next task"}, rows)
+	if len(list) > cut {
+		body += `<p class="more"><a href="` + w.href(rel, "changes.html") + `">See all ` + strconv.Itoa(len(list)) +
+			` changes with open tasks</a> (of ` + strconv.Itoa(len(changes)) + ` records).</p>` + "\n"
+	}
+	return body
 }
 
 func (w *wikiWriter) allNotes(rel string) string {

@@ -31,6 +31,7 @@ type group struct {
 	dir   string
 	tool  string
 	files []string
+	seen  map[string]bool
 }
 
 // Plan picks a runner per package and groups test files by directory and tool.
@@ -77,12 +78,18 @@ func Plan(root string, testFiles []string) RunPlan {
 	index := map[string]int{}
 	add := func(dir, tool, file string) {
 		key := dir + "|" + tool
-		if i, ok := index[key]; ok {
-			groups[i].files = append(groups[i].files, file)
+		i, ok := index[key]
+		if !ok {
+			i = len(groups)
+			index[key] = i
+			groups = append(groups, &group{dir: dir, tool: tool, seen: map[string]bool{}})
+		}
+		// The same test file reaches several endpoints; the command quotes it once.
+		if groups[i].seen[file] {
 			return
 		}
-		index[key] = len(groups)
-		groups = append(groups, &group{dir: dir, tool: tool, files: []string{file}})
+		groups[i].seen[file] = true
+		groups[i].files = append(groups[i].files, file)
 	}
 
 	ungrouped := make([]string, 0)

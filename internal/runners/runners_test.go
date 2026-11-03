@@ -35,6 +35,14 @@ func TestPlanVitestGroupsFiles(t *testing.T) {
 		[]string{"npx vitest run src/a.test.ts src/b.test.ts"}, []string{})
 }
 
+// One test file reaches several endpoints; the command must not repeat it.
+func TestPlanQuotesARepeatedFileOnce(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "package.json", `{"devDependencies":{"vitest":"^1"}}`)
+	check(t, Plan(root, []string{"src/a.test.ts", "src/a.test.ts", "src/b.test.ts"}),
+		[]string{"npx vitest run src/a.test.ts src/b.test.ts"}, []string{})
+}
+
 func TestPlanJestConfigBeatsViteAndPlaywrightWinsE2E(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "package.json", `{"devDependencies":{"vitest":"^1","jest":"^29","@playwright/test":"^1"}}`)

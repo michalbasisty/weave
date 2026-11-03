@@ -70,8 +70,9 @@ weave wiki --out docs/wiki # a wiki you can commit and send
 weave wiki --check         # exit 1 when the pages describe an older tree
 ```
 
-A sidebar that mirrors the graph, search on every page (`/`), the handler's code next to the
-endpoint, the tests that prove it with the command to run them, and prev/next at the foot.
+A sidebar that mirrors the graph, one directory page per section, search on every page (`/`),
+the handler's code next to the endpoint, the tests that prove it with the command to run them,
+and prev/next at the foot. `llms.txt` lists the same pages for an assistant, one line each.
 Every page is generated — regenerating is the only way to change it, so the documentation
 cannot drift into a document nobody trusts.
 

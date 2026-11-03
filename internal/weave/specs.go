@@ -43,6 +43,10 @@ var (
 	reTaskStop   = jsRe(`(?i)^#{1,4}\s*(definition of done|checklist|verification|notes|references)`)
 	reSatisfies  = regexp.MustCompile("`\\[Satisfies:[^\\]]*\\]`")
 	reBacktick   = regexp.MustCompile("`([^`]+)`")
+	// A title wraps at the file's column width. The rest of the sentence belongs to
+	// the title; an "Evidence:" line or a nested bullet does not.
+	reTitleLabel = jsRe(`(?i)^(evidence|files?|tests?|depends on|notes?)\s*:`)
+	reTitleBreak = jsRe(`^[-*+>#|]`)
 )
 
 type reqTable struct {
@@ -212,6 +216,10 @@ func ExtractSpecs(specFiles []SourceFile, b *Builder) ([]*Req, []*Task) {
 				continue
 			}
 			if continuation(raw) || jsstr.Trim(raw) == "" {
+				if rest := jsstr.Trim(reSatisfies.ReplaceAllString(raw, "")); rest != "" &&
+					!reTitleLabel.MatchString(rest) && !reTitleBreak.MatchString(rest) {
+					cur.Title = jsstr.Trim(cur.Title + " " + rest)
+				}
 				cur.Reqs = append(cur.Reqs, reqIDs(raw, true)...)
 				cur.Evidence = append(cur.Evidence, backticks(raw)...)
 			} else {
