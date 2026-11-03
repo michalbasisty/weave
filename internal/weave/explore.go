@@ -23,6 +23,29 @@ type Project struct {
 	Modules []Module
 	Changes []Change
 	Issues  []Issue
+	// Delta is what the map gained, lost or moved since a git ref; nil when the
+	// caller had no baseline (no git, or a fixture), and then the key is omitted.
+	Delta *ExploreDelta
+}
+
+// ExploreDelta is the graph delta against Ref, reduced to what a reader acts on.
+type ExploreDelta struct {
+	Ref     string
+	Added   []DeltaItem
+	Removed []DeltaItem
+	Moved   []DeltaItem
+}
+
+// DeltaItem is one node that appeared, disappeared or changed file. Callers is
+// set on a removed endpoint the base still had file call sites for; From is the
+// file a moved node left.
+type DeltaItem struct {
+	ID      string
+	Kind    string
+	Name    string
+	File    *string
+	From    *string
+	Callers int
 }
 
 // CovSummary is the one number a reader should see before trusting anything else.
@@ -502,7 +525,37 @@ func (p *Project) value() jsjson.Value {
 	}
 	o.Set("issues", jsjson.Arr(issues...))
 
+	if p.Delta != nil {
+		d := &jsjson.Object{}
+		d.Set("ref", jsjson.Str(p.Delta.Ref))
+		d.Set("added", deltaItems(p.Delta.Added))
+		d.Set("removed", deltaItems(p.Delta.Removed))
+		d.Set("moved", deltaItems(p.Delta.Moved))
+		o.Set("delta", jsjson.Obj(d))
+	}
+
 	return jsjson.Obj(o)
+}
+
+func deltaItems(items []DeltaItem) jsjson.Value {
+	vs := make([]jsjson.Value, len(items))
+	for i, it := range items {
+		x := &jsjson.Object{}
+		x.Set("i", jsjson.Str(it.ID))
+		x.Set("k", jsjson.Str(it.Kind))
+		x.Set("n", jsjson.Str(it.Name))
+		if it.File != nil {
+			x.Set("f", jsjson.Str(*it.File))
+		}
+		if it.From != nil {
+			x.Set("from", jsjson.Str(*it.From))
+		}
+		if it.Callers > 0 {
+			x.Set("c", jsjson.Int(it.Callers))
+		}
+		vs[i] = jsjson.Obj(x)
+	}
+	return jsjson.Arr(vs...)
 }
 
 func (n *ProjectNode) value() jsjson.Value {

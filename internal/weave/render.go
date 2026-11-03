@@ -22,6 +22,8 @@ var explorerJS string
 type NamedGraph struct {
 	Name  string
 	Graph *Graph
+	// Delta, when set, is what changed since a git ref; the page shows it first.
+	Delta *ExploreDelta
 }
 
 // RenderExplore is renderExplore(projects): one self-contained page.
@@ -30,6 +32,7 @@ func RenderExplore(projects []NamedGraph) string {
 	for _, ng := range projects {
 		p := ExplorePayload(ng.Graph)
 		p.Name = ng.Name
+		p.Delta = ng.Delta
 		for i := range p.Changes {
 			s := ChangeSummary(ng.Graph, strings.TrimPrefix(p.Changes[i].C, "change:"))
 			p.Changes[i].S = &s
@@ -71,32 +74,31 @@ const headStart = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 
 const headAfterTitle = `</title>
 <meta name="description" content="weave maps the screens, API endpoints, modules and tables of one repository, with the tests and spec changes around them.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23f4f1e8'/%3E%3Cpath d='M3 5h10M3 8h10M3 11h6' stroke='%231b1a17' stroke-width='1.6'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2314233f'/%3E%3Cpath d='M2 8h12' stroke='%23fff' stroke-width='1.6'/%3E%3Ccircle cx='4' cy='8' r='2' fill='%2314233f' stroke='%237aa2f2' stroke-width='1.4'/%3E%3Ccircle cx='12' cy='8' r='2' fill='%2314233f' stroke='%23c992dc' stroke-width='1.4'/%3E%3C/svg%3E">
 <script>try{var p=localStorage.getItem('weave:theme')||'auto',d=p==='dark'||(p==='auto'&&matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.dataset.theme=d?'dark':'light'}catch(e){try{document.documentElement.dataset.theme=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'}catch(e2){}}</script>
 <style>`
 
 const afterCSS = `</style></head>
 <body>
-<a class="skip" href="#list">Skip to the list</a>
+<a class="skip" href="#main">Skip to content</a>
 <header class="top">
-  <span class="brand">weave</span>
-  <select id="proj" aria-label="Project"></select>
-  <span class="spacer"></span>
-  <button id="theme" class="tbtn" type="button" aria-label="Theme"></button>
+  <a class="brand" href="#today">weave</a>
+  <select id="proj" aria-label="Project" hidden></select>
+  <nav class="tabs" id="tabs" aria-label="Places"></nav>
+  <div class="find" role="search">
+    <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
+    <label class="sr" for="q">Find a screen, endpoint, table or change</label>
+    <input id="q" type="search" placeholder="Search the map" autocomplete="off" spellcheck="false">
+    <kbd class="key" aria-hidden="true">/</kbd>
+  </div>
+  <button id="theme" class="themebtn" type="button"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11a5.5 5.5 0 0 0 0-11z" class="fill"/></svg><span id="themelabel"></span></button>
 </header>
-<div class="shell">
-  <nav class="rail" aria-label="Views">
-    <div class="find">
-      <label for="q">Find anything</label>
-      <input id="q" type="search" placeholder="Find anything: route, table, change…" autocomplete="off" spellcheck="false">
-    </div>
-    <div id="nav"></div>
-  </nav>
-  <main>
-    <section id="list" aria-label="Results" tabindex="-1"></section>
-    <section id="detail" aria-label="Detail"></section>
-  </main>
-</div>
+<nav class="crumbs" id="crumbs" aria-label="You are here"></nav>
+<main id="main" tabindex="-1">
+  <section id="list" aria-label="List"></section>
+  <section id="detail" aria-label="Item"></section>
+</main>
+<p class="sr" id="live" aria-live="polite"></p>
 <script>const D=`
 
 const afterJS = `</script>

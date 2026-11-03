@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -25,6 +26,12 @@ func TestRenderExploreMatchesGolden(t *testing.T) {
 	want, err := os.ReadFile(filepath.Join("testdata", "explore.golden.html"))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if os.Getenv("UPDATE_GOLDEN") != "" {
+		if err := os.WriteFile(filepath.Join("testdata", "explore.golden.html"), got, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
 	}
 
 	if !bytes.Equal(got, want) {
@@ -82,5 +89,22 @@ func TestExplorePayloadChangesNewestFirst(t *testing.T) {
 	}
 	if p.Changes[0].C != "change:2026-02-02-b" || p.Changes[1].C != "change:2026-01-01-a" {
 		t.Fatalf("changes order = %q, %q; want newest first", p.Changes[0].C, p.Changes[1].C)
+	}
+}
+
+// The delta is optional: absent, the key is omitted; present, the page gets the
+// removed endpoint's caller count and nothing it did not measure.
+func TestExplorePayloadDeltaKey(t *testing.T) {
+	g := &Graph{Nodes: []*GNode{{ID: "page:/p", Kind: KindPage, Name: "/p"}}}
+	p := ExplorePayload(g)
+	if s := string(p.AppendJS(nil)); strings.Contains(s, `"delta"`) {
+		t.Fatalf("delta key without a baseline: %s", s)
+	}
+	p.Delta = &ExploreDelta{Ref: "HEAD", Added: []DeltaItem{}, Moved: []DeltaItem{},
+		Removed: []DeltaItem{{ID: "endpoint:GET /a", Kind: KindEndpoint, Name: "GET /a", Callers: 2}}}
+	s := string(p.AppendJS(nil))
+	want := `"delta":{"ref":"HEAD","added":[],"removed":[{"i":"endpoint:GET /a","k":"endpoint","n":"GET /a","c":2}],"moved":[]}`
+	if !strings.Contains(s, want) {
+		t.Fatalf("payload missing %s\n got %s", want, s)
 	}
 }

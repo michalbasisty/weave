@@ -45,12 +45,15 @@ func newIndex(g *weave.Graph) *index {
 	return ix
 }
 
-// Delta compares current against base. all raises each section's cap from 12 to 60.
-func Delta(current, base *weave.Graph, name string, all bool) string {
-	cap := 12
-	if all {
-		cap = 60
-	}
+// diffs is what the graph gained, lost and moved between base and current, each
+// list in report order, plus the file call sites base had for every endpoint.
+type diffs struct {
+	added, removed, moved []*weave.GNode
+	before                *index
+	callers               map[string]int
+}
+
+func diff(current, base *weave.Graph) diffs {
 	before := newIndex(base)
 	after := newIndex(current)
 
@@ -92,6 +95,42 @@ func Delta(current, base *weave.Graph, name string, all bool) string {
 		}
 		callers[e.To]++
 	}
+	return diffs{added: added, removed: removed, moved: moved, before: before, callers: callers}
+}
+
+// Explore is the delta the explorer page shows under "Since the last commit".
+func Explore(current, base *weave.Graph, ref string) *weave.ExploreDelta {
+	d := diff(current, base)
+	item := func(n *weave.GNode) weave.DeltaItem {
+		return weave.DeltaItem{ID: n.ID, Kind: n.Kind, Name: n.Name, File: n.File}
+	}
+	out := &weave.ExploreDelta{Ref: ref, Added: []weave.DeltaItem{}, Removed: []weave.DeltaItem{}, Moved: []weave.DeltaItem{}}
+	for _, n := range d.added {
+		out.Added = append(out.Added, item(n))
+	}
+	for _, n := range d.removed {
+		it := item(n)
+		if n.Kind == weave.KindEndpoint {
+			it.Callers = d.callers[n.ID]
+		}
+		out.Removed = append(out.Removed, it)
+	}
+	for _, n := range d.moved {
+		it := item(n)
+		it.From = d.before.byID[n.ID].File
+		out.Moved = append(out.Moved, it)
+	}
+	return out
+}
+
+// Delta compares current against base. all raises each section's cap from 12 to 60.
+func Delta(current, base *weave.Graph, name string, all bool) string {
+	cap := 12
+	if all {
+		cap = 60
+	}
+	d := diff(current, base)
+	added, removed, moved, before, callers := d.added, d.removed, d.moved, d.before, d.callers
 
 	out := []string{"delta vs " + name}
 	if len(added) > 0 {

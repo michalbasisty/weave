@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/michalbasisty/weave/internal/baseline"
+	"github.com/michalbasisty/weave/internal/delta"
 	"github.com/michalbasisty/weave/internal/jsstr"
 	"github.com/michalbasisty/weave/internal/registry"
 	"github.com/michalbasisty/weave/internal/weave"
@@ -66,6 +68,16 @@ func cmdExplore() int {
 			return code
 		}
 		picked = append(picked, weave.NamedGraph{Name: filepath.Base(root), Graph: g})
+	}
+	// "Since the last commit" is the first thing a person checking an agent's work
+	// wants. A repo without git (or --no-delta) simply has no such section.
+	if !hasFlag("no-delta") {
+		since := arg("since", "HEAD")
+		for i := range picked {
+			if base := baseline.GraphAt(picked[i].Graph.Root, since); base != nil {
+				picked[i].Delta = delta.Explore(picked[i].Graph, base, since)
+			}
+		}
 	}
 	html := weave.RenderExplore(picked)
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {

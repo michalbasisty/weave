@@ -189,3 +189,36 @@ removed 6
 func n(kind, name, id, file string, line int) *weave.GNode {
 	return &weave.GNode{ID: id, Kind: kind, Name: name, File: weave.Ptr(file), Line: weave.Ptr(line)}
 }
+
+// The explorer's "Since the last commit" reads the same diff as `weave delta`:
+// added, removed with the base's file call sites, and moved with the old file.
+func TestExploreDeltaCarriesCallersAndOldFile(t *testing.T) {
+	str := func(s string) *string { return &s }
+	base := &weave.Graph{
+		Nodes: []*weave.GNode{
+			{ID: "endpoint:GET /a", Kind: weave.KindEndpoint, Name: "GET /a", File: str("a.ts")},
+			{ID: "page:/p", Kind: weave.KindPage, Name: "/p", File: str("old.tsx")},
+			{ID: "file:web/x.ts", Kind: weave.KindFile, Name: "web/x.ts", File: str("web/x.ts")},
+		},
+		Edges: []weave.GEdge{{From: "file:web/x.ts", To: "endpoint:GET /a", Kind: "calls", Conf: weave.ConfExact}},
+	}
+	current := &weave.Graph{
+		Nodes: []*weave.GNode{
+			{ID: "endpoint:GET /b", Kind: weave.KindEndpoint, Name: "GET /b", File: str("b.ts")},
+			{ID: "page:/p", Kind: weave.KindPage, Name: "/p", File: str("new.tsx")},
+		},
+	}
+	d := Explore(current, base, "HEAD")
+	if d.Ref != "HEAD" || len(d.Added) != 1 || len(d.Removed) != 1 || len(d.Moved) != 1 {
+		t.Fatalf("delta = %+v", d)
+	}
+	if d.Added[0].ID != "endpoint:GET /b" {
+		t.Errorf("added = %q", d.Added[0].ID)
+	}
+	if d.Removed[0].ID != "endpoint:GET /a" || d.Removed[0].Callers != 1 {
+		t.Errorf("removed = %+v, want GET /a still called by 1", d.Removed[0])
+	}
+	if d.Moved[0].From == nil || *d.Moved[0].From != "old.tsx" || *d.Moved[0].File != "new.tsx" {
+		t.Errorf("moved = %+v", d.Moved[0])
+	}
+}

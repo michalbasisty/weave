@@ -140,7 +140,8 @@ func helpText() string {
 --project <name>    use a registered project from anywhere
 --budget <tokens>   context size (default 350)
 --depth code        context: a short window at each anchor (opt-in; never whole files)
---out <file>        explore output path (default .weave/explore.html)`
+--out <file>        explore output path (default .weave/explore.html)
+--since <ref>       explore: what changed since this git ref (default HEAD; --no-delta skips it)`
 }
 
 func home() {

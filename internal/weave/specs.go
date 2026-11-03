@@ -285,7 +285,7 @@ func FirstParagraph(md string, max int) string {
 		if words(t) < 5 {
 			continue
 		}
-		return jsstr.Slice(collapseSpace(t), 0, max)
+		return jsstr.TruncateWords(collapseSpace(t), max)
 	}
 	return ""
 }

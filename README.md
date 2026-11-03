@@ -196,34 +196,37 @@ weave explore            # writes .weave/explore.html and opens it
 weave explore --all      # every registered project, one file, with a switcher
 ```
 
-One self-contained HTML file — 45 KB for this repo, 859 KB for a 937-file one. No
+One self-contained HTML file — 45 KB for this repo, ~720 KB for a 761-file one. No
 server, no network, no build. It is for people only: agents use the MCP server, never
 this page, so every choice here optimises for reading, not for parsing.
 
-The page teaches one line and then keeps every detail on it:
+The page draws the repository as a transit network, because that is what the graph is:
 
 ```
-screen ──calls──▶ API endpoint ──handled in──▶ module ──uses──▶ table
+screens ──call──▶ endpoints ──handled in──▶ modules ──use──▶ tables
 ```
 
-| view | what you see |
+Four places, and a breadcrumb on every one of them:
+
+| place | what you see |
 |---|---|
-| **Summary** | the whole map in one sentence, a worked example of the line above, what the index could and could not read, problems as counts, test coverage, and changes in flight |
-| **Screens** | every route, the endpoints it calls and the tables it reaches, most connected first |
-| **API** | every endpoint, grouped under the module that handles it, with `tested` / `no test` |
-| **Data** | each table and the modules that read or write it |
-| **Changes** | change records in progress and done, with tasks, requirements and files |
-| **Problems** | calls that match no endpoint, endpoints and screens with no test, changed requirements |
+| **Today** | the gate sentence, the four-line strip with counts, what changed since the last commit (`--since <ref>`, default HEAD), a numbered **Next up**, and a Proof panel with what the index could and could not read |
+| **Map** | the same four lines as four lists: Screens (most connected first), Endpoints (grouped by the module that handles them, with a *no test only* filter), Modules, Tables |
+| **Changes** | change records in progress and done, each with its next task, open, deferred and done tasks, requirements and reach |
+| **Checks** | **Broken** (what `weave check` fails: calls with no endpoint, endpoints removed but still called) separated from **Gaps in proof** (no test, no e2e, changed requirements) |
 
-Open any item and the four-lane **trace** shows the same line around it. Below the
-trace: **Proved by** (tests), **Planned in** (change, tasks, requirements), and one
-**Reach** sentence. Relations are written in words, never as graph vocabulary.
+Open any item and its **trace** is drawn as the line itself: four stations, the item as
+the interchange, each station headed with the relation in words (*Calls 14 endpoints*,
+*Handled in 8 modules*, *Reaches 22 tables*), horizontal on a desktop and vertical on a
+phone. Below it: **Proved by** (tests), **Planned in** (change, tasks, requirements) and
+one **Reach** sentence.
 
-Navigation is six entries with a count and a one-line gloss; there are no duplicate
-tabs. Every node has a URL (`#node/…`), so back, forward and a pasted link work.
-Search is global and lives at the top of the rail. `/` focuses it, `↑`/`↓` walk the
-list, `Esc` clears it or clears the selection, and clicking a file path copies it.
-Light, dark and follow-the-system are one button.
+Every view has a URL — `#today`, `#map/endpoints`, `#changes`, `#checks`,
+`#node/…` — so back, forward and a pasted link work; the old hashes (`#api`, `#problems`)
+still resolve. Search is global in the header, grouped by kind. `/` focuses it, `Enter`
+opens the first match, `↑`/`↓` walk the list, `Esc` clears the search and then the
+selection, and clicking a file path copies it. Light, dark and follow-the-system are one
+button. `weave explore --all` puts every project in one file with a switcher.
 
 The visual contract — tokens, type roles, scroll ownership, primitives, accepted debt —
 is in [`docs/explorer/DESIGN.md`](docs/explorer/DESIGN.md).

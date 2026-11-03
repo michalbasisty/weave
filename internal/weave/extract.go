@@ -656,7 +656,7 @@ func CommentAbove(lines []string, line, max int) string {
 			kept = append(kept, s)
 		}
 	}
-	return jsstr.Slice(jsstr.Trim(collapseSpace(strings.Join(kept, " "))), 0, max)
+	return jsstr.TruncateWords(jsstr.Trim(collapseSpace(strings.Join(kept, " "))), max)
 }
 
 // TopComment is the first comment block near the top of a file: what the file is for.
