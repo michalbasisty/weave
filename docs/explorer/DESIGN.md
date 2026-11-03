@@ -94,6 +94,13 @@ components:
 
 # Design System: weave explorer
 
+The rework plan (UI, UX, Stitch workflow, app specs, janitor) is in
+[`REWORK-PLAN.md`](REWORK-PLAN.md); this file remains the current visual contract.
+
+Scope: the single page `weave explore` writes, rendered by `internal/weave/render.go`
+(CSS and JS embedded from `internal/weave/assets/`). It is for people; agents use the
+MCP server. One HTML file, no framework, no build, no network.
+
 ## Overview
 
 **Creative North Star: "The line map."**
