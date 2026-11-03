@@ -18,6 +18,9 @@ var explorerCSS string
 //go:embed assets/wiki.css
 var wikiCSS string
 
+//go:embed assets/wiki.js
+var wikiJS string
+
 //go:embed assets/explorer.js
 var explorerJS string
 
