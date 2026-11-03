@@ -257,14 +257,18 @@ type ChangeHit struct {
 
 // Facts is everything a change to some files can reach.
 type Facts struct {
-	Files         []string    `json:"files"`
-	Dependents    []string    `json:"dependents"`
-	Label         string      `json:"label"`
-	Modules       []string    `json:"modules"`
+	Files      []string `json:"files"`
+	Dependents []string `json:"dependents"`
+	Label      string   `json:"label"`
+	Modules    []string `json:"modules"`
+	// Endpoints is everything the modules reach; FileEndpoints is what these files
+	// themselves declare or call. Context answers for a file, so it reads the second.
 	Endpoints     []*GNode    `json:"endpoints"`
+	FileEndpoints []*GNode    `json:"fileEndpoints"`
 	Pages         []PageHit   `json:"pages"`
 	Tables        []string    `json:"tables"`
 	Tests         []string    `json:"tests"`
+	FileTests     []string    `json:"fileTests"`
 	Commands      []string    `json:"commands"`
 	Reqs          []string    `json:"reqs"`
 	Suspect       []string    `json:"suspect"`
@@ -357,9 +361,14 @@ func Analyze(g *Graph, inputs []string) *Facts {
 	}
 
 	// Seed endpoints: defined in a changed file or module, or called by one.
+	// A file answers for itself; the module union is blast radius, so it stays out
+	// of fileEndpoints. One importer in another module used to drag that whole
+	// module's endpoints into context, labelled with this file's path.
+	fileEndpoints := newSet()
 	endpoints := newSet()
 	for _, e := range ix.OfKind(KindEndpoint) {
 		if fileOf(e) != "" && files.has(*e.File) {
+			fileEndpoints.add(e.ID)
 			endpoints.add(e.ID)
 		} else if v, ok := metaGet(e, "module"); truthy(v, ok) && modules.has(jsString(v)) {
 			endpoints.add(e.ID)
@@ -367,10 +376,12 @@ func Analyze(g *Graph, inputs []string) *Facts {
 	}
 	for _, f := range files.list {
 		for _, e := range ix.From(FileID(f), "calls") {
+			fileEndpoints.add(e.To)
 			endpoints.add(e.To)
 		}
 		for _, r := range ix.To(FileID(f), "renders") {
 			for _, c := range ix.From(r.From, "calls") {
+				fileEndpoints.add(c.To)
 				endpoints.add(c.To)
 			}
 		}
@@ -429,13 +440,18 @@ func Analyze(g *Graph, inputs []string) *Facts {
 	}
 
 	tests := newSet()
+	fileTests := newSet()
 	for _, t := range ix.OfKind(KindTest) {
 		if fileOf(t) != "" && files.has(*t.File) {
 			tests.add(t.Name)
+			fileTests.add(t.Name)
 		}
 		for _, e := range ix.From(t.ID, "") {
 			if endpoints.has(e.To) {
 				tests.add(t.Name)
+			}
+			if fileEndpoints.has(e.To) {
+				fileTests.add(t.Name)
 			}
 			if modules.has(strings.Replace(e.To, "module:", "", 1)) {
 				tests.add(t.Name)
@@ -444,6 +460,7 @@ func Analyze(g *Graph, inputs []string) *Facts {
 		for _, e := range ix.From(t.ID, "exercises") {
 			if pages.has(nameOr(ix.Node(e.To), "")) {
 				tests.add(t.Name)
+				fileTests.add(t.Name)
 			}
 		}
 	}
@@ -545,8 +562,13 @@ func Analyze(g *Graph, inputs []string) *Facts {
 	}
 	sort.SliceStable(changes, func(i, j int) bool { return changes[i].Score > changes[j].Score })
 
+	// Gap lists follow the same rule as endpoints: a file answers for itself.
+	scope := endpoints
+	if fileEndpoints.size() > 0 {
+		scope = fileEndpoints
+	}
 	untested, unclaimed := []string{}, []string{}
-	for _, ep := range endpoints.list {
+	for _, ep := range scope.list {
 		if len(ix.To(ep, "hits")) == 0 && len(ix.To(ep, "covers")) == 0 {
 			untested = append(untested, nameOr(ix.Node(ep), ep))
 		}
@@ -570,7 +592,11 @@ func Analyze(g *Graph, inputs []string) *Facts {
 		}
 	}
 
-	commands := runners.Plan(g.Root, tests.items()).Commands
+	testScope := tests.items()
+	if fileTests.size() > 0 {
+		testScope = fileTests.items()
+	}
+	commands := runners.Plan(g.Root, testScope).Commands
 
 	pageDirs := map[string]bool{}
 	for _, p := range ix.OfKind(KindPage) {
@@ -593,14 +619,17 @@ func Analyze(g *Graph, inputs []string) *Facts {
 		label = pages.list[0].Name
 	}
 
-	eps := make([]*GNode, 0, endpoints.size())
-	for _, id := range endpoints.list {
-		n := ix.Node(id)
-		if n == nil {
-			// The TypeScript would hand back undefined and fail on its name; keep the id.
-			n = &GNode{ID: id, Kind: KindEndpoint}
+	nodes := func(s *ordSet) []*GNode {
+		out := make([]*GNode, 0, s.size())
+		for _, id := range s.list {
+			n := ix.Node(id)
+			if n == nil {
+				// The TypeScript would hand back undefined and fail on its name; keep the id.
+				n = &GNode{ID: id, Kind: KindEndpoint}
+			}
+			out = append(out, n)
 		}
-		eps = append(eps, n)
+		return out
 	}
 
 	return &Facts{
@@ -608,10 +637,12 @@ func Analyze(g *Graph, inputs []string) *Facts {
 		Dependents:    dependents.items(),
 		Label:         label,
 		Modules:       modules.items(),
-		Endpoints:     eps,
+		Endpoints:     nodes(endpoints),
+		FileEndpoints: nodes(fileEndpoints),
 		Pages:         append([]PageHit{}, pages.list...),
 		Tables:        tables.items(),
 		Tests:         tests.items(),
+		FileTests:     fileTests.items(),
 		Commands:      commands,
 		Reqs:          reqs.items(),
 		Suspect:       suspect,
@@ -762,15 +793,18 @@ func Context(g *Graph, inputs []string, budgetTokens float64, depth string) stri
 		push("module    " + strings.Join(f.Modules, ", "))
 	}
 
-	for i, e := range head(f.Endpoints, 4) {
+	for i, e := range head(f.FileEndpoints, 4) {
 		lead := "endpoint  "
 		if i > 0 {
 			lead = "          "
 		}
 		push(lead + e.Name + "  " + loc(e))
 	}
-	if len(f.Endpoints) > 4 {
-		push("          +" + strconv.Itoa(len(f.Endpoints)-4) + " more")
+	if len(f.FileEndpoints) > 4 {
+		push("          +" + strconv.Itoa(len(f.FileEndpoints)-4) + " more")
+	}
+	if len(f.Endpoints) > len(f.FileEndpoints) {
+		push("reach     " + strconv.Itoa(len(f.Endpoints)) + " endpoint(s) through these modules — impact(files)")
 	}
 
 	if len(f.Tables) > 0 {
@@ -817,13 +851,15 @@ func Context(g *Graph, inputs []string, budgetTokens float64, depth string) stri
 		}
 	}
 
-	if len(f.Tests) > 0 {
-		push("tests     " + strconv.Itoa(len(f.Tests)))
-		for _, t := range head(f.Tests, 6) {
+	if len(f.FileTests) > 0 {
+		push("tests     " + strconv.Itoa(len(f.FileTests)))
+		for _, t := range head(f.FileTests, 6) {
 			if !push("          " + t) {
 				break
 			}
 		}
+	} else if len(f.Tests) > 0 {
+		push("tests     none for this file; " + strconv.Itoa(len(f.Tests)) + " in its modules")
 	} else {
 		push("tests     none reference this — write one first (red before green)")
 	}
@@ -834,7 +870,7 @@ func Context(g *Graph, inputs []string, budgetTokens float64, depth string) stri
 		}
 		push(s)
 	}
-	if len(f.Endpoints) > 0 && len(f.Pages) > 1 {
+	if len(f.FileEndpoints) > 0 && len(f.Pages) > 1 {
 		others := []string{}
 		for _, p := range head(f.Pages[1:], 4) {
 			others = append(others, p.Name)
