@@ -160,6 +160,7 @@ do I do next?" · `impact` answers "I know the change, what else breaks?"
 ```bash
 weave                      # status, and what to do next
 weave explore              # the map, in your browser
+weave serve  [--port 7777] # host the map, the wiki and the actions on 127.0.0.1
 weave context <file...>    # --budget 250; --depth code for a window at each anchor
 weave impact  <file...>
 weave plan    <change> [T3]
@@ -226,6 +227,29 @@ button. `weave explore --all` puts every project in one file with a switcher.
 
 The visual contract — tokens, type roles, scroll ownership, primitives, accepted debt —
 is in [`docs/explorer/DESIGN.md`](docs/explorer/DESIGN.md).
+
+## Hosted (one panel, and things you can do in it)
+
+`weave explore` writes a file you read. `weave serve` hosts the same page and lets you work
+in it:
+
+```bash
+weave serve                 # http://127.0.0.1:7777/?t=…  (loopback only)
+weave serve --port 8080
+```
+
+One page, three actions in the signboard:
+
+- **Check** — runs the gate on the working tree and prints the failures; every `file:line`
+  in the output is a link that opens that window of the file.
+- **Reindex / Wiki** — rebuild the index, or regenerate the wiki and open it (the wiki is
+  served at `/wiki/`).
+- **open** beside any path chip — the file, with its line numbers, and a one-line **note**
+  field that writes through `weave remember`, so `context()` returns it next session.
+
+The server binds `127.0.0.1` only, mints a write token per run, refuses another origin's
+requests, and serves one window of a file rather than whole files. It is not a team server:
+nothing outside the machine can reach it, and nothing is uploaded.
 
 ## Wiki (for people and for reviewers)
 

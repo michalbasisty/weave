@@ -29,6 +29,8 @@ func main() {
 		code = cmdExplore()
 	case "wiki":
 		code = cmdWiki()
+	case "serve":
+		code = cmdServe()
 	case "projects", "list":
 		code = cmdProjects()
 	case "forget":
@@ -127,7 +129,7 @@ func helpText() string {
 
   weave                         status, and what to do next
   weave explore                 open the map in your browser (--all: every project)
-  weave wiki                    write a read-only wiki: a page per module, endpoint, screen, table, change
+  weave wiki                write a read-only wiki: a page per module, endpoint, screen, table, change
   weave wiki --check            fail when the wiki no longer describes HEAD
   weave projects                every repo weave knows, and where they are
   weave context <file...>       one file, explained (--budget tokens, --depth code)
@@ -144,6 +146,7 @@ func helpText() string {
   weave memory                  all notes (--clear drops them)
   weave check   [file...]       fail when a change breaks a contract (no args: git diff)
   weave hook                    check for an agent hook: exit 2 and the failure on stderr
+  weave serve   [--port N]      host the map, the wiki and the actions on 127.0.0.1
   weave fires   [--since N]     what the hook has seen: runs, failures, avg time
   weave delta   [ref]           what the graph gained or lost (--from graph.json, --all)
   weave gain    [--since N]     tokens served over the last N days (default 7)

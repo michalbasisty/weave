@@ -19,6 +19,7 @@ var valueFlags = map[string]bool{
 	"--root": true, "--project": true, "--limit": true, "--budget": true,
 	"--out": true, "--against": true, "--runs": true, "--file": true,
 	"--note": true, "--from": true, "--since": true, "--depth": true,
+	"--port": true,
 }
 
 var (

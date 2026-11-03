@@ -1,0 +1,77 @@
+/* The hosted layer: a dev toolbar and one drawer. Same tokens as the page. */
+.wbar {
+  display: flex; gap: 2px; margin-left: var(--s3); padding-left: var(--s3);
+  border-left: 1px solid var(--shell-rule);
+}
+.wbar button, .wbar a {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px;
+  border: 0; border-radius: 5px; background: transparent; cursor: pointer;
+  color: var(--shell-ink2); font: 500 var(--fs-s) var(--ui); text-decoration: none;
+  white-space: nowrap;
+}
+.wbar button:hover, .wbar a:hover { background: var(--shell-field); color: var(--shell-ink); text-decoration: none; }
+.wbar .wdot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.wbar .wdot.bad { background: var(--bad); }
+.wbar .wdot.busy { background: var(--link); }
+
+.wopen {
+  margin-left: 6px; height: 28px; padding: 0 9px; border: 1px solid var(--rule);
+  border-radius: 5px; background: var(--surface); color: var(--link);
+  font: 500 var(--fs-xs) var(--ui); cursor: pointer; vertical-align: baseline;
+}
+.wopen:hover { border-color: var(--ink3); }
+
+.wdrawer {
+  position: fixed; top: 100px; right: 0; bottom: 0; width: min(560px, 46vw);
+  z-index: 41; display: flex; flex-direction: column;
+  background: var(--surface); border-left: 1px solid var(--rule); border-top: 1px solid var(--rule);
+}
+.wdrawer[hidden] { display: none; }
+.wdrawer > header {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-bottom: 1px solid var(--rule); min-height: 44px;
+}
+.wdrawer > header b {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: 600 var(--fs-s) var(--mono); color: var(--ink);
+}
+.wdrawer > header .wkind { margin-left: auto; white-space: nowrap; font: var(--fs-xs) var(--mono); color: var(--ink3); }
+.wdrawer > header button {
+  width: 30px; height: 30px; border: 0; border-radius: 5px;
+  background: transparent; color: var(--ink3); font: 400 18px/1 var(--ui); cursor: pointer; flex: 0 0 auto;
+}
+.wdrawer > header button:hover { background: var(--sunk); color: var(--ink); }
+.wdrawer .wbody { flex: 1; overflow: auto; padding: 12px; }
+.wdrawer pre {
+  margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
+  font: var(--fs-xs)/1.55 var(--mono); color: var(--ink2);
+}
+.wdrawer pre a { color: var(--link); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.wdrawer .wok { color: var(--ok); font: 600 var(--fs-s) var(--ui); }
+.wdrawer .wbad { color: var(--bad); font: 600 var(--fs-s) var(--ui); }
+.wdrawer .whint { color: var(--ink3); font: var(--fs-xs) var(--ui); margin: 0 0 8px; }
+
+.wnote { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
+.wnote input {
+  flex: 1; height: 34px; padding: 0 10px; border: 1px solid var(--rule); border-radius: 5px;
+  background: var(--ground); color: var(--ink); font: var(--fs-s) var(--ui);
+}
+.wnote button {
+  height: 34px; padding: 0 14px; border: 1px solid var(--ink); border-radius: 5px;
+  background: var(--ink); color: var(--surface); font: 600 var(--fs-s) var(--ui); cursor: pointer;
+}
+.wnote button:hover { opacity: .9; }
+
+@media (max-width: 900px) {
+  .wbar {
+    position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 40;
+    margin: 0; padding: 5px; border: 1px solid var(--shell-rule); border-radius: 8px;
+    background: var(--shell); justify-content: space-between;
+  }
+  .wbar button, .wbar a { padding: 0 10px; }
+  .wdrawer { top: 96px; right: 8px; left: 8px; width: auto; bottom: 68px; }
+}
+@media (min-width: 901px) and (max-width: 1200px) {
+  .wbar button span:not(.wdot) { display: none; }
+  .wbar { border-left: 0; padding-left: 0; margin-left: var(--s2); }
+}
