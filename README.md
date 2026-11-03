@@ -169,6 +169,8 @@ weave explore              # the map, in your browser
 weave context <file...>    # --budget 250; --depth code for a window at each anchor
 weave impact  <file...>
 weave plan    <change> [T3]
+weave spec    new <name>       # create proposal.md, tasks.md, spec-delta.md
+weave spec    task done <change> <T1>
 weave change  [slug]
 weave search  <query>
 weave grep    <text>       # --regex, --limit; graph files rank first

@@ -337,6 +337,31 @@ func TestInitUpgradeReplacesStaleEntry(t *testing.T) {
 	}
 }
 
+func TestSpecNewAndTaskDone(t *testing.T) {
+	root := t.TempDir()
+	out, code := run(t, "spec", "new", "demo", "--title", "Demo change", "--root", root)
+	if code != 0 || !strings.Contains(out, "created specs/changes/") {
+		t.Fatalf("spec new: %d\n%s", code, out)
+	}
+	matches, err := filepath.Glob(filepath.Join(root, "specs", "changes", "*-demo", "tasks.md"))
+	if err != nil || len(matches) != 1 {
+		t.Fatalf("tasks.md: %v %v", matches, err)
+	}
+	raw, _ := os.ReadFile(matches[0])
+	if !strings.Contains(string(raw), "- [ ] T1") {
+		t.Fatalf("template: %s", raw)
+	}
+	slug := filepath.Base(filepath.Dir(matches[0]))
+	out, code = run(t, "spec", "task", "done", slug, "T1", "--root", root)
+	if code != 0 || !strings.Contains(out, "done "+slug+" T1") {
+		t.Fatalf("task done: %d\n%s", code, out)
+	}
+	raw, _ = os.ReadFile(matches[0])
+	if !strings.Contains(string(raw), "- [x] T1") {
+		t.Fatalf("task not ticked: %s", raw)
+	}
+}
+
 func TestVersion(t *testing.T) {
 	out, code := run(t, "version")
 	if code != 0 || !strings.HasPrefix(strings.TrimSpace(out), "weave ") {
