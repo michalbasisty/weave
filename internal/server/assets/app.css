@@ -1,18 +1,24 @@
-/* The hosted layer: a dev toolbar and one drawer. Same tokens as the page. */
+/* The hosted layer: a gate chip, a wiki button, one dialog, and the review sheet. */
 .wbar {
-  display: flex; gap: 2px; margin-left: var(--s3); padding-left: var(--s3);
-  border-left: 1px solid var(--shell-rule);
+  display: flex; gap: 6px; margin-left: var(--s3); padding-left: var(--s3);
+  border-left: 1px solid var(--shell-rule); align-items: center;
 }
-.wbar button, .wbar a {
-  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px;
-  border: 0; border-radius: 5px; background: transparent; cursor: pointer;
-  color: var(--shell-ink2); font: 500 var(--fs-s) var(--ui); text-decoration: none;
-  white-space: nowrap;
+.wgate {
+  display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 11px;
+  border: 1px solid var(--shell-rule); border-radius: 999px; background: transparent;
+  color: var(--shell-ink2); font: 500 var(--fs-xs) var(--mono); cursor: pointer; white-space: nowrap;
 }
-.wbar button:hover, .wbar a:hover { background: var(--shell-field); color: var(--shell-ink); text-decoration: none; }
-.wbar .wdot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
-.wbar .wdot.bad { background: var(--bad); }
-.wbar .wdot.busy { background: var(--link); }
+.wgate:hover { background: var(--shell-field); color: var(--shell-ink); }
+.wact {
+  display: inline-flex; align-items: center; height: 32px; padding: 0 11px;
+  border: 0; border-radius: 5px; background: transparent; color: var(--shell-ink2);
+  font: 500 var(--fs-s) var(--ui); cursor: pointer; white-space: nowrap;
+}
+.wact:hover { background: var(--shell-field); color: var(--shell-ink); }
+.wdot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink3); }
+.wdot.ok { background: var(--ok); }
+.wdot.bad { background: var(--bad); }
+.wdot.busy { background: var(--link); }
 
 .wopen {
   margin-left: 6px; height: 28px; padding: 0 9px; border: 1px solid var(--rule);
@@ -21,35 +27,38 @@
 }
 .wopen:hover { border-color: var(--ink3); }
 
-.wdrawer {
-  position: fixed; top: 100px; right: 0; bottom: 0; width: min(560px, 46vw);
-  z-index: 41; display: flex; flex-direction: column;
-  background: var(--surface); border-left: 1px solid var(--rule); border-top: 1px solid var(--rule);
+/* the dialog is native: Esc closes, the page behind is inert, focus returns */
+.wdialog {
+  position: fixed; inset: 100px 0 0 auto; width: min(560px, 46vw); max-width: 100vw;
+  height: calc(100vh - 100px); max-height: calc(100vh - 100px); margin: 0; padding: 0;
+  border: 0; border-left: 1px solid var(--rule); background: var(--surface); color: var(--ink);
+  display: none; flex-direction: column;
 }
-.wdrawer[hidden] { display: none; }
-.wdrawer > header {
+.wdialog[open] { display: flex; }
+.wdialog::backdrop { background: rgba(11, 17, 29, .28); }
+.wdialog > header {
   display: flex; align-items: center; gap: 10px; padding: 10px 12px;
   border-bottom: 1px solid var(--rule); min-height: 44px;
 }
-.wdrawer > header b {
+.wdialog > header b {
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font: 600 var(--fs-s) var(--mono); color: var(--ink);
 }
-.wdrawer > header .wkind { margin-left: auto; white-space: nowrap; font: var(--fs-xs) var(--mono); color: var(--ink3); }
-.wdrawer > header button {
-  width: 30px; height: 30px; border: 0; border-radius: 5px;
-  background: transparent; color: var(--ink3); font: 400 18px/1 var(--ui); cursor: pointer; flex: 0 0 auto;
+.wdialog > header .wkind { margin-left: auto; white-space: nowrap; font: var(--fs-xs) var(--mono); color: var(--ink3); }
+.wdialog > header button {
+  width: 30px; height: 30px; border: 0; border-radius: 5px; background: transparent;
+  color: var(--ink3); font: 400 18px/1 var(--ui); cursor: pointer; flex: 0 0 auto;
 }
-.wdrawer > header button:hover { background: var(--sunk); color: var(--ink); }
-.wdrawer .wbody { flex: 1; overflow: auto; padding: 12px; }
-.wdrawer pre {
+.wdialog > header button:hover { background: var(--sunk); color: var(--ink); }
+.wbody { flex: 1; overflow: auto; padding: 12px; }
+.wbody pre {
   margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
   font: var(--fs-xs)/1.55 var(--mono); color: var(--ink2);
 }
-.wdrawer pre a { color: var(--link); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
-.wdrawer .wok { color: var(--ok); font: 600 var(--fs-s) var(--ui); }
-.wdrawer .wbad { color: var(--bad); font: 600 var(--fs-s) var(--ui); }
-.wdrawer .whint { color: var(--ink3); font: var(--fs-xs) var(--ui); margin: 0 0 8px; }
+.wbody pre a { color: var(--link); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.wok { color: var(--ok); font: 600 var(--fs-s) var(--ui); }
+.wbad { color: var(--bad); font: 600 var(--fs-s) var(--ui); }
+.whint { color: var(--ink3); font: var(--fs-s) var(--ui); margin: 4px 0 8px; }
 
 .wnote { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
 .wnote input {
@@ -60,18 +69,41 @@
   height: 34px; padding: 0 14px; border: 1px solid var(--ink); border-radius: 5px;
   background: var(--ink); color: var(--surface); font: 600 var(--fs-s) var(--ui); cursor: pointer;
 }
-.wnote button:hover { opacity: .9; }
+
+/* since you last reviewed: the first thing on Today that is about the agent's work */
+.wreviewslot { padding: var(--s5) var(--s5) 0; }
+.wreviewwrap { margin: 0 0 var(--s5); }
+.wreview { padding: 16px 18px; border: 1px solid var(--rule); border-left: 3px solid var(--link); border-radius: 6px; background: var(--surface); }
+.wreview h2 { margin: 0 0 6px; font: 600 var(--fs-m) var(--ui); letter-spacing: 0; border: 0; padding: 0; }
+.wverdict { margin: 0 0 10px; color: var(--ink2); font: 400 var(--fs-s) var(--ui); }
+.wverdict b { color: var(--ink); font-weight: 600; }
+.wrows { list-style: none; margin: 0 0 10px; padding: 0; }
+.wrows li { border-top: 1px solid var(--rule2); }
+.wrow { display: grid; grid-template-columns: 74px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 6px 0; color: var(--ink); }
+.wrow:hover { text-decoration: none; background: var(--sunk); }
+.wk { font: 600 var(--fs-xs) var(--mono); color: var(--ink3); text-transform: uppercase; letter-spacing: .04em; }
+.wn { font: 500 var(--fs-s) var(--mono); overflow-wrap: anywhere; }
+.wf { font: var(--fs-xs) var(--mono); color: var(--ink3); }
+.wmark {
+  height: 32px; padding: 0 14px; border: 1px solid var(--ink); border-radius: 5px;
+  background: var(--ink); color: var(--surface); font: 600 var(--fs-s) var(--ui); cursor: pointer;
+}
+.wmark:disabled { opacity: .55; cursor: default; }
 
 @media (max-width: 900px) {
   .wbar {
-    position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 40;
-    margin: 0; padding: 5px; border: 1px solid var(--shell-rule); border-radius: 8px;
-    background: var(--shell); justify-content: space-between;
+    position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 40; margin: 0; padding: 5px;
+    border: 1px solid var(--shell-rule); border-radius: 8px; background: var(--shell);
+    justify-content: space-between;
   }
-  .wbar button, .wbar a { padding: 0 10px; }
-  .wdrawer { top: 96px; right: 8px; left: 8px; width: auto; bottom: 68px; }
+  /* the fixed bar must not cover the last line of the page, and focused rows must
+     scroll clear of it (WCAG 2.4.11) */
+  body { padding-bottom: 68px; scroll-padding-bottom: 76px; }
+  .wdialog { inset: 96px 0 68px 0; width: auto; height: auto; max-height: none; border-left: 0; }
+  .wrow { grid-template-columns: 64px minmax(0, 1fr); }
+  .wf { display: none; }
 }
-@media (min-width: 901px) and (max-width: 1200px) {
-  .wbar button span:not(.wdot) { display: none; }
-  .wbar { border-left: 0; padding-left: 0; margin-left: var(--s2); }
+@media (min-width: 901px) and (max-width: 1240px) {
+  .wgate { padding: 0 9px; }
+  .wbar { margin-left: var(--s2); padding-left: var(--s2); }
 }

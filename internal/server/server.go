@@ -74,12 +74,23 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-// localOnly rejects a request that a browser on another origin could have forged.
+// localOnly rejects a request a browser on another origin could have forged, and a
+// Host header that is not loopback (DNS rebinding).
 func localOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if o := r.Header.Get("Origin"); o != "" {
 			if !strings.HasPrefix(o, "http://127.0.0.1") && !strings.HasPrefix(o, "http://localhost") {
 				http.Error(w, "cross-origin request refused", http.StatusForbidden)
+				return
+			}
+		}
+		if h := r.Host; h != "" {
+			name := h
+			if i := strings.LastIndexByte(name, ':'); i > 0 {
+				name = name[:i]
+			}
+			if name != "127.0.0.1" && name != "localhost" && name != "[::1]" {
+				http.Error(w, "host refused", http.StatusForbidden)
 				return
 			}
 		}
@@ -218,6 +229,32 @@ func Handler(c Config) http.Handler {
 	})
 
 	// file opens one window of a file, never the whole file.
+	mux.HandleFunc("/api/review", func(w http.ResponseWriter, r *http.Request) {
+		g, err := c.Graph()
+		if err != nil {
+			writeJSON(w, 500, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, buildReview(g, c.Root))
+	})
+
+	// review/mark closes the range: everything before this commit counts as seen.
+	mux.HandleFunc("/api/review/mark", func(w http.ResponseWriter, r *http.Request) {
+		if !c.authed(r) {
+			writeJSON(w, 403, map[string]string{"error": "missing token"})
+			return
+		}
+		head := gitOut(c.Root, "rev-parse", "HEAD")
+		if head == "" {
+			writeJSON(w, 400, map[string]string{"error": "no git history to mark"})
+			return
+		}
+		if err := appendMark(c.Root, head); err != nil {
+			writeJSON(w, 500, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]string{"marked": head})
+	})
 	mux.HandleFunc("/api/file", func(w http.ResponseWriter, r *http.Request) {
 		rel := r.URL.Query().Get("path")
 		line, _ := strconv.Atoi(r.URL.Query().Get("line"))
