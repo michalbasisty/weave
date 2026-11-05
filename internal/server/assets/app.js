@@ -502,7 +502,7 @@
     wrap.append(el('h2', { text: 'Since you last reviewed' }));
     if (!data || data.error) { wrap.append(el('p', { class: 'whint', text: 'No git history to compare.' })); return wrap; }
     if (!data.files && !data.commits) {
-      wrap.append(el('p', { class: 'whint', text: 'Nothing new since ' + (data.mark || '').slice(0, 7) + '.' }));
+      wrap.append(el('p', { class: 'whint', text: data.mark ? 'Nothing new since ' + data.mark.slice(0, 7) + '.' : 'Nothing new yet. Mark the page reviewed to start a baseline.' }));
       return wrap;
     }
     const counts = {};
