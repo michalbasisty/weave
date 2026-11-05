@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http/httptest"
 	"net/url"
@@ -78,5 +79,65 @@ func TestSpecPageRenders(t *testing.T) {
 		if rec.Code != 400 {
 			t.Errorf("%s: got %d, want 400", bad, rec.Code)
 		}
+	}
+}
+
+// The editor's save goes through the panel: token, path guard, size cap, and the
+// file and rendered page both show the new text.
+func TestSpecSaveWritesThroughThePanel(t *testing.T) {
+	root := t.TempDir()
+	rel := "specs/capabilities/media-files/spec.md"
+	dir := filepath.Join(root, "specs", "capabilities", "media-files")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "spec.md")
+	if err := os.WriteFile(path, []byte("# Capability: media-files\n\nOld text.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h := Handler(Config{Root: root, Token: "tok", Graph: func() (*weave.Graph, error) { return &weave.Graph{}, nil }})
+	post := func(body map[string]string, token bool) *httptest.ResponseRecorder {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rec := httptest.NewRecorder()
+		req := post("/api/spec-save", bytes.NewReader(raw))
+		if token {
+			req.Header.Set("X-Weave-Token", "tok")
+		}
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	if got := post(map[string]string{"path": rel, "text": "x"}, false); got.Code != 403 {
+		t.Errorf("without token: %d, want 403", got.Code)
+	}
+	for _, bad := range []map[string]string{
+		{"path": "specs/../x.md", "text": "x"},
+		{"path": "src/a.ts", "text": "x"},
+		{"path": rel, "text": strings.Repeat("x", 512*1024+1)},
+	} {
+		if got := post(bad, true); got.Code != 400 {
+			t.Errorf("%v: %d, want 400", bad["path"], got.Code)
+		}
+	}
+
+	newText := "# Capability: media-files\n\nEdited by the panel.\n"
+	if got := post(map[string]string{"path": rel, "text": newText}, true); got.Code != 200 {
+		t.Fatalf("save: %d %s", got.Code, got.Body.String())
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil || string(raw) != newText {
+		t.Fatalf("file after save: %q %v", raw, err)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, get("/api/spec?path="+rel))
+	var page struct{ Text, HTML string }
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if page.Text != newText || !strings.Contains(page.HTML, "Edited by the panel.") {
+		t.Errorf("page after save: %+v", page)
 	}
 }

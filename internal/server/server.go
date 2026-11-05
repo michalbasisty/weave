@@ -227,18 +227,12 @@ func Handler(c Config) http.Handler {
 	})
 
 	// spec renders one spec file for people. Only Markdown under specs/ is served, and
-	// the renderer escapes before it adds a tag.
+	// the renderer escapes before it adds a tag. text is the source the editor starts
+	// from.
 	mux.HandleFunc("/api/spec", func(w http.ResponseWriter, r *http.Request) {
-		rel := filepath.ToSlash(strings.TrimSpace(strings.TrimPrefix(r.URL.Query().Get("path"), "./")))
-		if !strings.HasPrefix(rel, "specs/") || !strings.HasSuffix(rel, ".md") || strings.Contains(rel, "..") || strings.Contains(rel, `\`) {
+		rel, abs, ok := specFile(c.Root, r.URL.Query().Get("path"))
+		if !ok {
 			writeJSON(w, 400, map[string]string{"error": "a path under specs/ ending .md"})
-			return
-		}
-		full := filepath.Join(c.Root, filepath.FromSlash(rel))
-		abs, err := filepath.Abs(full)
-		rootAbs, _ := filepath.Abs(c.Root)
-		if err != nil || !strings.HasPrefix(abs, rootAbs+string(os.PathSeparator)) {
-			writeJSON(w, 400, map[string]string{"error": "outside the repo"})
 			return
 		}
 		info, err := os.Stat(abs)
@@ -252,7 +246,39 @@ func Handler(c Config) http.Handler {
 			return
 		}
 		md := string(raw)
-		writeJSON(w, 200, map[string]any{"path": rel, "title": specTitle(md), "html": renderSpecMD(md)})
+		writeJSON(w, 200, map[string]any{"path": rel, "title": specTitle(md), "text": md, "html": renderSpecMD(md)})
+	})
+
+	// spec-save replaces one spec file: the panel's editor writes through the same lock
+	// as the task writer and a temp file, so a reader never sees half a document.
+	mux.HandleFunc("/api/spec-save", func(w http.ResponseWriter, r *http.Request) {
+		if !c.authed(r) {
+			writeJSON(w, 403, map[string]string{"error": "missing token"})
+			return
+		}
+		var body struct{ Path, Text string }
+		if json.NewDecoder(r.Body).Decode(&body) != nil {
+			writeJSON(w, 400, map[string]string{"error": "path and text are required"})
+			return
+		}
+		rel, abs, ok := specFile(c.Root, body.Path)
+		if !ok {
+			writeJSON(w, 400, map[string]string{"error": "a path under specs/ ending .md"})
+			return
+		}
+		if info, err := os.Stat(abs); err != nil || info.Size() > 512*1024 {
+			writeJSON(w, 400, map[string]string{"error": "unreadable or larger than 512 KB"})
+			return
+		}
+		if len(body.Text) > 512*1024 {
+			writeJSON(w, 400, map[string]string{"error": "a spec is at most 512 KB"})
+			return
+		}
+		if err := weave.SaveSpecText(c.Root, rel, body.Text); err != nil {
+			writeJSON(w, 500, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "path": rel, "bytes": len(body.Text)})
 	})
 
 	// spec-new creates the three files a change needs, through `weave spec new`.
@@ -384,6 +410,21 @@ func Handler(c Config) http.Handler {
 // a task id. No separator and no leading dot, so the command cannot leave
 // specs/changes.
 var nameOK = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+// specFile resolves a browser-supplied Markdown path to a file under specs/. No
+// traversal, no separator, no other extension.
+func specFile(root, path string) (string, string, bool) {
+	rel := filepath.ToSlash(strings.TrimSpace(strings.TrimPrefix(path, "./")))
+	if !strings.HasPrefix(rel, "specs/") || !strings.HasSuffix(rel, ".md") || strings.Contains(rel, "..") || strings.Contains(rel, `\`) {
+		return "", "", false
+	}
+	abs, err := filepath.Abs(filepath.Join(root, filepath.FromSlash(rel)))
+	rootAbs, _ := filepath.Abs(root)
+	if err != nil || !strings.HasPrefix(abs, rootAbs+string(os.PathSeparator)) {
+		return "", "", false
+	}
+	return rel, abs, true
+}
 
 type panelTask struct {
 	ID    string `json:"id"`

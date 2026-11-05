@@ -22,9 +22,9 @@ session. An agent may read less and conclude less. A live eval is the open quest
 
 ## 2. What every session pays before the first prompt
 
-<img src="img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 1,434 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
+<img src="img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 1,308 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
 
-**Method.** weave's fourteen tool definitions serialised from its own schema (1,434 tokens). The
+**Method.** weave's thirteen tool definitions serialised from its own schema (1,308 tokens). The
 others are published measurements of those servers; they are stable enough to be quoted and
 labelled, not re-measured here. This is the one comparison in which every row is the same
 unit — tokens of JSON schema sitting in context on every turn.

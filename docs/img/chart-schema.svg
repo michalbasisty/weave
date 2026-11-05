@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 336" width="1200" height="336" role="img" aria-label="MCP tool schema loaded before the first prompt: weave 1434 tokens, filesystem 3500, Notion 9000, GitHub 18000.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 336" width="1200" height="336" role="img" aria-label="MCP tool schema loaded before the first prompt: weave 1308 tokens, filesystem 3500, Notion 9000, GitHub 18000.">
   <style>
     :root { --ground:#f5f6f8; --ink:#131a26; --ink2:#3a4454; --ink3:#5a6474; --rule:#dbe0e8; --rule2:#e8ebf0;
             --weave:#1d4bb0; --other:#8f9bb0; }
@@ -24,10 +24,10 @@
 
   <line class="axis" x1="300" y1="96" x2="300" y2="284"/>
 
-  <text class="name" x="40" y="118">weave — 14 tools</text>
+  <text class="name" x="40" y="118">weave — 13 tools</text>
   <rect class="track" x="300" y="102" width="700" height="18" rx="4"/>
-  <rect class="barW" x="300" y="102" width="56" height="18" rx="4"/>
-  <text class="value" x="368" y="117" fill="var(--weave)">1,434</text>
+  <rect class="barW" x="300" y="102" width="51" height="18" rx="4"/>
+  <text class="value" x="363" y="117" fill="var(--weave)">1,308</text>
 
   <text class="name" x="40" y="160">filesystem</text>
   <rect class="track" x="300" y="144" width="700" height="18" rx="4"/>

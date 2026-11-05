@@ -333,7 +333,43 @@
     });
   };
 
-  const renderSpecPage = (host, name) => {
+  const openSpecEditor = (host, name, path, text) => {
+    const area = el('textarea', { class: 'wspecedit', spellcheck: 'false', 'aria-label': 'Spec Markdown' });
+    area.value = text;
+    const status = el('span', { class: 'wspecstatus', text: 'Markdown — Ctrl+S saves' });
+    const save = el('button', { type: 'button', class: 'wmark', text: 'Save' });
+    const cancel = el('button', { type: 'button', class: 'wopen', text: 'Cancel' });
+    const bar = el('div', { class: 'wspecbar' }, [
+      el('a', { href: '#specs', class: 'wback', text: '← All specs' }),
+      el('span', { class: 'wkind', text: path }),
+      status, cancel, save,
+    ]);
+    const saveIt = () => {
+      save.disabled = true;
+      api('/api/spec-save', { path, text: area.value }).then(r => {
+        save.disabled = false;
+        if (r.error) {
+          status.textContent = r.error;
+          status.className = 'wspecstatus wbad';
+          return;
+        }
+        renderSpecPage(host, name, 'Saved');
+      }).catch(() => {
+        save.disabled = false;
+        status.textContent = 'Save failed';
+        status.className = 'wspecstatus wbad';
+      });
+    };
+    save.addEventListener('click', saveIt);
+    cancel.addEventListener('click', () => renderSpecPage(host, name));
+    area.addEventListener('keydown', e => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveIt(); }
+    });
+    host.replaceChildren(bar, area);
+    area.focus();
+  };
+
+  const renderSpecPage = (host, name, note) => {
     host.replaceChildren(el('p', { class: 'whint', text: 'Loading…' }));
     const path = 'specs/capabilities/' + name + '/spec.md';
     api('/api/spec?path=' + encodeURIComponent(path)).then(r => {
@@ -344,10 +380,14 @@
       }
       const raw = el('button', { type: 'button', class: 'wopen', text: 'raw' });
       raw.addEventListener('click', () => openFile(path, 0));
+      const edit = el('button', { type: 'button', class: 'wopen', text: 'edit' });
+      edit.addEventListener('click', () => openSpecEditor(host, name, path, r.text || ''));
       const bar = el('div', { class: 'wspecbar' }, [
         back,
         el('span', { class: 'wkind', text: r.path }),
+        ...(note ? [el('span', { class: 'wspecstatus wok', text: note })] : []),
         raw,
+        edit,
       ]);
       host.replaceChildren(bar, el('article', { class: 'specdoc', html: r.html }));
     }).catch(() => host.replaceChildren(el('p', { class: 'wbad', text: 'Could not read the spec.' })));

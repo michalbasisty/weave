@@ -212,7 +212,24 @@ try {
   check('spec page has its title', await page.eval(`document.querySelector('.specdoc h1').textContent.includes('Capability: orders')`));
   check('spec page renders the Parts table', await page.eval(`!!document.querySelector('.specdoc table')`));
   check('spec page has a raw link', await page.eval(`!!document.querySelector('.wspecbar .wopen')`));
+  check('spec page offers edit', await page.eval(
+    `[...document.querySelectorAll('.wspecbar .wopen')].some(b => b.textContent === 'edit')`));
   if (shots) await page.shot(path.join(tmp, 'spec-page.png'));
+
+  await page.eval(`[...document.querySelectorAll('.wspecbar .wopen')].find(b => b.textContent === 'edit').click()`);
+  check('edit opens the Markdown', await page.waitFor(`!!document.querySelector('.wspecedit')`));
+  await page.eval(`(() => {
+    const t = document.querySelector('.wspecedit');
+    t.value += '\\n## Smoke\\n\\nEdited in the panel.\\n';
+    document.querySelector('.wspecbar .wmark').click();
+    return 'ok';
+  })()`);
+  check('save renders the new text', await page.waitFor(
+    `!!document.querySelector('.specdoc') && document.querySelector('.specdoc').innerText.includes('Edited in the panel.')`));
+  const specFile = fs.readFileSync(path.join(root, 'specs', 'capabilities', 'orders', 'spec.md'), 'utf8');
+  check('save writes spec.md', specFile.includes('Edited in the panel.'));
+  if (shots) await page.shot(path.join(tmp, 'spec-edited.png'));
+
   await page.eval(`document.querySelector('.wback').click()`);
   check('back returns to the list', await page.waitFor(`!!document.querySelector('.wcaps a.wcname')`));
 

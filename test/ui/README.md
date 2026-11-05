@@ -14,7 +14,8 @@ on a free port and drives headless Chrome over CDP. The checks:
 
 - the menu order (Today, Map, Changes, Checks, Specs, Wiki) and the full-width Specs place;
 - the Views table, its screen link and the owning capability;
-- a capability opens as a rendered page (title, Parts table, raw link) and goes back;
+- a capability opens as a rendered page (title, Parts table, raw link), its `edit` saves
+  the Markdown, and back returns to the list;
 - the gate runs and its verdict lands in the Check tab;
 - a path chip opens the file window in the File tab;
 - the wiki builds and renders inside the Wiki place;

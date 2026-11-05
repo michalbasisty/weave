@@ -55,12 +55,13 @@ The log above still describes the ten-tool server that month was measured on. Si
 
 - **Four write tools joined the surface.** `task_done` and `task_reopen` close a task;
   `change_new` and `change_delete` (`confirm: true`) create and remove a change record.
-  The schema is 1,434 tokens for fourteen tools, not 1,017 for ten. The advice to keep
-  the surface small still holds in general; these were added because the CLI, the panel
-  and MCP needed one writer, not because the log asked for them.
+  `ask` is no longer advertised (it stays `weave ask`), so the schema is 1,308 tokens for
+  thirteen tools. The advice to keep the surface small still holds in general; the write
+  tools were added because the CLI, the panel and MCP needed one writer.
 - **The panel writes.** `weave serve` ticks and reopens tasks, starts changes, renders
   capability specs, and maps every screen to its endpoints, tables and owning spec in a
-  Views table. The "explorer stays read-only" assumption is gone; writes go through
-  `weave.SetSpecTask`, `NewSpecChange` and `DeleteSpecChange`, with a `tasks.md` lock.
-- **Still open:** dropping `ask` from the advertised set, and whether spec prose should
-  be editable in the panel (today: rendered and raw, read-only).
+  Views table. It also edits a spec's Markdown (through a lock and a temp file). The
+  "explorer stays read-only" assumption is gone; writes go through `weave.SetSpecTask`,
+  `NewSpecChange`, `DeleteSpecChange` and `SaveSpecText`.
+- **Still open:** whether the panel should grow a structured Parts editor rather than the
+  Markdown editor it has now.

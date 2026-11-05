@@ -45,7 +45,7 @@ func TestPageCarriesTheActionLayer(t *testing.T) {
 // A write without the token is refused: the page has the token, a forged request does not.
 func TestWritesNeedTheToken(t *testing.T) {
 	h, _ := testHandler(t)
-	for _, path := range []string{"/api/check", "/api/note", "/api/wiki", "/api/task-done", "/api/spec-new"} {
+	for _, path := range []string{"/api/check", "/api/note", "/api/wiki", "/api/task-done", "/api/spec-new", "/api/spec-save"} {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, post(path, strings.NewReader(`{}`)))
 		if rec.Code != http.StatusForbidden {

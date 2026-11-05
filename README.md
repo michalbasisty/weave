@@ -42,7 +42,7 @@ Two numbers people ask about first:
 
 | | |
 |---|---|
-| cost to install | **1,434 tokens** of MCP schema per session (14 tools) |
+| cost to install | **1,308 tokens** of MCP schema per session (13 tools) |
 | cost to answer | **66 tokens** for a route question, **346** for a screen's whole context |
 | cost to run | one static binary: index 954 files in 330 ms, `check` 406 ms |
 
@@ -53,7 +53,8 @@ with the `file:line`. The measurements, methods and the comparison with other to
 
 ## The panel
 
-`weave serve` binds `127.0.0.1`, mints a write token per run, and serves one page:
+`weave serve` binds `127.0.0.1` and keeps its write token in `.weave/serve.token`, so a
+restart keeps the URLs people have open (`--new-token` rotates it). It serves one page:
 
 - **Specs** and **Wiki** are places in the menu, after Checks, and take the full content
   width. Specs runs the change records — a tick or reopen rewrites that one checkbox in
@@ -61,7 +62,8 @@ with the `file:line`. The measurements, methods and the comparison with other to
   `specs/capabilities/`, and has a **Views** table: every screen, the endpoints and tables
   it reaches, and the capability whose Parts table names that screen's file. Click a
   capability to read it as a page (title, prose, the Parts table) with a `raw` link to the
-  source; Wiki shows the generated pages in place, with a Rebuild button.
+  source and an `edit` that saves the Markdown (Ctrl+S); Wiki shows the generated pages in
+  place, with a Rebuild button.
 - **Check** and **File** share one dock beside the map, non-modal so the map stays usable:
   the gate output with clickable `file:line`, and one file window with a note field that
   writes through `weave remember`.

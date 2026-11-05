@@ -117,6 +117,38 @@ func SetSpecTask(root, change, task string, done bool) (name string, changed boo
 	return name, true, nil
 }
 
+// SaveSpecText replaces one spec file. The lock keeps two editors from writing over
+// each other and the temp file keeps a reader from seeing half a document.
+func SaveSpecText(root, rel, text string) error {
+	path := filepath.Join(root, filepath.FromSlash(rel))
+	unlock, err := lockFile(path)
+	if err != nil {
+		return err
+	}
+	defer unlock()
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".spec-*.tmp")
+	if err != nil {
+		return err
+	}
+	name := tmp.Name()
+	if _, err := tmp.WriteString(text); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(name)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(name)
+		return err
+	}
+	_ = os.Chmod(name, 0o644)
+	if err := os.Rename(name, path); err != nil {
+		_ = os.Remove(name)
+		return err
+	}
+	return nil
+}
+
 // changeDir resolves a slug, or an unambiguous short name, to a directory directly
 // under specs/changes and returns its base name.
 func changeDir(root, change string) (string, string, error) {
