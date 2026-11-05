@@ -140,21 +140,25 @@ func changeDir(root, change string) (string, string, error) {
 func lockFile(path string) (func(), error) {
 	lock := path + ".lock"
 	deadline := time.Now().Add(2 * time.Second)
+	var last error
 	for {
 		f, err := os.OpenFile(lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 		if err == nil {
 			_ = f.Close()
 			return func() { _ = os.Remove(lock) }, nil
 		}
-		if !errors.Is(err, fs.ErrExist) {
-			return nil, err
+		last = err
+		if errors.Is(err, fs.ErrExist) {
+			// A crashed writer leaves its file behind; a lock older than 5s is stale.
+			if info, statErr := os.Stat(lock); statErr == nil && time.Since(info.ModTime()) > 5*time.Second {
+				_ = os.Remove(lock)
+				continue
+			}
 		}
-		if info, statErr := os.Stat(lock); statErr == nil && time.Since(info.ModTime()) > 5*time.Second {
-			_ = os.Remove(lock)
-			continue
-		}
+		// On Windows a lock that is being removed surfaces as access denied, so every
+		// error is retried until the deadline rather than failing the write.
 		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("tasks.md is locked by another writer")
+			return nil, fmt.Errorf("tasks.md is locked by another writer: %w", last)
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
