@@ -48,3 +48,19 @@ document's opinion with evidence is a before/after on the same twelve tasks.
 
 Until then, the honest claim is the one in the README: the answer is 66–346 tokens, the gate
 is quiet when it is right, and a route question is not answerable with grep.
+
+## 2026-11-05: what changed since this log
+
+The log above still describes the ten-tool server that month was measured on. Since then:
+
+- **Four write tools joined the surface.** `task_done` and `task_reopen` close a task;
+  `change_new` and `change_delete` (`confirm: true`) create and remove a change record.
+  The schema is 1,434 tokens for fourteen tools, not 1,017 for ten. The advice to keep
+  the surface small still holds in general; these were added because the CLI, the panel
+  and MCP needed one writer, not because the log asked for them.
+- **The panel writes.** `weave serve` ticks and reopens tasks, starts changes, renders
+  capability specs, and maps every screen to its endpoints, tables and owning spec in a
+  Views table. The "explorer stays read-only" assumption is gone; writes go through
+  `weave.SetSpecTask`, `NewSpecChange` and `DeleteSpecChange`, with a `tasks.md` lock.
+- **Still open:** dropping `ask` from the advertised set, and whether spec prose should
+  be editable in the panel (today: rendered and raw, read-only).
