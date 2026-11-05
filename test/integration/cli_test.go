@@ -312,7 +312,7 @@ func TestMCPAndGain(t *testing.T) {
 	for _, tl := range list.Result.Tools {
 		names = append(names, tl.Name)
 	}
-	if strings.Join(names, ",") != "context,impact,search,remember,recall,plan,changes,task_done,task_reopen,change_new,change_delete,changed,status" {
+	if strings.Join(names, ",") != "context,impact,search,remember,recall,plan,changes,task_done,task_reopen,change_new,change_delete,changed,verify,status" {
 		t.Fatalf("tools: %v", names)
 	}
 	if !strings.Contains(lines[2], "GET /api/v1/orders") || !strings.Contains(lines[2], "tokens") {

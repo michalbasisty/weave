@@ -120,11 +120,11 @@ Every page is generated, so the documentation cannot drift into a document nobod
 |---|---|---|---|
 | a route question | **66 tokens** | found by hand: not findable with grep | `GET /api/v1/tasks/:id` is `/:id` under a mount in the source |
 | a screen's whole context | **346 tokens** | 4,657 for the screen's file alone; 61,687 gathering the same facts | about **13x** less than the file, about **178x** less than by hand |
-| install cost | **1,308 tokens** of MCP schema (13 tools) | GitHub 18,000, Notion 9,000, filesystem 3,500 | see the chart below |
+| install cost | **1,433 tokens** of MCP schema (14 tools) | GitHub 18,000, Notion 9,000, filesystem 3,500 | see the chart below |
 | index a 954-file repo | **330 ms** | | one static binary |
 | run the gate | **406 ms** | | quiet when it is right |
 
-<img src="docs/img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 1,308 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
+<img src="docs/img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 1,433 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
 
 The cheapest thing about it is not the tokens. It is that the answer is *right*: a route that
 grep cannot find is answered with the `file:line`, and a gate that names the broken caller
@@ -173,6 +173,7 @@ every answer ends with the tokens it cost:
 | `change_new(name)` | creates `proposal.md`, `tasks.md` and `spec-delta.md`, as `weave spec new` |
 | `change_delete(change, confirm)` | removes one change record; destructive, needs `confirm: true` |
 | `changed(ref)` | what the graph gained or lost since a git ref |
+| `verify(files?)` | the gate on the current diff: broken calls, untested endpoints, the owning change, and the commands to run; `strict: true` fails on an untested endpoint |
 | `remember` / `recall` | a note beside the files it concerns, returned as a claim, never evidence |
 
 `context` answers "I know the file, what is it?", `plan` answers "I know the spec, what

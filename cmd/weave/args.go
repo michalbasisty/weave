@@ -216,13 +216,5 @@ func graphFor() (*weave.Graph, int) {
 }
 
 func loadCases() []junit.Case {
-	p, ok := junit.FindJUnitFile(root)
-	if !ok {
-		return nil
-	}
-	text, err := os.ReadFile(p)
-	if err != nil {
-		return nil
-	}
-	return junit.Parse(string(text))
+	return junit.Load(root)
 }

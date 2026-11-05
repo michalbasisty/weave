@@ -159,6 +159,15 @@ var toolDefs = []tool{
 		}},
 	},
 	{
+		Name:        "verify",
+		Description: "Run the gate on the current diff: broken calls, untested endpoints, the owning change, and the exact commands to run the tests. Call it before saying done.",
+		InputSchema: schema{Type: "object", Properties: props{
+			{"files", propDef{Type: "array", Items: &propDef{Type: "string"}, Description: "repo-relative paths; default: the git diff"}},
+			{"against", propDef{Type: "string", Description: "git ref to compare against"}},
+			{"strict", propDef{Type: "boolean", Description: "an untested endpoint fails the gate"}},
+		}},
+	},
+	{
 		Name:        "status",
 		Description: "Graph health: node counts, endpoints no page calls, endpoints no test covers, pages without e2e.",
 		InputSchema: schema{Type: "object", Properties: props{}},

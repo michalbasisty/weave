@@ -17,6 +17,7 @@ import (
 	"github.com/michalbasisty/weave/internal/delta"
 	"github.com/michalbasisty/weave/internal/grep"
 	"github.com/michalbasisty/weave/internal/usage"
+	"github.com/michalbasisty/weave/internal/verify"
 	"github.com/michalbasisty/weave/internal/version"
 	"github.com/michalbasisty/weave/internal/weave"
 )
@@ -37,6 +38,7 @@ const instructions = "weave maps a repo: UI pages -> HTTP endpoints -> modules -
 	"changed() tells you what the graph gained or lost since a branch point. " +
 	"Call remember(files, note) after you learn something the next session needs; context() returns those notes, labelled as claims, not evidence. " +
 	"context(depth: \"code\") adds a short window at each anchor when you need the exact lines. " +
+	"Before saying a task is done, call verify(): it runs the gate on the diff and returns the commands that prove it. " +
 	"No tool returns whole files; text search returns matching lines only, and every output is capped."
 
 type GraphSource func(project string) (*weave.Graph, error)
@@ -350,6 +352,8 @@ func callTool(name string, a map[string]any, g *weave.Graph, invalidate func()) 
 			return "", &rpcError{-32602, "cannot read " + ref}
 		}
 		return delta.Delta(g, base, name, truthy(a["all"])), nil
+	case "verify":
+		return verify.Run(g, g.Root, strAt(a, "against"), truthy(a["strict"]), filesArg(a)).Text(), nil
 	case "status":
 		return weave.Doctor(g) + "\n" + runtimeLine(g), nil
 	default:

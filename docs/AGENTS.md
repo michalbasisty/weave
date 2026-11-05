@@ -55,8 +55,8 @@ The log above still describes the ten-tool server that month was measured on. Si
 
 - **Four write tools joined the surface.** `task_done` and `task_reopen` close a task;
   `change_new` and `change_delete` (`confirm: true`) create and remove a change record.
-  `ask` is no longer advertised (it stays `weave ask`), so the schema is 1,308 tokens for
-  thirteen tools. The advice to keep the surface small still holds in general; the write
+  `ask` is no longer advertised (it stays `weave ask`), so the schema is 1,433 tokens for
+  fourteen tools. The advice to keep the surface small still holds in general; the write
   tools were added because the CLI, the panel and MCP needed one writer.
 - **The panel writes.** `weave serve` ticks and reopens tasks, starts changes, renders
   capability specs, and maps every screen to its endpoints, tables and owning spec in a
@@ -65,3 +65,6 @@ The log above still describes the ten-tool server that month was measured on. Si
   `NewSpecChange`, `DeleteSpecChange` and `SaveSpecText`.
 - **Still open:** whether the panel should grow a structured Parts editor rather than the
   Markdown editor it has now.
+- **`verify` joined the surface.** One call returns what `weave check` prints on the diff
+  plus the commands that prove it, so a self-check costs one call instead of none.
+- The surface is now 14 tools and 1,433 tokens.

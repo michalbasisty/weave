@@ -209,6 +209,25 @@ func TestTaskDoneAndReopenOverMCP(t *testing.T) {
 	}
 }
 
+// verify is the gate over MCP: the lines `weave check` prints, then the receipt.
+func TestVerifyOverMCP(t *testing.T) {
+	root := filepath.Join("..", "..", "test", "fixture")
+	g := weave.BuildGraph(root)
+	src := func(string) (*weave.Graph, error) { return g, nil }
+	msgs, _ := replay(t, "", src, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"verify","arguments":{"files":["packages/backend/src/modules/orders/orders.routes.ts"]}}}`+"\n")
+
+	text := msgs[0]["result"].(map[string]any)["content"].([]any)[0].(map[string]any)["text"].(string)
+	if !strings.HasPrefix(text, "check: 1 file(s)") || !strings.Contains(text, "2 endpoint(s)") {
+		t.Fatalf("verify reply: %s", text)
+	}
+	if !strings.Contains(text, "  run  cd packages/web") {
+		t.Fatalf("verify did not name the command: %s", text)
+	}
+	if !regexp.MustCompile(`\x{2014} \d+ tokens · graph \d+s old`).MatchString(text) {
+		t.Fatalf("receipt missing: %s", text)
+	}
+}
+
 // A change is created and removed over MCP; the destructive tool needs confirm, and
 // both writes drop the cached graph.
 func TestChangeNewAndDeleteOverMCP(t *testing.T) {

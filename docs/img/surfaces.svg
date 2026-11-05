@@ -57,7 +57,7 @@
   <rect class="box" x="464" y="212" width="340" height="44" rx="6"/>
   <text class="body" x="482" y="240"><tspan font-weight="600">Wiki</tspan> · weave wiki · a page per thing</text>
   <rect class="box" x="464" y="266" width="340" height="44" rx="6"/>
-  <text class="body" x="482" y="294"><tspan font-weight="600">Agent</tspan> · weave mcp · 13 tools, 1,308 tokens</text>
+  <text class="body" x="482" y="294"><tspan font-weight="600">Agent</tspan> · weave mcp · 14 tools, 1,433 tokens</text>
 
   <!-- who -->
   <text class="kicker" x="836" y="124">CI, STOP HOOK, PRE-COMMIT</text>

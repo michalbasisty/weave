@@ -65,6 +65,20 @@ func FindJUnitFile(root string) (string, bool) {
 	return hits[0].path, true
 }
 
+// Load reads the newest JUnit report under root. It returns nil when the project
+// has written none, so a gate can say the evidence was not checked.
+func Load(root string) []Case {
+	p, ok := FindJUnitFile(root)
+	if !ok {
+		return nil
+	}
+	text, err := os.ReadFile(p)
+	if err != nil {
+		return nil
+	}
+	return Parse(string(text))
+}
+
 // Parse reads the test cases out of a JUnit document. A malformed document keeps
 // the cases read before the error, rather than failing the command.
 func Parse(text string) []Case {
