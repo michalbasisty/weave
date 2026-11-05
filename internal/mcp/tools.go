@@ -166,14 +166,18 @@ var toolDefs = []tool{
 }
 
 func visibleTools(multi, manager bool) []tool {
-	base := toolDefs
-	if manager {
-		base = nil
-		for _, t := range toolDefs {
-			if t.Name == "ask" || t.Name == "plan" || t.Name == "status" {
-				base = append(base, t)
+	base := make([]tool, 0, len(toolDefs))
+	for _, t := range toolDefs {
+		if manager {
+			if t.Name != "ask" && t.Name != "plan" && t.Name != "status" {
+				continue
 			}
+		} else if t.Name == "ask" {
+			// ask stays a CLI command: the usage log never called it, and a tool that
+			// costs a model call should not sit in every session's schema.
+			continue
 		}
+		base = append(base, t)
 	}
 	if !multi {
 		return base
