@@ -26,36 +26,60 @@
     el('span', { class: 'wdot', id: 'wdot' }),
     el('span', { id: 'wgate-text', text: 'checking…' }),
   ]);
-  const btnWiki = el('button', { class: 'wact', type: 'button', title: 'Regenerate the wiki and open it' }, [
-    el('span', { text: 'Wiki' }),
-  ]);
-  const bar = el('div', { class: 'wbar', role: 'toolbar', 'aria-label': 'Actions' }, [gatePill, btnWiki]);
+  const bar = el('div', { class: 'wbar', role: 'toolbar', 'aria-label': 'Actions' }, [gatePill]);
   const theme = document.getElementById('theme');
   if (theme && theme.parentElement) theme.parentElement.insertBefore(bar, theme);
   else document.body.append(bar);
 
-  /* ---------------------------------------------------------------- drawer */
+  /* ---------------------------------------------------------------- the dock */
+  // The transient tools: the gate output and one file window with its note. Specs and
+  // the wiki are places in the menu instead, because they are read at full width.
   const dialog = el('dialog', { class: 'wdialog', 'aria-label': 'Panel' });
-  const dTitle = el('b', { text: '' });
+  const dTitle = el('b', { text: 'Panel' });
   const dKind = el('span', { class: 'wkind', text: '' });
   const dClose = el('button', { type: 'button', title: 'Close', 'aria-label': 'Close' }, [el('span', { text: '×' })]);
-  const dBody = el('div', { class: 'wbody' });
-  dialog.append(el('header', {}, [dTitle, dKind, dClose]), dBody);
+  const tabs = [['check', 'Check'], ['file', 'File']];
+  const tabNames = {
+    check: ['weave check', 'working tree'],
+    file: ['File', ''],
+  };
+  const tabButtons = {};
+  const panes = {};
+  const tabBar = el('div', { class: 'wtabs', role: 'tablist', 'aria-label': 'Panel sections' });
+  for (const [key, label] of tabs) {
+    panes[key] = el('div', { class: 'wpane', role: 'tabpanel' });
+    const b = el('button', { type: 'button', role: 'tab', 'aria-selected': 'false', text: label });
+    b.addEventListener('click', () => showPanel(key));
+    tabButtons[key] = b;
+    tabBar.append(b);
+  }
+  const dBody = el('div', { class: 'wbody' }, tabs.map(([k]) => panes[k]));
+  dialog.append(el('header', {}, [dTitle, dKind, dClose]), tabBar, dBody);
   document.body.append(dialog);
 
-  const openDrawer = (title, kind, nodes) => {
-    dTitle.textContent = title;
-    dTitle.title = title;
-    dKind.textContent = kind || '';
-    dBody.replaceChildren(...nodes);
-    if (!dialog.open) dialog.showModal();
-    dClose.focus();
+  const setPane = (key, nodes) => panes[key].replaceChildren(...nodes);
+
+  const showPanel = (key, title, kind) => {
+    if (!panes[key]) return;
+    const wasOpen = dialog.open;
+    for (const [k, b] of Object.entries(tabButtons)) b.setAttribute('aria-selected', k === key ? 'true' : 'false');
+    for (const [k, p] of Object.entries(panes)) p.dataset.on = k === key ? '1' : '0';
+    dTitle.textContent = title || tabNames[key][0];
+    dTitle.title = dTitle.textContent;
+    dKind.textContent = kind === undefined ? tabNames[key][1] : kind;
+    if (!dialog.open) dialog.show();
+    if (!wasOpen) tabButtons[key].focus();
   };
+
   dClose.addEventListener('click', () => dialog.close());
-  dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
-  // Escape belongs to the dialog while it is open: the page's own Escape clears the
-  // selection, which would remove the item you were reading.
-  dialog.addEventListener('keydown', e => { if (e.key === 'Escape') e.stopPropagation(); }, true);
+  // Escape closes the dock and must not reach the page's own Escape handler, which
+  // clears the map selection.
+  dialog.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.stopPropagation(); dialog.close(); }
+  }, true);
+
+  setPane('check', [el('p', { class: 'whint', text: 'Click the gate to run weave check.' })]);
+  setPane('file', [el('p', { class: 'whint', text: 'Open a file from a file:line or a path chip.' })]);
 
   /* ------------------------------------------------- file:line is clickable */
   const linkify = text => {
@@ -76,7 +100,11 @@
   const openFile = (path, line) => {
     api('/api/file?path=' + encodeURIComponent(path) + (line ? '&line=' + line : ''))
       .then(res => {
-        if (res.error) { openDrawer(path, 'file', [el('p', { class: 'wbad', text: res.error })]); return; }
+        if (res.error) {
+          setPane('file', [el('p', { class: 'wbad', text: res.error })]);
+          showPanel('file', path);
+          return;
+        }
         const pre = el('pre', {});
         pre.append(linkify(res.text));
         const note = el('div', { class: 'wnote' });
@@ -89,11 +117,12 @@
           api('/api/note', { note: text, files: [path] }).then(r => {
             save.disabled = false;
             input.value = '';
-            dBody.prepend(el('p', { class: r.exit === 0 ? 'wok' : 'wbad', text: r.exit === 0 ? 'Saved. context() returns it as a note, not evidence.' : r.output }));
+            panes.file.prepend(el('p', { class: r.exit === 0 ? 'wok' : 'wbad', text: r.exit === 0 ? 'Saved. context() returns it as a note, not evidence.' : r.output }));
           });
         });
         note.append(input, save);
-        openDrawer(res.path, 'lines ' + res.start + '–' + (res.start + res.text.split('\n').length - 1) + ' of ' + res.total, [pre, note]);
+        setPane('file', [pre, note]);
+        showPanel('file', res.path, 'lines ' + res.start + '–' + (res.start + res.text.split('\n').length - 1) + ' of ' + res.total);
       });
   };
 
@@ -112,26 +141,319 @@
       checkedAt = Date.now();
       const bad = r.exit !== 0;
       setGate(bad ? 'bad' : 'ok', bad ? 'contract broken' : 'checked ' + Math.round((Date.now() - t0) / 100) / 10 + 's');
-      if (!show) return;
       const pre = el('pre', {});
       pre.append(linkify(r.output || '(no output)'));
-      openDrawer('weave check', 'working tree', [
+      setPane('check', [
         el('p', { class: bad ? 'wbad' : 'wok', text: bad ? 'Exit ' + r.exit + ' — the contract is broken.' : 'Exit 0 — every call matches an endpoint.' }),
         pre,
       ]);
+      if (show) showPanel('check');
     }).catch(() => setGate('bad', 'check failed'));
   };
   gatePill.addEventListener('click', () => runCheck(true));
-  btnWiki.addEventListener('click', () => {
-    btnWiki.disabled = true;
-    btnWiki.textContent = 'Building…';
-    api('/api/wiki', {}).then(r => {
-      btnWiki.disabled = false;
-      btnWiki.textContent = 'Wiki';
-      if (r.exit === 0) window.open(r.url, '_blank');
-      else openDrawer('weave wiki', 'failed', [el('pre', { text: r.output })]);
+
+  /* --------------------------------------------------- full views in the menu */
+  // Specs and Wiki are places, not panes: the generated map is two columns, and these
+  // want the whole content width. They live beside #list/#detail so the map's own
+  // renderer keeps working untouched.
+  const main = document.getElementById('main');
+  const specsPage = el('div', { class: 'wfullpage wspecspage' });
+  const wikiBar = el('div', { class: 'wwikibar' }, [
+    el('b', { text: 'Wiki' }),
+    el('span', { class: 'wkind', text: 'generated from the index' }),
+    el('button', { type: 'button', class: 'wmark', text: 'Rebuild' }),
+  ]);
+  const wikiBody = el('div', { class: 'wwikibody' });
+  const wikiPage = el('div', { class: 'wfullpage wwikipage' }, [wikiBar, wikiBody]);
+  const fullHost = el('section', { id: 'wfullview' }, [specsPage, wikiPage]);
+  if (main) main.append(fullHost);
+
+  let activeFull = '';
+  let specsDirty = false;
+  let specsFocus = '';
+  let specsHost = null;
+
+  const fail = output => {
+    setPane('check', [el('pre', { text: output })]);
+    showPanel('check', 'weave spec', 'failed');
+  };
+
+  const tickButton = (change, task, after) => {
+    const label = (task.done ? 'Reopen ' : 'Mark ') + task.id + (task.done ? '' : ' done');
+    const box = el('button', {
+      type: 'button',
+      class: 'wtick' + (task.done ? ' done' : ''),
+      'data-task': change + ' ' + task.id,
+      'aria-pressed': task.done ? 'true' : 'false',
+      'aria-label': label,
+      title: label,
+      text: task.done ? '✓' : '',
     });
-  });
+    box.addEventListener('click', () => {
+      box.disabled = true;
+      api('/api/task-done', { change, task: task.id, done: !task.done }).then(r => {
+        if (r.exit !== 0) {
+          box.disabled = false;
+          if (specsHost) specsHost.prepend(el('p', { class: 'wbad', text: r.output }));
+          else fail(r.output);
+          return;
+        }
+        after();
+      }).catch(() => { box.disabled = false; });
+    });
+    return box;
+  };
+
+  const renderSpecs = host => {
+    specsHost = host;
+    api('/api/specs').then(r => {
+      if (r.error) { host.replaceChildren(el('p', { class: 'wbad', text: r.error })); return; }
+      const changes = r.changes || [];
+      const caps = r.capabilities || [];
+      const open = changes.reduce((n, c) => n + (c.total - c.done), 0);
+      const tickRow = (change, task) => {
+        const box = tickButton(change, task, () => {
+          specsDirty = true;
+          specsFocus = change + ' ' + task.id;
+          renderSpecs(host);
+        });
+        return el('li', {}, [box, el('span', { class: 'wtask', text: task.id + '  ' + task.title })]);
+      };
+      const nodes = [
+        el('h2', { class: 'wfullhead', text: 'Specs' }),
+        el('p', {
+          class: 'whint',
+          text: changes.length + ' change' + (changes.length === 1 ? '' : 's') + ' · ' + open +
+            ' open task' + (open === 1 ? '' : 's') + ' · ' + caps.length + ' capabilit' + (caps.length === 1 ? 'y' : 'ies') + '.',
+        }),
+      ];
+      const views = r.views || [];
+      if (views.length) {
+        const body = el('tbody', {});
+        for (const v of views) {
+          const conn = [];
+          if (v.endpoints.length) {
+            conn.push(v.endpoints.length + ' endpoint' + (v.endpoints.length === 1 ? '' : 's') + ': ' +
+              v.endpoints.slice(0, 3).join(', ') + (v.endpoints.length > 3 ? ' +' + (v.endpoints.length - 3) : ''));
+          } else {
+            conn.push('no endpoint');
+          }
+          if (v.tables.length) {
+            conn.push('tables: ' + v.tables.slice(0, 3).join(', ') + (v.tables.length > 3 ? ' +' + (v.tables.length - 3) : ''));
+          }
+          const screen = el('a', { href: '#node/' + encodeURIComponent(v.id), text: v.name });
+          const spec = v.owner
+            ? el('a', { href: '#specs/' + encodeURIComponent(v.owner), text: v.owner })
+            : el('span', { class: 'wkind', text: 'unowned' });
+          body.append(el('tr', {}, [
+            el('td', { class: 'wvname' }, [screen]),
+            el('td', { class: 'wvconn', text: conn.join(' · '), title: v.endpoints.concat(v.tables).join(', ') }),
+            el('td', { class: 'wvspec' }, [spec]),
+          ]));
+        }
+        nodes.push(el('section', { class: 'wspec' }, [
+          el('div', { class: 'wspechead' }, [
+            el('b', { text: 'Views' }),
+            el('span', { class: 'wkind', text: String(views.length) }),
+          ]),
+          el('p', { class: 'whint', text: 'Every screen, the endpoints and tables it reaches, and the capability whose Parts table names its file.' }),
+          el('div', { class: 'wtablewrap' }, [
+            el('table', { class: 'wviewtable' }, [
+              el('thead', {}, [el('tr', {}, [
+                el('th', { text: 'Screen' }),
+                el('th', { text: 'Connections' }),
+                el('th', { text: 'Spec' }),
+              ])]),
+              body,
+            ]),
+          ]),
+        ]));
+      }
+      if (!changes.length) {
+        nodes.push(el('p', { class: 'whint', text: 'No change record yet. One is specs/changes/<slug>/tasks.md with checkbox tasks.' }));
+      }
+      for (const c of changes) {
+        const ul = el('ul', { class: 'wtasks' });
+        for (const t of c.tasks) ul.append(tickRow(c.slug, t));
+        nodes.push(el('section', { class: 'wspec' }, [
+          el('div', { class: 'wspechead' }, [
+            el('b', { text: c.slug }),
+            el('span', { class: 'wkind', text: c.done + '/' + c.total }),
+          ]),
+          ul,
+        ]));
+      }
+      // Capability specs live in the repo as files; weave indexes their requirements
+      // but has no node for the capability, so this reads the directory.
+      if (caps.length) {
+        const ul = el('ul', { class: 'wcaps' });
+        for (const cap of caps) {
+          const link = el('a', { href: '#specs/' + encodeURIComponent(cap.name), class: 'wcname', text: cap.name });
+          const openBtn = el('button', { type: 'button', class: 'wopen', text: 'raw' });
+          openBtn.addEventListener('click', () => openFile(cap.file, cap.line || 0));
+          ul.append(el('li', {}, [
+            link,
+            el('span', { class: 'wkind', text: cap.parts + ' parts · ' + cap.reqs + ' reqs' }),
+            openBtn,
+          ]));
+        }
+        nodes.push(el('section', { class: 'wspec' }, [
+          el('div', { class: 'wspechead' }, [
+            el('b', { text: 'Capabilities' }),
+            el('span', { class: 'wkind', text: String(caps.length) }),
+          ]),
+          ul,
+        ]));
+      }
+
+      const name = el('input', { type: 'text', placeholder: 'new change — billing-retry', 'aria-label': 'New change name', spellcheck: 'false' });
+      const create = el('button', { type: 'button', text: 'Create' });
+      create.addEventListener('click', () => {
+        const value = name.value.trim();
+        if (!value) return;
+        create.disabled = true;
+        api('/api/spec-new', { name: value }).then(res => {
+          create.disabled = false;
+          if (res.exit !== 0) { host.prepend(el('p', { class: 'wbad', text: res.output })); return; }
+          specsDirty = true;
+          name.value = '';
+          renderSpecs(host);
+        }).catch(() => { create.disabled = false; });
+      });
+      nodes.push(el('div', { class: 'wnote' }, [name, create]));
+      host.replaceChildren(...nodes);
+      // A tick re-renders the list; keep focus on the box you pressed.
+      if (specsFocus) {
+        const want = specsFocus;
+        specsFocus = '';
+        for (const b of host.querySelectorAll('.wtick')) {
+          if (b.dataset.task === want) { b.focus(); break; }
+        }
+      }
+    });
+  };
+
+  const renderSpecPage = (host, name) => {
+    host.replaceChildren(el('p', { class: 'whint', text: 'Loading…' }));
+    const path = 'specs/capabilities/' + name + '/spec.md';
+    api('/api/spec?path=' + encodeURIComponent(path)).then(r => {
+      const back = el('a', { href: '#specs', class: 'wback', text: '← All specs' });
+      if (r.error) {
+        host.replaceChildren(back, el('p', { class: 'wbad', text: r.error }));
+        return;
+      }
+      const raw = el('button', { type: 'button', class: 'wopen', text: 'raw' });
+      raw.addEventListener('click', () => openFile(path, 0));
+      const bar = el('div', { class: 'wspecbar' }, [
+        back,
+        el('span', { class: 'wkind', text: r.path }),
+        raw,
+      ]);
+      host.replaceChildren(bar, el('article', { class: 'specdoc', html: r.html }));
+    }).catch(() => host.replaceChildren(el('p', { class: 'wbad', text: 'Could not read the spec.' })));
+  };
+
+  const buildWiki = () => {
+    wikiBody.replaceChildren(el('p', { class: 'whint', text: 'Building…' }));
+    api('/api/wiki', {}).then(r => {
+      if (r.exit === 0) wikiBody.replaceChildren(el('iframe', { class: 'wwikiframe', src: '/wiki/', title: 'Wiki' }));
+      else wikiBody.replaceChildren(el('pre', { text: r.output }));
+    }).catch(() => wikiBody.replaceChildren(el('p', { class: 'wbad', text: 'Wiki build failed.' })));
+  };
+  wikiBar.querySelector('.wmark').addEventListener('click', buildWiki);
+
+  const setCrumbs = (kind, name) => {
+    const crumbs = document.getElementById('crumbs');
+    if (!crumbs || !kind) return;
+    const first = crumbs.querySelector('a');
+    const stamp = crumbs.querySelector('.stamp');
+    const ol = el('ol', {});
+    const home = el('li', {});
+    if (first) home.append(first.cloneNode(true));
+    else home.append(el('a', { href: '#today', text: 'weave' }));
+    home.append(el('span', { class: 'sep', text: '›' }));
+
+    const here = el('li', {});
+    if (kind === 'wiki') {
+      here.append(el('span', { 'aria-current': 'page', text: 'Wiki' }));
+      ol.append(home, here);
+    } else if (name) {
+      here.append(el('a', { href: '#specs', text: 'Specs' }));
+      here.append(el('span', { class: 'sep', text: '›' }));
+      const leaf = el('li', {});
+      leaf.append(el('span', { 'aria-current': 'page', text: name }));
+      ol.append(home, here, leaf);
+    } else {
+      here.append(el('span', { 'aria-current': 'page', text: 'Specs' }));
+      ol.append(home, here);
+    }
+    crumbs.replaceChildren(ol);
+    if (stamp) crumbs.append(stamp);
+  };
+
+  const showFull = (kind, name) => {
+    if (!main) return;
+    main.classList.add('wfull');
+    specsPage.dataset.on = kind === 'specs' ? '1' : '0';
+    wikiPage.dataset.on = kind === 'wiki' ? '1' : '0';
+    if (kind === 'specs') {
+      if (name) renderSpecPage(specsPage, name);
+      else renderSpecs(specsPage);
+    } else if (!wikiBody.querySelector('iframe') && !wikiBody.querySelector('pre')) {
+      buildWiki();
+    }
+    setCrumbs(kind, name);
+  };
+
+  const hideFull = () => {
+    if (!main) return;
+    main.classList.remove('wfull');
+    specsPage.dataset.on = '0';
+    wikiPage.dataset.on = '0';
+  };
+
+  // The map owns #tabs; the two views are appended after Checks and restored whenever
+  // the map re-renders the menu.
+  const ensureTabs = () => {
+    const nav = document.getElementById('tabs');
+    if (!nav) return;
+    if (!nav.querySelector('[data-wtab]')) {
+      nav.append(el('a', { href: '#specs', 'data-wtab': 'specs', text: 'Specs' }));
+      nav.append(el('a', { href: '#wiki', 'data-wtab': 'wiki', text: 'Wiki' }));
+    }
+    for (const a of nav.querySelectorAll('a')) {
+      if (a.dataset.wtab) {
+        if (a.dataset.wtab === activeFull) a.setAttribute('aria-current', 'page');
+        else a.removeAttribute('aria-current');
+      } else if (activeFull) {
+        a.removeAttribute('aria-current');
+      }
+    }
+  };
+  const tabsNav = document.getElementById('tabs');
+  if (tabsNav) new MutationObserver(ensureTabs).observe(tabsNav, { childList: true });
+  ensureTabs();
+
+  const route = () => {
+    const h = location.hash;
+    if (h === '#specs' || h.startsWith('#specs/') || h === '#wiki') {
+      let name = '';
+      if (h.startsWith('#specs/')) {
+        activeFull = 'specs';
+        try { name = decodeURIComponent(h.slice(7)); } catch (e) { name = ''; }
+      } else {
+        activeFull = h === '#wiki' ? 'wiki' : 'specs';
+      }
+      showFull(activeFull, name);
+      ensureTabs();
+      return;
+    }
+    const was = activeFull;
+    activeFull = '';
+    hideFull();
+    ensureTabs();
+    if (was === 'specs' && specsDirty) { specsDirty = false; location.reload(); }
+  };
 
   /* ------------------------------------------------------- since you reviewed */
   const kindWord = k => ({ endpoint: 'endpoint', page: 'screen', module: 'module', table: 'table' }[k] || k);
@@ -200,7 +522,7 @@
     if (isToday()) loadReview();
   };
   // hashchange fires on window; a listener on document never sees it.
-  window.addEventListener('hashchange', () => { if (dialog.open) dialog.close(); attribute(); });
+  window.addEventListener('hashchange', () => { attribute(); route(); });
 
   /* an Open button beside every path chip the page already renders */
   const addOpeners = () => {
@@ -211,13 +533,49 @@
       chip.after(open);
     }
   };
-  addOpeners();
-  // Only the Open buttons need the observer; the review sheet has its own slot.
-  new MutationObserver(addOpeners).observe(document.getElementById('main') || document.body, { childList: true, subtree: true });
+
+  /* the same tick, where a change page states the next task: the panel is the only
+     surface that can write, so the hosted page gets the action the static one cannot */
+  const changeSlug = () => {
+    const h = location.hash || '';
+    if (h.indexOf('#node/') !== 0) return '';
+    let id = '';
+    try { id = decodeURIComponent(h.slice(6)); } catch (e) { return ''; }
+    return id.indexOf('change:') === 0 ? id.slice(7) : '';
+  };
+
+  const addTaskTicks = () => {
+    const slug = changeSlug();
+    if (!slug) return;
+    const detail = document.getElementById('detail');
+    if (!detail) return;
+    for (const li of detail.querySelectorAll('.tasks > li')) {
+      if (li.querySelector('.wtick')) continue;
+      const ring = li.querySelector('.ring[data-k="task"]');
+      const tid = li.querySelector('.tid');
+      if (!ring || !tid) continue;
+      const done = !!(li.parentElement && li.parentElement.classList.contains('done'));
+      ring.remove();
+      li.classList.add('wtickrow');
+      li.prepend(tickButton(slug, { id: tid.textContent.trim(), done }, () => location.reload()));
+    }
+    const nt = detail.querySelector('.nexttask .nt1');
+    if (nt && !nt.querySelector('.wtick')) {
+      const tid = nt.querySelector('.tid');
+      if (tid) nt.prepend(tickButton(slug, { id: tid.textContent.trim(), done: false }, () => location.reload()));
+    }
+  };
+
+  const enhance = () => { addOpeners(); addTaskTicks(); };
+  enhance();
+  // Only the Open buttons and the change-page ticks need the observer; the review
+  // sheet has its own slot.
+  new MutationObserver(enhance).observe(document.getElementById('main') || document.body, { childList: true, subtree: true });
 
   /* first paint: check once, load the sheet, then re-check when the tab returns */
   runCheck(false);
   attribute();
+  route();
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && Date.now() - checkedAt > 30000) runCheck(false);
   });

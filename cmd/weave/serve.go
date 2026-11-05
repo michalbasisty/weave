@@ -43,8 +43,8 @@ func cmdServe() int {
 	addr := "127.0.0.1:" + strconv.Itoa(port)
 	srv := &http.Server{Addr: addr, Handler: server.Handler(cfg), ReadHeaderTimeout: 5 * time.Second}
 	fmt.Printf("weave serve: http://%s/?t=%s\n", addr, token)
-	fmt.Println("  one page: the map, a Check button, file:line that opens, notes, the wiki under /wiki/")
-	fmt.Println("  Ctrl+C stops it. Loopback only; it writes nothing outside .weave/ and the files you note.")
+	fmt.Println("  one page: the map, a Check button, file:line that opens, notes, specs, the wiki under /wiki/")
+	fmt.Println("  Ctrl+C stops it. Loopback only; it writes nothing outside .weave/, specs/ and the files you note.")
 	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

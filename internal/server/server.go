@@ -1,6 +1,6 @@
 // Package server serves the explorer and the wiki from one process, and lets the
 // page do the things a person actually needs: run the gate, open the file behind a
-// failure, leave a note, close a task, regenerate the wiki.
+// failure, leave a note, tick a task or start a change, regenerate the wiki.
 //
 // It binds loopback only and refuses cross-origin writes. It is not a team server and
 // must not become one: the product's claim is a local gate, not a hosted dashboard.
@@ -17,6 +17,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -213,18 +215,89 @@ func Handler(c Config) http.Handler {
 		writeJSON(w, 200, map[string]any{"exit": code, "output": out})
 	})
 
-	// task-done closes one task in a change record, through the same command the CLI uses.
+	// specs lists every change record with its task ids: the data the Specs drawer
+	// edits. The graph is the source, so a record added by hand appears too.
+	mux.HandleFunc("/api/specs", func(w http.ResponseWriter, r *http.Request) {
+		g, err := c.Graph()
+		if err != nil {
+			writeJSON(w, 500, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"changes": panelSpecs(g), "capabilities": panelCapabilities(c.Root, g), "views": panelViews(c.Root, g)})
+	})
+
+	// spec renders one spec file for people. Only Markdown under specs/ is served, and
+	// the renderer escapes before it adds a tag.
+	mux.HandleFunc("/api/spec", func(w http.ResponseWriter, r *http.Request) {
+		rel := filepath.ToSlash(strings.TrimSpace(strings.TrimPrefix(r.URL.Query().Get("path"), "./")))
+		if !strings.HasPrefix(rel, "specs/") || !strings.HasSuffix(rel, ".md") || strings.Contains(rel, "..") || strings.Contains(rel, `\`) {
+			writeJSON(w, 400, map[string]string{"error": "a path under specs/ ending .md"})
+			return
+		}
+		full := filepath.Join(c.Root, filepath.FromSlash(rel))
+		abs, err := filepath.Abs(full)
+		rootAbs, _ := filepath.Abs(c.Root)
+		if err != nil || !strings.HasPrefix(abs, rootAbs+string(os.PathSeparator)) {
+			writeJSON(w, 400, map[string]string{"error": "outside the repo"})
+			return
+		}
+		info, err := os.Stat(abs)
+		if err != nil || info.Size() > 512*1024 {
+			writeJSON(w, 400, map[string]string{"error": "unreadable or larger than 512 KB"})
+			return
+		}
+		raw, err := os.ReadFile(abs)
+		if err != nil {
+			writeJSON(w, 400, map[string]string{"error": err.Error()})
+			return
+		}
+		md := string(raw)
+		writeJSON(w, 200, map[string]any{"path": rel, "title": specTitle(md), "html": renderSpecMD(md)})
+	})
+
+	// spec-new creates the three files a change needs, through `weave spec new`.
+	mux.HandleFunc("/api/spec-new", func(w http.ResponseWriter, r *http.Request) {
+		if !c.authed(r) {
+			writeJSON(w, 403, map[string]string{"error": "missing token"})
+			return
+		}
+		var body struct{ Name, Title string }
+		name := ""
+		if json.NewDecoder(r.Body).Decode(&body) == nil {
+			name = strings.TrimSpace(body.Name)
+		}
+		if !nameOK.MatchString(name) {
+			writeJSON(w, 400, map[string]string{"error": "a name is letters, digits, dash or underscore: billing-retry"})
+			return
+		}
+		args := []string{"spec", "new", name, "--root", c.Root}
+		if strings.TrimSpace(body.Title) != "" {
+			args = append(args, "--title", body.Title)
+		}
+		out, code := c.run(args...)
+		writeJSON(w, 200, map[string]any{"exit": code, "output": out})
+	})
+
+	// task-done ticks or reopens one task in a change record, through the same
+	// command the CLI uses. done defaults to true for an older page.
 	mux.HandleFunc("/api/task-done", func(w http.ResponseWriter, r *http.Request) {
 		if !c.authed(r) {
 			writeJSON(w, 403, map[string]string{"error": "missing token"})
 			return
 		}
-		var body struct{ Change, Task string }
-		if json.NewDecoder(r.Body).Decode(&body) != nil || body.Change == "" || body.Task == "" {
+		var body struct {
+			Change, Task string
+			Done         *bool
+		}
+		if json.NewDecoder(r.Body).Decode(&body) != nil || !nameOK.MatchString(body.Change) || !nameOK.MatchString(body.Task) {
 			writeJSON(w, 400, map[string]string{"error": "change and task are required"})
 			return
 		}
-		out, code := c.run("spec", "task", "done", body.Change, body.Task, "--root", c.Root)
+		sub := "done"
+		if body.Done != nil && !*body.Done {
+			sub = "reopen"
+		}
+		out, code := c.run("spec", "task", sub, body.Change, body.Task, "--root", c.Root)
 		writeJSON(w, 200, map[string]any{"exit": code, "output": out})
 	})
 
@@ -305,6 +378,247 @@ func Handler(c Config) http.Handler {
 	})
 
 	return localOnly(mux)
+}
+
+// nameOK guards the two values a browser passes to `weave spec`: a change slug and
+// a task id. No separator and no leading dot, so the command cannot leave
+// specs/changes.
+var nameOK = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+type panelTask struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Done  bool   `json:"done"`
+}
+
+type panelChange struct {
+	Slug  string      `json:"slug"`
+	File  string      `json:"file,omitempty"`
+	Done  int         `json:"done"`
+	Total int         `json:"total"`
+	Tasks []panelTask `json:"tasks"`
+}
+
+type panelCapability struct {
+	Name  string `json:"name"`
+	File  string `json:"file"`
+	Parts int    `json:"parts"`
+	Reqs  int    `json:"reqs"`
+	Line  int    `json:"line,omitempty"`
+}
+
+type panelView struct {
+	ID        string   `json:"id"`
+	Name      string   `json:"name"`
+	File      string   `json:"file,omitempty"`
+	Owner     string   `json:"owner,omitempty"`
+	Endpoints []string `json:"endpoints"`
+	Tables    []string `json:"tables"`
+}
+
+// panelSpecs lists change records newest first, with the task id each tick needs.
+func panelSpecs(g *weave.Graph) []panelChange {
+	ix := weave.NewIndex(g)
+	out := []panelChange{}
+	for _, c := range ix.OfKind(weave.KindChange) {
+		ch := panelChange{Slug: strings.TrimPrefix(c.ID, "change:"), Tasks: []panelTask{}}
+		if c.File != nil {
+			ch.File = *c.File
+		}
+		for _, e := range ix.From(c.ID, "has_task") {
+			t := ix.Node(e.To)
+			if t == nil {
+				continue
+			}
+			id := strings.TrimPrefix(t.ID, "task:")
+			if i := strings.LastIndexByte(id, '/'); i >= 0 {
+				id = id[i+1:]
+			}
+			pt := panelTask{ID: id}
+			if t.Meta != nil {
+				if v, ok := t.Meta.Get("title"); ok {
+					pt.Title = v.Str()
+				}
+				if v, ok := t.Meta.Get("done"); ok {
+					pt.Done = v.Bool()
+				}
+			}
+			// The evidence clause belongs to the task's file list, not to its label.
+			if i := strings.Index(pt.Title, " Evidence:"); i >= 0 {
+				pt.Title = strings.TrimSpace(pt.Title[:i])
+			}
+			ch.Tasks = append(ch.Tasks, pt)
+			ch.Total++
+			if pt.Done {
+				ch.Done++
+			}
+		}
+		out = append(out, ch)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Slug > out[j].Slug })
+	return out
+}
+
+// panelCapabilities lists specs/capabilities/<area>/spec.md. weave indexes their
+// requirements but not the capability itself, so the name and the Parts count come
+// from the files; reqs come from the graph.
+func panelCapabilities(root string, g *weave.Graph) []panelCapability {
+	byFile := map[string]int{}
+	for _, n := range g.Nodes {
+		if n.Kind == weave.KindReq && n.File != nil {
+			byFile[*n.File]++
+		}
+	}
+	out := []panelCapability{}
+	for _, s := range capabilitySpecs(root) {
+		parts, line := partsTable(s.md)
+		out = append(out, panelCapability{Name: s.name, File: s.file, Parts: parts, Reqs: byFile[s.file], Line: line})
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+type capSpec struct {
+	name, file, md string
+}
+
+func capabilitySpecs(root string) []capSpec {
+	entries, err := os.ReadDir(filepath.Join(root, "specs", "capabilities"))
+	if err != nil {
+		return nil
+	}
+	out := []capSpec{}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		rel := "specs/capabilities/" + e.Name() + "/spec.md"
+		raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			continue
+		}
+		out = append(out, capSpec{name: e.Name(), file: rel, md: string(raw)})
+	}
+	return out
+}
+
+// panelViews is the cross-reference people ask for: every screen, the endpoints and
+// tables it reaches, and the capability spec whose Parts table names its file.
+func panelViews(root string, g *weave.Graph) []panelView {
+	ix := weave.NewIndex(g)
+	flows := map[string]weave.Flow{}
+	for _, f := range weave.ExplorePayload(g).Flows {
+		flows[f.P] = f
+	}
+	parts := capabilityParts(root)
+	out := []panelView{}
+	for _, p := range ix.OfKind(weave.KindPage) {
+		v := panelView{ID: p.ID, Name: p.Name, Endpoints: []string{}, Tables: []string{}}
+		if p.File != nil {
+			v.File = *p.File
+			v.Owner = ownerOf(parts, *p.File)
+		}
+		f := flows[p.ID]
+		for _, id := range f.E {
+			if n := ix.Node(id); n != nil {
+				v.Endpoints = append(v.Endpoints, n.Name)
+			}
+		}
+		for _, id := range f.T {
+			if n := ix.Node(id); n != nil {
+				v.Tables = append(v.Tables, n.Name)
+			}
+		}
+		sort.Strings(v.Endpoints)
+		sort.Strings(v.Tables)
+		out = append(out, v)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}
+
+type capPart struct {
+	path, capability string
+}
+
+// capabilityParts flattens every Parts table into path to capability. A cell may name
+// several paths, so each backticked span counts.
+func capabilityParts(root string) []capPart {
+	out := []capPart{}
+	for _, s := range capabilitySpecs(root) {
+		for _, p := range partsPaths(s.md) {
+			out = append(out, capPart{path: p, capability: s.name})
+		}
+	}
+	return out
+}
+
+var reBacktickPath = regexp.MustCompile("`([^`]+)`")
+
+func partsPaths(md string) []string {
+	out := []string{}
+	in := false
+	for _, raw := range strings.Split(md, "\n") {
+		t := strings.TrimSpace(raw)
+		if strings.HasPrefix(t, "## Parts") {
+			in = true
+			continue
+		}
+		if !in {
+			continue
+		}
+		if strings.HasPrefix(t, "## ") || strings.HasPrefix(t, "# ") {
+			break
+		}
+		if !strings.HasPrefix(t, "|") {
+			continue
+		}
+		cell := strings.TrimSpace(strings.TrimPrefix(t, "|"))
+		if i := strings.IndexByte(cell, '|'); i >= 0 {
+			cell = cell[:i]
+		}
+		for _, m := range reBacktickPath.FindAllStringSubmatch(cell, -1) {
+			p := strings.TrimSuffix(strings.TrimSpace(m[1]), "/")
+			if p != "" {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
+}
+
+// ownerOf picks the longest Parts path that names the file or a directory above it.
+func ownerOf(parts []capPart, file string) string {
+	best, bestLen := "", 0
+	for _, p := range parts {
+		if (file == p.path || strings.HasPrefix(file, p.path+"/")) && len(p.path) > bestLen {
+			best, bestLen = p.capability, len(p.path)
+		}
+	}
+	return best
+}
+
+// partsTable counts the data rows of the first table under "## Parts" and returns
+// the line that heading is on, so the drawer opens the window there.
+func partsTable(md string) (rows, line int) {
+	in := false
+	for i, raw := range strings.Split(md, "\n") {
+		t := strings.TrimSpace(raw)
+		if strings.HasPrefix(t, "## Parts") {
+			in, line = true, i+1
+			continue
+		}
+		if !in {
+			continue
+		}
+		if strings.HasPrefix(t, "## ") || strings.HasPrefix(t, "# ") {
+			break
+		}
+		if cell := strings.TrimSpace(strings.TrimPrefix(t, "|")); strings.HasPrefix(cell, "`") {
+			rows++
+		}
+	}
+	return rows, line
 }
 
 // inject puts the action layer into the rendered page: a stylesheet, the script, and

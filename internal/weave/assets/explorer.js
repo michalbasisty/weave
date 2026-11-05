@@ -175,6 +175,8 @@ function taskTitle(t){const s=plain(t);const i=s.indexOf(' Evidence:');return i<
 function taskParts(t){const s=taskTitle(t),m=s.match(/^(T[\w.]*)\s+([\s\S]*)$/);return m?[m[1],m[2]]:['',s]}
 // "Later: …", "Not done, by choice: …" and [deferred] are parked work, not the next step.
 function isLater(t){return /^(T[\w.]*\s+)?(\[?(later|deferred)\b|not done\b)/i.test(taskTitle(t))}
+// The task's id is the last word of its node name; the title itself has it stripped.
+function taskIdOf(t){const s=plain(t&&t.n||'');const i=s.lastIndexOf(' ');return i<0?s:s.slice(i+1)}
 function tasksOf(changeId){
   const r=[];
   for(const e of out.get(changeId)||[])if(e[1]==='has_task'){const t=ix.get(e[0]);if(t)r.push(t)}
@@ -595,9 +597,9 @@ function changeFacts(n){
   let h='<div class="progress">'+bar(c.done,c.total,c.done+' of '+c.total+' tasks done')+'<span>'+c.done+' of '+c.total+' tasks done</span></div>';
   const tasks=tasksOf(n.i),open=tasks.filter(t=>!t.dn),done=tasks.filter(t=>t.dn);
   const live=open.filter(t=>!isLater(t.t||t.n)),later=open.filter(t=>isLater(t.t||t.n));
-  const entry=t=>{const p=taskParts(t.t||t.n);return '<li>'+ring('task',!!t.dn)+'<span>'+(p[0]?'<span class="tid">'+esc(p[0])+'</span>':'')+esc(p[1])+'</span></li>'};
+  const entry=t=>{const p=taskParts(t.t||t.n);if(!p[0])p[0]=taskIdOf(t);return '<li>'+ring('task',!!t.dn)+'<span>'+(p[0]?'<span class="tid">'+esc(p[0])+'</span>':'')+esc(p[1])+'</span></li>'};
   if(live.length){
-    const p=taskParts(live[0].t||live[0].n);
+    const p=taskParts(live[0].t||live[0].n);if(!p[0])p[0]=taskIdOf(live[0]);
     h+='<section class="sec nexttask"><h2>Next task</h2><p class="nt1">'+(p[0]?'<span class="tid">'+esc(p[0])+'</span>':'')+esc(p[1])+'</p>'+
       '<p class="hint">Agents get the same answer, with files and the command to run, from <code>weave plan '+esc(n.i.replace(/^change:/,''))+'</code>.</p></section>';
   }
