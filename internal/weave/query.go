@@ -1148,6 +1148,11 @@ func Plan(g *Graph, slug, taskID string) string {
 		}
 	}
 	out = append(out, "  change "+slug+" "+strconv.Itoa(done)+"/"+strconv.Itoa(len(tasks)))
+	verb := "done"
+	if metaIsTrue(task, "done") {
+		verb = "reopen"
+	}
+	out = append(out, "  tick   weave spec task "+verb+" "+c.Name+" "+lastWord(task.Name))
 	return strings.Join(out, "\n")
 }
 

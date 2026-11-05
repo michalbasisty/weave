@@ -8,7 +8,8 @@ Three things, one binary, no runtime dependencies:
 
 - **A gate.** `weave check` exits 1 when a frontend call reaches an endpoint that no longer
   exists. The failure names the caller's `file:line`.
-- **A panel.** `weave serve` hosts the map with the gate, file windows and notes in it.
+- **A panel.** `weave serve` hosts the map with the gate, file windows, notes and the
+  change specs in it.
 - **A wiki.** `weave wiki` writes a page per module, endpoint, screen, table and change, and
   tells you when the pages describe an older commit.
 
@@ -41,7 +42,7 @@ Two numbers people ask about first:
 
 | | |
 |---|---|
-| cost to install | **1,017 tokens** of MCP schema per session (10 tools) |
+| cost to install | **1,434 tokens** of MCP schema per session (14 tools) |
 | cost to answer | **66 tokens** for a route question, **346** for a screen's whole context |
 | cost to run | one static binary: index 954 files in 330 ms, `check` 406 ms |
 
@@ -54,13 +55,19 @@ with the `file:line`. The measurements, methods and the comparison with other to
 
 `weave serve` binds `127.0.0.1`, mints a write token per run, and serves one page:
 
-- **Check** runs the gate on the working tree; every `file:line` in the output opens that
-  window of the file.
-- **Reindex**, **Wiki** — rebuild, or regenerate the wiki and open it at `/wiki/`.
-- **open** beside any path chip loads the file with a one-line note field that writes through
-  `weave remember`, so the next session reads it.
+- **Specs** and **Wiki** are places in the menu, after Checks, and take the full content
+  width. Specs runs the change records — a tick or reopen rewrites that one checkbox in
+  `tasks.md`, and a change can be started there — lists every capability spec under
+  `specs/capabilities/`, and has a **Views** table: every screen, the endpoints and tables
+  it reaches, and the capability whose Parts table names that screen's file. Click a
+  capability to read it as a page (title, prose, the Parts table) with a `raw` link to the
+  source; Wiki shows the generated pages in place, with a Rebuild button.
+- **Check** and **File** share one dock beside the map, non-modal so the map stays usable:
+  the gate output with clickable `file:line`, and one file window with a note field that
+  writes through `weave remember`.
 
-It is a local tool, not a team server: loopback only, one origin, no uploads.
+Each surface keeps its content when you switch. It is a local tool, not a team server:
+loopback only, one origin, no uploads.
 
 ## The wiki
 
@@ -79,7 +86,8 @@ cannot drift into a document nobody trusts.
 ## Agents
 
 `weave init` writes MCP configs for Claude Code, Cursor, VS Code and opencode. The server is
-stdio, answers from one JSON index, and every answer ends with the tokens it cost:
+stdio, answers from one JSON index, writes only change records and their task checkboxes, and
+every answer ends with the tokens it cost:
 
 | tool | what it returns |
 |---|---|
@@ -87,6 +95,9 @@ stdio, answers from one JSON index, and every answer ends with the tokens it cos
 | `impact(files)` | the complete blast radius |
 | `search(query)` | endpoints, pages, modules, tables, requirements, tests by name; `text: true` scans source |
 | `plan(slug)` | the next unfinished task of a change, with its files and command |
+| `task_done(change, task)` | ticks one task in `tasks.md`, the same edit as `weave spec task done`; `task_reopen` undoes it |
+| `change_new(name)` | creates `proposal.md`, `tasks.md` and `spec-delta.md`, as `weave spec new` |
+| `change_delete(change, confirm)` | removes one change record; destructive, needs `confirm: true` |
 | `changed(ref)` | what the graph gained or lost since a git ref |
 | `remember` / `recall` | a note beside the files it concerns, returned as a claim, never evidence |
 

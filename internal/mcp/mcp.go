@@ -29,6 +29,8 @@ var supported = []string{"2024-11-05", "2025-03-26", "2025-06-18"}
 
 const instructions = "weave maps a repo: UI pages -> HTTP endpoints -> modules -> database tables, plus spec change records and tests. " +
 	"If the work comes from a spec change, call plan(slug) first: it returns the next task with its files, endpoints and the command to run. " +
+	"When that task is finished, call task_done(change, task) instead of editing tasks.md; task_reopen(change, task) undoes a tick. " +
+	"Start a change with change_new(name); change_delete(change, confirm: true) removes one and cannot be undone. " +
 	"Before editing any other file, call context(files) once: page, endpoints, tables, owning change, open tasks, requirements, " +
 	"tests to run and the command to run them, in a few hundred tokens. Call impact(files) only when you need the complete list. " +
 	"Use search() instead of grepping directories; search(text: true) scans source lines when you need a literal string. " +
@@ -94,20 +96,21 @@ type runtimeStats struct {
 
 var runtime = runtimeStats{start: time.Now()}
 
-// Serve runs the JSON-RPC loop until stdin closes.
-func Serve(src GraphSource, multi, manager bool) error {
-	return ServeIO(os.Stdin, os.Stdout, src, multi, manager)
+// Serve runs the JSON-RPC loop until stdin closes. invalidate, when set, tells the
+// caller its cached graph is stale after a write.
+func Serve(src GraphSource, multi, manager bool, invalidate func()) error {
+	return ServeIO(os.Stdin, os.Stdout, src, multi, manager, invalidate)
 }
 
 // ServeIO is Serve with explicit streams, for tests.
-func ServeIO(in io.Reader, out io.Writer, src GraphSource, multi, manager bool) error {
+func ServeIO(in io.Reader, out io.Writer, src GraphSource, multi, manager bool, invalidate func()) error {
 	reader := bufio.NewReader(in)
 	writer := bufio.NewWriter(out)
 	defer writer.Flush()
 	for {
 		line, err := reader.ReadString('\n')
 		if len(line) > 0 {
-			handle(strings.TrimSpace(line), src, multi, manager, writer)
+			handle(strings.TrimSpace(line), src, multi, manager, invalidate, writer)
 		}
 		if err != nil {
 			if err == io.EOF {
@@ -129,7 +132,7 @@ func send(w *bufio.Writer, msg response) {
 	_ = w.Flush()
 }
 
-func handle(line string, src GraphSource, multi, manager bool, w *bufio.Writer) {
+func handle(line string, src GraphSource, multi, manager bool, invalidate func(), w *bufio.Writer) {
 	if line == "" {
 		return
 	}
@@ -187,7 +190,7 @@ func handle(line string, src GraphSource, multi, manager bool, w *bufio.Writer) 
 			reply(toolResult{Content: []content{{Type: "text", Text: "weave error: " + err.Error()}}, IsError: true})
 			return
 		}
-		text, rerr := callTool(name, args, g)
+		text, rerr := callTool(name, args, g, invalidate)
 		if rerr != nil {
 			fail(rerr.Code, rerr.Message)
 			return
@@ -209,7 +212,7 @@ func handle(line string, src GraphSource, multi, manager bool, w *bufio.Writer) 
 	}
 }
 
-func callTool(name string, a map[string]any, g *weave.Graph) (string, *rpcError) {
+func callTool(name string, a map[string]any, g *weave.Graph, invalidate func()) (string, *rpcError) {
 	if name == "" {
 		name = "undefined"
 	}
@@ -263,6 +266,53 @@ func callTool(name string, a map[string]any, g *weave.Graph) (string, *rpcError)
 			return weave.ChangeView(g, slug), nil
 		}
 		return weave.ListChanges(g, 25), nil
+	case "task_done", "task_reopen":
+		change, task := strAt(a, "change"), strAt(a, "task")
+		if change == "" || task == "" {
+			return "", &rpcError{-32602, name + " needs `change` and `task`; plan(slug) returns the task id"}
+		}
+		done := name == "task_done"
+		dir, changed, err := weave.SetSpecTask(g.Root, change, task, done)
+		if err != nil {
+			return "", &rpcError{-32602, err.Error()}
+		}
+		if changed && invalidate != nil {
+			invalidate()
+		}
+		state, verb := "open", "reopened"
+		if done {
+			state, verb = "done", "done"
+		}
+		if !changed {
+			return dir + " " + task + " is already " + state, nil
+		}
+		return verb + " " + dir + " " + task, nil
+	case "change_new":
+		name, title := strAt(a, "name"), strAt(a, "title")
+		if name == "" {
+			return "", &rpcError{-32602, "change_new needs `name`, e.g. billing-retry"}
+		}
+		slug, err := weave.NewSpecChange(g.Root, name, title, time.Now())
+		if err != nil {
+			return "", &rpcError{-32602, err.Error()}
+		}
+		if invalidate != nil {
+			invalidate()
+		}
+		return "created specs/changes/" + slug, nil
+	case "change_delete":
+		change := strAt(a, "change")
+		if change == "" || !truthy(a["confirm"]) {
+			return "", &rpcError{-32602, "change_delete needs `change` and `confirm: true`; it removes specs/changes/<change> and cannot be undone"}
+		}
+		name, err := weave.DeleteSpecChange(g.Root, change)
+		if err != nil {
+			return "", &rpcError{-32602, err.Error()}
+		}
+		if invalidate != nil {
+			invalidate()
+		}
+		return "deleted specs/changes/" + name, nil
 	case "plan":
 		slug := strAt(a, "slug")
 		if slug == "" {

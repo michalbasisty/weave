@@ -136,7 +136,8 @@ func helpText() string {
   weave impact  <file...>       full blast radius
   weave plan    <change> [T3]   the next task, its files, its command
   weave spec    new <name>      create proposal.md, tasks.md, spec-delta.md
-  weave spec    task done <change> <T1>
+  weave spec    task done <change> <T1>, task reopen <change> <T1>
+  weave spec    rm <change>        delete a change record (destructive)
   weave ask     "question"      a cheap model answers from the graph
   weave change  [slug]          spec change records
   weave search  <query>

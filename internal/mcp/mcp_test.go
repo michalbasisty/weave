@@ -21,10 +21,15 @@ func TestMain(m *testing.M) {
 
 func replay(t *testing.T, flags string, src GraphSource, input string) ([]map[string]any, []string) {
 	t.Helper()
+	return replayWith(t, flags, src, input, nil)
+}
+
+func replayWith(t *testing.T, flags string, src GraphSource, input string, invalidate func()) ([]map[string]any, []string) {
+	t.Helper()
 	var out bytes.Buffer
 	multi := strings.Contains(flags, "all")
 	manager := strings.Contains(flags, "manager")
-	if err := ServeIO(strings.NewReader(input), &out, src, multi, manager); err != nil {
+	if err := ServeIO(strings.NewReader(input), &out, src, multi, manager, invalidate); err != nil {
 		t.Fatal(err)
 	}
 	var msgs []map[string]any
@@ -160,5 +165,88 @@ func TestNotesAndChangedOverMCP(t *testing.T) {
 	changed := msgs[2]["result"].(map[string]any)["content"].([]any)[0].(map[string]any)["text"].(string)
 	if !strings.Contains(changed, "no change in endpoints") {
 		t.Fatalf("changed against the same graph: %s", changed)
+	}
+}
+
+// An agent closes a task over MCP, and the server's cached graph is invalidated so
+// the next plan() does not repeat the same task.
+func TestTaskDoneAndReopenOverMCP(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "specs", "changes", "2026-01-01-a")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "tasks.md")
+	if err := os.WriteFile(path, []byte("# Tasks: a\n\n- [ ] T1 One.\n- [x] T2 Two.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	src := func(string) (*weave.Graph, error) { return &weave.Graph{Root: root}, nil }
+	invalidated := 0
+	msgs, _ := replayWith(t, "", src, strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"task_done","arguments":{"change":"2026-01-01-a","task":"T1"}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"task_reopen","arguments":{"change":"2026-01-01-a","task":"T2"}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"task_done","arguments":{"change":"../x","task":"T1"}}}`,
+	}, "\n")+"\n", func() { invalidated++ })
+
+	text := func(i int) string {
+		return msgs[i]["result"].(map[string]any)["content"].([]any)[0].(map[string]any)["text"].(string)
+	}
+	if got := text(0); !strings.HasPrefix(got, "done 2026-01-01-a T1") {
+		t.Errorf("task_done reply: %s", got)
+	}
+	if got := text(1); !strings.HasPrefix(got, "reopened 2026-01-01-a T2") {
+		t.Errorf("task_reopen reply: %s", got)
+	}
+	raw, _ := os.ReadFile(path)
+	if !strings.Contains(string(raw), "- [x] T1 One.") || !strings.Contains(string(raw), "- [ ] T2 Two.") {
+		t.Errorf("tasks.md after both edits:\n%s", raw)
+	}
+	if invalidated != 2 {
+		t.Errorf("graph invalidations: %d, want 2", invalidated)
+	}
+	if _, ok := msgs[2]["error"]; !ok {
+		t.Errorf("a path outside specs/changes should be an error, got %v", msgs[2])
+	}
+}
+
+// A change is created and removed over MCP; the destructive tool needs confirm, and
+// both writes drop the cached graph.
+func TestChangeNewAndDeleteOverMCP(t *testing.T) {
+	root := t.TempDir()
+	src := func(string) (*weave.Graph, error) { return &weave.Graph{Root: root}, nil }
+	invalidated := 0
+	mark := func() { invalidated++ }
+	msgs, _ := replayWith(t, "", src, strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"change_new","arguments":{"name":"2026-01-01-billing","title":"Billing"}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"change_new","arguments":{"name":"../escape"}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"change_delete","arguments":{"change":"2026-01-01-billing"}}}`,
+	}, "\n")+"\n", mark)
+
+	text := func(i int) string {
+		return msgs[i]["result"].(map[string]any)["content"].([]any)[0].(map[string]any)["text"].(string)
+	}
+	if got := text(0); !strings.HasPrefix(got, "created specs/changes/2026-01-01-billing") {
+		t.Errorf("change_new reply: %s", got)
+	}
+	dir := filepath.Join(root, "specs", "changes", "2026-01-01-billing")
+	if _, err := os.Stat(filepath.Join(dir, "tasks.md")); err != nil {
+		t.Errorf("tasks.md was not created: %v", err)
+	}
+	if _, ok := msgs[1]["error"]; !ok {
+		t.Error("a name with a separator should be an error")
+	}
+	if _, ok := msgs[2]["error"]; !ok {
+		t.Error("delete without confirm should be an error")
+	}
+
+	msgs, _ = replayWith(t, "", src, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"change_delete","arguments":{"change":"2026-01-01-billing","confirm":true}}}`+"\n", mark)
+	if got := text(0); !strings.HasPrefix(got, "deleted specs/changes/2026-01-01-billing") {
+		t.Errorf("change_delete reply: %s", got)
+	}
+	if _, err := os.Stat(dir); err == nil {
+		t.Error("the change directory survived")
+	}
+	if invalidated != 2 {
+		t.Errorf("graph invalidations: %d, want 2", invalidated)
 	}
 }

@@ -51,7 +51,12 @@ func cmdMcp() int {
 		return g, nil
 	}
 
-	if err := mcp.Serve(src, multi, manager); err != nil {
+	if err := mcp.Serve(src, multi, manager, func() {
+		// A spec write makes every cached graph stale, including a project not asked for.
+		for k := range graphs {
+			delete(graphs, k)
+		}
+	}); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}

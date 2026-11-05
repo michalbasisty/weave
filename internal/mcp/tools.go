@@ -118,6 +118,38 @@ var toolDefs = []tool{
 		}},
 	},
 	{
+		Name:        "task_done",
+		Description: "Tick one task in a change record's tasks.md, the same edit as `weave spec task done`. plan(slug) returns the id; do not edit tasks.md yourself.",
+		InputSchema: schema{Type: "object", Properties: props{
+			{"change", propDef{Type: "string", Description: "change record slug, e.g. 2026-10-22-warehouse-orders"}},
+			{"task", propDef{Type: "string", Description: "task id from plan, e.g. T3"}},
+		}, Required: []string{"change", "task"}},
+	},
+	{
+		Name:        "task_reopen",
+		Description: "Reopen one task in a change record's tasks.md, the same edit as `weave spec task reopen`. Use it when a ticked task turns out unfinished.",
+		InputSchema: schema{Type: "object", Properties: props{
+			{"change", propDef{Type: "string", Description: "change record slug, e.g. 2026-10-22-warehouse-orders"}},
+			{"task", propDef{Type: "string", Description: "task id, e.g. T3"}},
+		}, Required: []string{"change", "task"}},
+	},
+	{
+		Name:        "change_new",
+		Description: "Create a change record under specs/changes: proposal.md, tasks.md and spec-delta.md, the same files as `weave spec new`. Returns the slug; plan(slug) then gives the first task.",
+		InputSchema: schema{Type: "object", Properties: props{
+			{"name", propDef{Type: "string", Description: "slug, e.g. billing-retry; today's date is prefixed unless present"}},
+			{"title", propDef{Type: "string", Description: "human title; defaults to the name"}},
+		}, Required: []string{"name"}},
+	},
+	{
+		Name:        "change_delete",
+		Description: "Delete one change record and its three files. Irreversible: pass the exact change and confirm must be true.",
+		InputSchema: schema{Type: "object", Properties: props{
+			{"change", propDef{Type: "string", Description: "change record slug"}},
+			{"confirm", propDef{Type: "boolean", Description: "must be true; the directory is removed"}},
+		}, Required: []string{"change", "confirm"}},
+	},
+	{
 		Name:        "changed",
 		Description: "What the graph gained or lost since a git ref (default HEAD) or a saved graph.json: endpoints, pages, tables, modules, requirements. A removed endpoint still called by the base is named with its caller count.",
 		InputSchema: schema{Type: "object", Properties: props{
