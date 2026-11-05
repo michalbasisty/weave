@@ -110,8 +110,8 @@ function render(){
   }
 }
 function renderTabs(){
-  const broken=brokenCount(),open=S.changes.filter(c=>c.done<c.total).length;
-  const badge={changes:open?'<span class="tc">'+open+'</span>':'',checks:broken?'<span class="tc bad">'+broken+'</span>':''};
+  const broken=brokenCount(),open=S.changes.filter(c=>c.done<c.total).length,gaps=gapCount();
+  const badge={changes:open?'<span class="tc">'+open+'</span>':'',checks:broken?'<span class="tc bad">'+broken+'</span>':gaps?'<span class="tc">'+gaps+'</span>':''};
   $('#tabs').innerHTML=PLACES.map(p=>{
     const href=p[0]==='map'?'#map/'+lane:'#'+p[0];
     return '<a href="'+href+'"'+(!q&&place===p[0]?' aria-current="page"':'')+'>'+p[1]+(badge[p[0]]||'')+'</a>';
@@ -235,6 +235,8 @@ function network(big){
 
 /* ---------------------------------------------------------------- lists */
 function renderList(){
+  const live=$('#live');
+  if(live&&!q)live.textContent='';
   // Keep the scroll only while the same list is on screen.
   const key=q?'q:'+q:place+'/'+lane+'/'+untestedOnly;
   const box=$('#list'),keep=key===listKey?box.scrollTop:0;
@@ -265,7 +267,7 @@ function laneList(){
     return lhead('Screens',rows.length,'<span class="lh">most connected first</span>')+rows.map(n=>{
       const f=flow.get(n.i),e=f?f.e.length:0,t=f?f.t.length:0;
       const meta=(e?cnt(e,'endpoint'):'calls no endpoint')+(t?' · '+cnt(t,'table'):'');
-      return row(n.i,hasE2e(n.i)?'<span class="ok">'+ICON.check+'e2e</span>':'',[descOf(n)?esc(descOf(n)):'',esc(meta)]);
+      return row(n.i,hasE2e(n.i)?'<span class="proved">'+ICON.check+'e2e</span>':'',[descOf(n)?esc(descOf(n)):'',esc(meta)]);
     }).join('');
   }
   if(lane==='modules'){
@@ -303,7 +305,7 @@ function apiList(){
   }
   groups.sort((a,b)=>nameOf(a.m.m).localeCompare(nameOf(b.m.m)));
   const loose=eps.filter(n=>!owned.has(n.i)).sort(epSort);
-  const apiRow=n=>row(n.i,isTested(n.i)?'<span class="ok">'+ICON.check+'tested</span>':'',[descOf(n)?esc(descOf(n)):'']);
+  const apiRow=n=>row(n.i,isTested(n.i)?'<span class="proved">'+ICON.check+'tested</span>':'',[descOf(n)?esc(descOf(n)):'']);
   for(const g of groups){
     const used=g.m.t.map(nameOf);
     h+=grp(nameOf(g.m.m),cnt(g.eps.length,'endpoint')+(used.length?' · uses '+used.slice(0,2).join(', ')+(used.length>2?' +'+(used.length-2):''):''));
@@ -331,8 +333,9 @@ function checksList(){
   const broken=issue('broken_calls'),gone=stillCalled();
   const nb=broken.length+gone.length,gapsN=gapCount();
   // The badge is the gate: broken items only. Gaps are named in the aside, where a
-  // reader can see they are proof that is missing, not work that is failing.
-  let h=lhead('Checks',nb,'<span class="lh">'+nb+' broken · '+gapsN+' gaps in proof</span>');
+  // reader can see they are proof that is missing, not work that is failing. The
+  // heading counts everything the place lists, or it contradicts the rows below it.
+  let h=lhead('Checks',nb+gapsN,'<span class="lh">'+nb+' broken · '+gapsN+' gaps in proof</span>');
   h+=grp('Broken',nb?cnt(nb,'item'):'nothing',nb?'bad':'');
   if(!nb)h+='<p class="calm">'+ICON.check+'<span>Nothing <code>weave check</code> would fail: every frontend call matches an endpoint.</span></p>';
   h+=broken.map(id=>row(id,'',['matches no endpoint · '+esc(where(id))])).join('');
@@ -382,8 +385,8 @@ function today(){
     :'<p class="gate ok">'+ICON.check+'<span><b>The contract gate passes.</b> Every frontend call matches an endpoint.</span></p>';
   h+='</header>'+network(true)+proofRow();
   h+='<div class="cols"><div class="work">';
-  h+=sinceBlock();
   h+='<section class="blk"><h2>Next up</h2>'+worklist(broken,gone,open)+'</section>';
+  h+=sinceBlock();
   h+=quietDelta();
   h+='</div>'+health()+'</div>';
   if(!S.counts.pages&&!S.counts.endpoints)h+='<p class="note">No routes were found. weave reads Express, Next.js route handlers, tRPC routers and OpenAPI specs; <code>weave doctor</code> names the files it could not parse.</p>';
@@ -465,9 +468,10 @@ function health(){
   let h='<aside class="health" aria-label="What weave could read"><h2>What weave could read</h2>';
   if(sus)h+='<p class="hl">'+cnt(sus,'requirement')+' changed after the code was written. <a href="#checks">Review</a></p>';
   h+='<dl class="read">';
-  h+='<div><dt>Route files</dt><dd>'+cov.routes.found+' / '+cov.routes.files+'</dd></div>';
-  h+='<div><dt>Frontend calls matched</dt><dd>'+calls.resolved+' / '+calls.total+'</dd></div>';
-  h+='<div><dt>Task files</dt><dd>'+cov.specs.parsed+' / '+cov.specs.files+'</dd></div></dl>';
+  const ratio=(a,b)=>b?a+' / '+b:'none found';
+  h+='<div><dt>Route files</dt><dd>'+ratio(cov.routes.found,cov.routes.files)+'</dd></div>';
+  h+='<div><dt>Frontend calls matched</dt><dd>'+ratio(calls.resolved,calls.total)+'</dd></div>';
+  h+='<div><dt>Task files</dt><dd>'+ratio(cov.specs.parsed,cov.specs.files)+'</dd></div></dl>';
   const notes=[];
   if(cov.gaps)notes.push(cnt(cov.gaps,'file')+' looked like a contract but produced nothing.');
   if(cov.unmapped)notes.push(cnt(cov.unmapped,'file')+' call an API weave could not map: an external service, or a pattern it misses.');
@@ -584,9 +588,9 @@ function subline(n){
   if(k==='endpoint'){
     const m=relOut(n.i,'in_module');
     if(m.length)bits.push('handled in <a href="'+enc(m[0])+'">'+esc(nameOf(m[0]))+'</a>');
-    bits.push(isTested(n.i)?'<span class="ok">'+ICON.check+'tested</span>':'no direct test');
+    bits.push(isTested(n.i)?'<span class="proved">'+ICON.check+'tested</span>':'no direct test');
   }
-  if(k==='page')bits.push(hasE2e(n.i)?'<span class="ok">'+ICON.check+'end-to-end test</span>':'no end-to-end test');
+  if(k==='page')bits.push(hasE2e(n.i)?'<span class="proved">'+ICON.check+'end-to-end test</span>':'no end-to-end test');
   if(k==='change'){const t=changeTitle(n.i);if(t.date)bits.push(esc(t.date))}
   if(k==='task'){bits.push(n.dn?'done':'open');const c=relIn(n.i,'has_task')[0];if(c)bits.push('in <a href="'+enc(c)+'">'+esc(changeTitle(c).title)+'</a>')}
   return bits.join(' · ');
@@ -702,20 +706,31 @@ function reach(id){
 function findIds(){return [...ix.keys()].filter(id=>nodeMatch(ix.get(id)))}
 function findList(){
   const ids=findIds();
-  if(!ids.length)return lhead('Search',0)+empty('Nothing matches “'+q+'”','Try part of a route (<code>/tasks</code>), a table (<code>users</code>), a change name, or a file path. <kbd>Esc</kbd> clears the search.');
+  const live=$('#live');
+  if(live)live.textContent=ids.length+(ids.length===1?' match':' matches')+' for '+q;
+  if(!ids.length)return lhead('Search',0)+empty('Nothing matches "'+q+'"','Try part of a route (<code>/tasks</code>), a table (<code>users</code>), a change name, or a file path. <kbd>Esc</kbd> clears the search.');
   let h=lhead('Search',ids.length,'<span class="lh">grouped by kind</span>');
+  // A row that matched on its file or description says so; the name alone would look
+  // like an unexplained hit.
+  const why=id=>{
+    const n=ix.get(id);
+    if(!n||matches(n.n))return '';
+    if(n.f&&matches(n.f))return esc(n.f+(n.l?':'+n.l:''));
+    if(n.d&&matches(n.d))return esc(plain(n.d));
+    return '';
+  };
   for(const k of ORDER){
     const bag=ids.filter(id=>kindOf(id)===k);
     if(!bag.length)continue;
     h+=grp(KINDS[k],String(bag.length));
-    h+=bag.slice(0,30).map(id=>row(id,'',[k==='change'?'':esc(descOf(ix.get(id)))])).join('');
+    h+=bag.slice(0,30).map(id=>row(id,'',[why(id)||(k==='change'?'':esc(descOf(ix.get(id))))])).join('');
     if(bag.length>30)h+='<details class="grpwrap"><summary class="moresum">Show all '+bag.length+'</summary>'+bag.slice(30).map(id=>row(id,'',[])).join('')+'</details>';
   }
   return h;
 }
 function findIntro(){
   const n=findIds().length;
-  return '<div class="intro"><h1 tabindex="-1">Search</h1><p>'+cnt(n,'match')+' for “'+esc(q)+'”, grouped by kind on the left. Open one to see where it sits on the line. <kbd>Esc</kbd> clears the search.</p></div>';
+  return '<div class="intro"><h1 tabindex="-1">Search</h1><p>'+n+(n===1?' match':' matches')+' for “'+esc(q)+'”, grouped by kind on the left. Open one to see where it sits on the line. <kbd>Esc</kbd> clears the search.</p></div>';
 }
 
 /* ---------------------------------------------------------------- events */
