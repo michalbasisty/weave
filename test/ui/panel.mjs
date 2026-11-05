@@ -7,6 +7,7 @@
 //   node test/ui/panel.mjs           check and clean up
 //   node test/ui/panel.mjs --keep    keep the temp repo and screenshots
 //   node test/ui/panel.mjs --shots   save screenshots into the temp dir
+//   node test/ui/panel.mjs --out DIR save the screenshots the README shows into DIR
 //
 // Exit 1 on the first failed check; every check prints a line either way.
 
@@ -21,7 +22,9 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(here, '..', '..');
 const flags = new Set(process.argv.slice(2));
 const keep = flags.has('--keep');
-const shots = flags.has('--shots') || keep;
+const outAt = process.argv.indexOf('--out');
+const outDir = outAt > 0 ? path.resolve(process.argv[outAt + 1]) : '';
+const shots = flags.has('--shots') || keep || !!outDir;
 
 if (typeof WebSocket === 'undefined') {
   console.error('needs Node 22+ (global WebSocket)');
@@ -195,6 +198,20 @@ try {
     await sleep(600);
   };
 
+  // ---- The map itself, for the README: Today, an endpoint's line, the gate's list
+  if (shots) {
+    const shotDir = outDir || tmp;
+    await go('#today');
+    await page.waitFor(`!!document.querySelector('#detail h1, #detail .intro')`);
+    await page.shot(path.join(shotDir, 'today.png'));
+    await go('#node/endpoint%3AGET%20%2Fapi%2Fv1%2Forders');
+    await page.waitFor(`!!document.querySelector('#detail .item')`);
+    await page.shot(path.join(shotDir, 'endpoint.png'));
+    await go('#checks');
+    await page.waitFor(`!!document.querySelector('#list .lhead')`);
+    await page.shot(path.join(shotDir, 'checks.png'));
+  }
+
   // ---- Specs: menu place, views table, owner, rendered spec page
   await go('#specs');
   check('Specs opens', await page.waitFor(`!!document.querySelector('#wfullview .wcaps a.wcname')`));
@@ -214,7 +231,7 @@ try {
   check('spec page has a raw link', await page.eval(`!!document.querySelector('.wspecbar .wopen')`));
   check('spec page offers edit', await page.eval(
     `[...document.querySelectorAll('.wspecbar .wopen')].some(b => b.textContent === 'edit')`));
-  if (shots) await page.shot(path.join(tmp, 'spec-page.png'));
+  if (shots) await page.shot(path.join(outDir || tmp, 'spec-page.png'));
 
   await page.eval(`[...document.querySelectorAll('.wspecbar .wopen')].find(b => b.textContent === 'edit').click()`);
   check('edit opens the Markdown', await page.waitFor(`!!document.querySelector('.wspecedit')`));
@@ -228,7 +245,7 @@ try {
     `!!document.querySelector('.specdoc') && document.querySelector('.specdoc').innerText.includes('Edited in the panel.')`));
   const specFile = fs.readFileSync(path.join(root, 'specs', 'capabilities', 'orders', 'spec.md'), 'utf8');
   check('save writes spec.md', specFile.includes('Edited in the panel.'));
-  if (shots) await page.shot(path.join(tmp, 'spec-edited.png'));
+  if (shots) await page.shot(path.join(outDir || tmp, 'spec-edited.png'));
 
   await page.eval(`document.querySelector('.wback').click()`);
   check('back returns to the list', await page.waitFor(`!!document.querySelector('.wcaps a.wcname')`));
@@ -254,7 +271,7 @@ try {
     `!!document.querySelector('.wwikiframe') && !!document.querySelector('.wwikiframe').contentDocument.title`, 30000));
   check('Wiki marks the menu', await page.eval(
     `document.querySelector('#tabs a[href="#wiki"]').getAttribute('aria-current') === 'page'`));
-  if (shots) await page.shot(path.join(tmp, 'wiki.png'));
+  if (shots) await page.shot(path.join(outDir || tmp, 'wiki.png'));
 
   // ---- Tick: the write path rewrites tasks.md
   await page.eval(`document.querySelector('#tabs a[href="#specs"]').click()`);
@@ -266,7 +283,7 @@ try {
   const taskID = String(task).split(' ').pop();
   const tasksFile = fs.readFileSync(path.join(root, 'specs', 'changes', '2026-01-01-orders', 'tasks.md'), 'utf8');
   check('tick rewrites tasks.md', new RegExp(`- \\[x\\] ${taskID}\\b`).test(tasksFile), tasksFile.trim());
-  if (shots) await page.shot(path.join(tmp, 'specs.png'));
+  if (shots) await page.shot(path.join(outDir || tmp, 'specs.png'));
 
   if (page.errors.length) {
     failures++;

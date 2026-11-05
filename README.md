@@ -4,77 +4,105 @@ Your agent says it is done. This is how you check.
 
 <img src="docs/img/lines.svg" alt="A repository drawn as four lines: screens call endpoints, handled in modules, that use tables." width="100%">
 
-Three things, one binary, no runtime dependencies:
+weave reads your repository once and draws it as four lines: **screens** call **endpoints**,
+endpoints are handled in **modules**, modules use **tables**. Change records, tests and
+requirements hang off that map. One static binary, nothing to run beside it.
+
+<img src="docs/img/surfaces.svg" alt="One index built from the source feeds four doors: the gate, the panel, the wiki and the MCP server." width="100%">
 
 - **A gate.** `weave check` exits 1 when a frontend call reaches an endpoint that no longer
-  exists. The failure names the caller's `file:line`.
-- **A panel.** `weave serve` hosts the map with the gate, file windows, notes and the
-  change specs in it.
+  exists, and names the caller's `file:line`.
+- **A panel.** `weave serve` hosts the map with the gate, file windows, notes and the change
+  specs in it.
 - **A wiki.** `weave wiki` writes a page per module, endpoint, screen, table and change, and
   tells you when the pages describe an older commit.
+- **An agent interface.** `weave mcp` answers "what is this file, what does it touch, what
+  proves it" in a few hundred tokens instead of a few thousand.
 
 ```bash
 go install github.com/michalbasisty/weave/cmd/weave@latest   # Go 1.22+ to build, nothing to run
 cd /path/to/your/project
 weave init --hooks    # connect Claude, Cursor, VS Code, opencode, and the Stop hook
-weave serve           # http://127.0.0.1:7777 — the map, hosted
+weave serve           # http://127.0.0.1:7777: the map, hosted
 weave check           # what a change breaks (exit 1)
 ```
 
-## The gate
+## What you use it for
+
+| You are... | Ask weave | You get |
+|---|---|---|
+| **Handing work to an agent and wondering if "done" is true** | `weave check`, or let the Stop hook run it | exit 1 and `file:line` when a call no longer matches an endpoint; exit 0 and silence otherwise |
+| **About to edit a file** (or an agent is) | `context(files)` / `weave context <file>` | the screen, endpoints, tables, owning change, open tasks and the tests with the command to run them |
+| **Planning what to build next** | the Today page, `plan(slug)` | the next unfinished task, its files and its command; Changes shows done / total per record |
+| **Reviewing what an agent changed** | Today, "since the last commit" | what was added, removed or moved on the map, and which removed endpoints are still called |
+| **Looking for gaps in proof** | Checks | every endpoint no test reaches, ranked by how many screens call it, kept apart from what is actually broken |
+| **Keeping specs honest** | Specs, then Views | every screen with the endpoints and tables it reaches and the capability spec that owns its file |
+| **Onboarding someone** | `weave wiki` | a browsable site, one page per thing, stamped with the commit it describes |
+| **Wondering "what else breaks if I change this?"** | `impact(files)` | the complete blast radius, not a sample |
+
+### Checking an agent's work
 
 <img src="docs/img/gate.svg" alt="The gate: an agent claims done, weave check exits 1 naming the caller's file and line, the agent keeps working." width="100%">
 
-It runs at the end of an agent turn (Stop hook), before a commit, and in CI. Three failures,
-no opinions:
+The gate runs at the end of an agent turn (Stop hook), before a commit, and in CI. Three
+failures, no opinions:
 
-- a **removed endpoint is still called** — it compares the endpoint set with the previous one;
-- a **call site matches no endpoint** — a route that was renamed, or a typo;
+- a **removed endpoint is still called**: it compares the endpoint set with the previous one;
+- a **call site matches no endpoint**: a route that was renamed, or a typo;
 - a **requirement's test fails**, when the code names the requirement and a JUnit report exists.
 
 Everything else is a warning, because a gate that cries wolf gets switched off in a week.
 
-## What it costs, and what it saves
+### Reading the repository in ten seconds
 
-<img src="docs/img/chart-cost.svg" alt="Tokens for the same answers: weave search 66, weave context 346, the screen's file alone 4,657, the same facts gathered by hand 61,687." width="100%">
+<img src="docs/img/screens/today.png" alt="The Today page: the gate verdict, the four-line strip with counts, how many endpoints have a direct test, and a numbered list of what to do next." width="100%">
 
-Two numbers people ask about first:
+*Today* is the page to open first. The gate sentence says whether the contract holds, the strip
+says how big the repository is, the proof row says how much of it a test reaches, and "Next up"
+orders the work: broken calls first, then the change in progress, then the biggest gaps.
+"What weave could read" prints what the extractors found, so a zero is never a guess.
 
-| | |
-|---|---|
-| cost to install | **1,308 tokens** of MCP schema per session (13 tools) |
-| cost to answer | **66 tokens** for a route question, **346** for a screen's whole context |
-| cost to run | one static binary: index 954 files in 330 ms, `check` 406 ms |
+### Following one thing across the stack
 
-The cheapest thing about it is not the tokens. It is that `GET /api/v1/tasks/:id` cannot be
-found with grep — the source says `/:id` under a mount — and weave answers it in 66 tokens
-with the `file:line`. The measurements, methods and the comparison with other tools are in
-[`docs/COMPARISON.md`](docs/COMPARISON.md).
+<img src="docs/img/screens/endpoint.png" alt="An endpoint opened on the line: called from one screen, handled in the orders module, using the orders table, with the handler's file and line and the note that no test reaches it." width="100%">
 
-## The panel
+Open any screen, endpoint, module or table and it is drawn on the line it sits on: who calls
+it, who handles it, what it uses, which test proves it, and how far a change would reach.
+Every neighbour is a link, and the handler's `file:line` has an **open** button that shows the
+code beside the map and takes a note for the next session.
 
-`weave serve` binds `127.0.0.1` and keeps its write token in `.weave/serve.token`, so a
-restart keeps the URLs people have open (`--new-token` rotates it). It serves one page:
+### Finding what nothing proves
 
-- **Specs** and **Wiki** are places in the menu, after Checks, and take the full content
-  width. Specs runs the change records — a tick or reopen rewrites that one checkbox in
-  `tasks.md`, and a change can be started there — lists every capability spec under
-  `specs/capabilities/`, and has a **Views** table: every screen, the endpoints and tables
-  it reaches, and the capability whose Parts table names that screen's file. Click a
-  capability to read it as a page (title, prose, the Parts table) with a `raw` link to the
-  source and an `edit` that saves the Markdown (Ctrl+S); Wiki shows the generated pages in
-  place, with a Rebuild button.
-- **Check** and **File** share one dock beside the map, non-modal so the map stays usable:
-  the gate output with clickable `file:line`, and one file window with a note field that
-  writes through `weave remember`.
+<img src="docs/img/screens/checks.png" alt="The Checks page: zero broken calls, nine endpoints with no direct test, grouped by module and sorted by how many screens call them." width="100%">
 
-Each surface keeps its content when you switch. It is a local tool, not a team server:
-loopback only, one origin, no uploads.
+*Checks* separates two things that look alike. **Broken** is what `weave check` fails on.
+**Gaps in proof** are places no test reaches yet: worth knowing, not failures. The tab badge
+counts the gaps so the place never reads as empty.
 
-## The wiki
+### Managing specs next to the code
+
+<img src="docs/img/screens/specs.png" alt="The Specs place: a Views table mapping each screen to its endpoints, tables and owning capability, the change records with tickable tasks, and the capability specs." width="100%">
+
+*Specs* is a menu place that takes the full width:
+
+- **Views** maps every screen to the endpoints and tables it reaches and to the capability
+  whose Parts table names its file (the longest matching path wins);
+- **Changes** lists each record in `specs/changes/` with a checkbox per task. A tick rewrites
+  that one checkbox in `tasks.md`, and a change can be started from the same page;
+- **Capabilities** lists every `specs/capabilities/<area>/spec.md`.
+
+<img src="docs/img/screens/spec-page.png" alt="A capability spec rendered as a page: title, status, prose and the Parts table, with raw and edit buttons." width="100%">
+
+A capability opens as a page, not as raw Markdown: title, prose, the Parts table with its
+paths in monospace. `raw` shows the source in the file window and `edit` saves the Markdown
+(Ctrl+S) through a lock and a temp-file rename, so a reader never sees half a document.
+
+### Giving everyone the same documentation
+
+<img src="docs/img/screens/wiki.png" alt="The generated wiki shown inside the panel, with a sidebar of sections and a page per item." width="100%">
 
 ```bash
-weave wiki                 # .weave/wiki — local, gitignored
+weave wiki                 # .weave/wiki: local, gitignored
 weave wiki --out docs/wiki # a wiki you can commit and send
 weave wiki --check         # exit 1 when the pages describe an older tree
 ```
@@ -82,8 +110,52 @@ weave wiki --check         # exit 1 when the pages describe an older tree
 A sidebar that mirrors the graph, one directory page per section, search on every page (`/`),
 the handler's code next to the endpoint, the tests that prove it with the command to run them,
 and prev/next at the foot. `llms.txt` lists the same pages for an assistant, one line each.
-Every page is generated — regenerating is the only way to change it, so the documentation
-cannot drift into a document nobody trusts.
+Every page is generated, so the documentation cannot drift into a document nobody trusts.
+
+## What it costs, and what it saves
+
+<img src="docs/img/chart-cost.svg" alt="Tokens for the same answers: weave search 66, weave context 346, the screen's file alone 4,657, the same facts gathered by hand 61,687." width="100%">
+
+| | weave | the alternative | difference |
+|---|---|---|---|
+| a route question | **66 tokens** | found by hand: not findable with grep | `GET /api/v1/tasks/:id` is `/:id` under a mount in the source |
+| a screen's whole context | **346 tokens** | 4,657 for the screen's file alone; 61,687 gathering the same facts | about **13x** less than the file, about **178x** less than by hand |
+| install cost | **1,308 tokens** of MCP schema (13 tools) | GitHub 18,000, Notion 9,000, filesystem 3,500 | see the chart below |
+| index a 954-file repo | **330 ms** | | one static binary |
+| run the gate | **406 ms** | | quiet when it is right |
+
+<img src="docs/img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 1,308 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
+
+The cheapest thing about it is not the tokens. It is that the answer is *right*: a route that
+grep cannot find is answered with the `file:line`, and a gate that names the broken caller
+saves the next review round. The measurements, methods and the comparison with other tools
+are in [`docs/COMPARISON.md`](docs/COMPARISON.md).
+
+**What is not proven.** The numbers above are measured on weave's own answers. Whether having
+them *changes an agent's behaviour* (fewer tokens per task, fewer wrong files, a higher pass
+rate) has not been measured end to end. [`docs/EVAL.md`](docs/EVAL.md) is the protocol that
+would; until it runs, other tools' reported savings are context, not a promise:
+
+<img src="docs/img/chart-others.svg" alt="Reduction in agent output tokens reported by other tools: repowise 31.6%, CodeGraph 24.4%, Serena 14.8%, Graphify 8.9%, code-review-graph 6.0%." width="100%">
+
+## The panel
+
+`weave serve` binds `127.0.0.1` and keeps its write token in `.weave/serve.token`, so a restart
+keeps the URLs people have open (`--new-token` rotates it). It serves one page:
+
+| Place | Holds |
+|---|---|
+| **Today** | gate verdict, strip, proof, next up, what changed since the last commit |
+| **Map** | every screen, endpoint, module and table, each drawn on its line |
+| **Changes** | change records with their tasks |
+| **Checks** | broken calls and gaps in proof |
+| **Specs** | Views, change records, capability specs, spec editor |
+| **Wiki** | the generated pages in place, with a Rebuild button |
+
+**Check** and **File** share one dock beside the map, non-modal so the map stays usable: the
+gate output with clickable `file:line`, and one file window with a note field that writes
+through `weave remember`. Each surface keeps its content when you switch. It is a local tool,
+not a team server: loopback only, one origin, no uploads.
 
 ## Agents
 
@@ -103,15 +175,15 @@ every answer ends with the tokens it cost:
 | `changed(ref)` | what the graph gained or lost since a git ref |
 | `remember` / `recall` | a note beside the files it concerns, returned as a claim, never evidence |
 
-`context` answers "I know the file, what is it?" · `plan` answers "I know the spec, what next?"
-· `impact` answers "I know the change, what else breaks?" What agents actually call, and what
-that says about the tool surface, is in [`docs/AGENTS.md`](docs/AGENTS.md).
+`context` answers "I know the file, what is it?", `plan` answers "I know the spec, what
+next?", `impact` answers "I know the change, what else breaks?". What agents actually call,
+and what that says about the tool surface, is in [`docs/AGENTS.md`](docs/AGENTS.md).
 
 ## It says what it could not parse
 
 Every extractor misses something, and a tool that misses a route silently gives a confident
-wrong answer. So coverage is measured and printed — route files, client calls, task files,
-Prisma models, tRPC routers — and any file that looks like a contract but produced nothing is
+wrong answer. So coverage is measured and printed (route files, client calls, task files,
+Prisma models, tRPC routers) and any file that looks like a contract but produced nothing is
 named. That list is the honest boundary of every answer weave gives.
 
 ```bash
@@ -120,12 +192,13 @@ weave doctor
 
 ## More
 
-- [`docs/REFERENCE.md`](docs/REFERENCE.md) — every command, every extractor, traceability,
-  CI, known limits.
-- [`docs/COMPARISON.md`](docs/COMPARISON.md) — all three charts and their methods.
-- [`docs/PLAN.md`](docs/PLAN.md) — where this is going, and the replay that says what not to build.
-- [`docs/DESIGN.md`](docs/DESIGN.md) — the research the product rests on.
-- [`docs/explorer/DESIGN.md`](docs/explorer/DESIGN.md) — the visual contract of the map.
+- [`docs/REFERENCE.md`](docs/REFERENCE.md): every command, every extractor, traceability, CI, known limits.
+- [`docs/COMPARISON.md`](docs/COMPARISON.md): the charts and their methods.
+- [`docs/PLAN.md`](docs/PLAN.md): where this is going, and the replay that says what not to build.
+- [`docs/DESIGN.md`](docs/DESIGN.md): the research the product rests on.
+- [`docs/explorer/DESIGN.md`](docs/explorer/DESIGN.md): the visual contract of the map.
+- [`test/ui/README.md`](test/ui/README.md): the browser smoke test, which also regenerates the
+  screenshots here: `node test/ui/panel.mjs --out docs/img/screens`.
 
 ```bash
 go test ./...    # unit, golden and integration suites
