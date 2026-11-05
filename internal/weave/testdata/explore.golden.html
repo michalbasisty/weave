@@ -1113,7 +1113,7 @@ function findList(){
   const ids=findIds();
   const live=$('#live');
   if(live)live.textContent=ids.length+(ids.length===1?' match':' matches')+' for '+q;
-  if(!ids.length)return lhead('Search',0)+empty('Nothing matches "'+q+'"','Try part of a route (<code>/tasks</code>), a table (<code>users</code>), a change name, or a file path. <kbd>Esc</kbd> clears the search.');
+  if(!ids.length)return lhead('Search',0)+empty('Nothing matches “'+esc(q)+'”','Try part of a route (<code>/tasks</code>), a table (<code>users</code>), a change name, or a file path. <kbd>Esc</kbd> clears the search.');
   let h=lhead('Search',ids.length,'<span class="lh">grouped by kind</span>');
   // A row that matched on its file or description says so; the name alone would look
   // like an unexplained hit.
