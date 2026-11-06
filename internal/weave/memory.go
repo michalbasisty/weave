@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -81,7 +82,7 @@ func Remember(root string, files []string, note, now string) (*Note, error) {
 		}
 	}
 	text := jsstr.Slice(jsstr.Trim(note), 0, 1000)
-	if list.size() == 0 || text == "" {
+	if list.size() == 0 || text == "" || Derivable(text) {
 		return nil, nil
 	}
 	// The same note on the same files again is noise, not news: an agent that
@@ -128,7 +129,7 @@ func matching(notes []Note, files []string, n int) []Note {
 	keep := make([]bool, len(notes))
 	for i := len(notes) - 1; i >= 0; i-- {
 		k := strings.Join(strings.Fields(strings.ToLower(notes[i].Note)), " ")
-		keep[i] = !seen[k]
+		keep[i] = !seen[k] && !Derivable(notes[i].Note)
 		seen[k] = true
 	}
 	for i, note := range notes {
@@ -194,6 +195,58 @@ func ClearMemory(root string) (int, error) {
 		return 0, err
 	}
 	return len(notes), os.WriteFile(MemoryPath(root), nil, 0o644)
+}
+
+// A note that only says who owns a file restates CODEOWNERS or the map:
+// `Owner: payments team`, `Owners: @ana @ben`, `Owned by billing`. Agents write
+// these for every file they touch, and twenty of them bury the one note a person
+// wrote. They are neither stored nor shown.
+var (
+	reOwnerLabel = regexp.MustCompile(`(?i)^\s*(?:owners?|maintainers?|codeowners?)\s*:`)
+	reOwnedBy    = regexp.MustCompile(`(?i)^\s*(?:owned\s+by|ownership\b)`)
+)
+
+// Derivable reports whether a note only restates ownership.
+func Derivable(note string) bool {
+	if reOwnerLabel.MatchString(note) {
+		return true
+	}
+	return reOwnedBy.MatchString(note) && len(strings.Fields(note)) <= 8
+}
+
+// PruneMemory drops ownership notes and repeats from the memory file, keeping the
+// newest copy of each note, and returns how many it dropped.
+func PruneMemory(root string) (int, error) {
+	notes, err := ReadNotes(root)
+	if err != nil || len(notes) == 0 {
+		return 0, err
+	}
+	var keep []Note
+	for i := len(notes) - 1; i >= 0; i-- {
+		n := notes[i]
+		if Derivable(n.Note) {
+			continue
+		}
+		dup := false
+		for _, k := range keep {
+			if sameNote(k.Note, n.Note) && sameFiles(k.Files, n.Files) {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			keep = append(keep, n)
+		}
+	}
+	var buf []byte
+	for i := len(keep) - 1; i >= 0; i-- {
+		w := objWriter{}
+		w.str("at", keep[i].At)
+		w.strs("files", keep[i].Files)
+		w.str("note", keep[i].Note)
+		buf = append(append(buf, w.end()...), '\n')
+	}
+	return len(notes) - len(keep), os.WriteFile(MemoryPath(root), buf, 0o644)
 }
 
 func sameNote(a, b string) bool {

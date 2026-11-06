@@ -66,7 +66,11 @@ func cmdRemember() int {
 	}
 	entry, err := weave.Remember(root, files, note, time.Now().UTC().Format("2006-01-02T15:04:05.000Z"))
 	if err != nil || entry == nil {
-		fmt.Println("nothing to remember")
+		if weave.Derivable(note) {
+			fmt.Println("not stored: who owns a file is in CODEOWNERS and the map; keep notes for decisions and gotchas")
+		} else {
+			fmt.Println("nothing new to remember")
+		}
 		return 0
 	}
 	fmt.Printf("remembered for %d file(s): %s\n", len(entry.Files), entry.Note)
@@ -84,6 +88,15 @@ func cmdRecall() int {
 }
 
 func cmdMemory() int {
+	if hasFlag("prune") {
+		n, err := weave.PruneMemory(root)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		fmt.Printf("memory pruned (%d ownership note(s) and repeats dropped)\n", n)
+		return 0
+	}
 	if hasFlag("clear") {
 		n, err := weave.ClearMemory(root)
 		if err != nil {

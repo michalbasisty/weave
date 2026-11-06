@@ -144,7 +144,7 @@ func helpText() string {
   weave grep    <text>          matching source lines (--regex, --limit)
   weave remember --note "…" <file...>   leave a note for the next session
   weave recall  [file...]       notes for these files
-  weave memory                  all notes (--clear drops them)
+  weave memory                  all notes (--prune drops ownership notes and repeats, --clear drops all)
   weave check   [file...]       fail when a change breaks a contract (no args: git diff)
   weave hook                    check for an agent hook: exit 2 and the failure on stderr
   weave serve   [--port N]      host the map, the wiki and the actions on 127.0.0.1, and open it
