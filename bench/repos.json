@@ -1,0 +1,24 @@
+[
+  {
+    "name": "documenso",
+    "dir": "documenso",
+    "url": "https://github.com/documenso/documenso",
+    "commit": "fdd0337",
+    "stack": "Remix + tRPC + Prisma monorepo"
+  },
+  {
+    "name": "RealWorld (Express + React)",
+    "dir": "realworld",
+    "url": "https://github.com/gothinkster/node-express-realworld-example-app + https://github.com/khaledosman/react-redux-realworld-example-app",
+    "commit": "30b68e1 + 53b0b4c",
+    "stack": "Express + Prisma backend, React + Redux front end",
+    "mutate": true
+  },
+  {
+    "name": "RealWorld (NestJS)",
+    "dir": "nest-realworld",
+    "url": "https://github.com/lujakob/nestjs-realworld-example-app",
+    "commit": "c1c2cc4",
+    "stack": "NestJS + TypeORM API"
+  }
+]

@@ -71,8 +71,10 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 	var errors, warnings []string
 
 	var prev []string
+	var baseGraph *weave.Graph // the graph removed endpoints are read from, when there is one
 	if against != "" {
 		if base := baseline.GraphAt(root, against); base != nil {
+			baseGraph = base
 			prev = endpointNames(base)
 		} else {
 			warnings = append(warnings, fmt.Sprintf("could not read %s — comparing against the last local index instead", against))
@@ -80,6 +82,24 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 		}
 	} else {
 		prev = g.PrevEndpoints
+		// The last index moves with every run, so a second `weave check` on the same
+		// edit would compare the edit with itself and pass. The committed tree does
+		// not move: with uncommitted changes, an endpoint gone since HEAD counts too.
+		if len(gitChanged(root, "")) > 0 {
+			if base := baseline.GraphAt(root, "HEAD"); base != nil {
+				baseGraph = base
+				seen := make(map[string]bool, len(prev))
+				for _, e := range prev {
+					seen[e] = true
+				}
+				for _, e := range endpointNames(base) {
+					if !seen[e] {
+						prev = append(prev, e)
+						seen[e] = true
+					}
+				}
+			}
+		}
 	}
 	now := endpointNames(g)
 	nowSet := make(map[string]bool, len(now))
@@ -109,10 +129,22 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 			}
 		}
 	}
+	// The screens a removed endpoint served are the ones that called it before:
+	// exact when the old graph is at hand, else every screen that reaches the caller.
+	calledBy := map[string][]string{}
+	if baseGraph != nil {
+		for _, e := range baseGraph.Edges {
+			if e.Kind == "calls" && strings.HasPrefix(e.From, "page:") && strings.HasPrefix(e.To, "endpoint:") {
+				calledBy[strings.TrimPrefix(e.To, "endpoint:")] = append(calledBy[strings.TrimPrefix(e.To, "endpoint:")], strings.TrimPrefix(e.From, "page:"))
+			}
+		}
+	}
 	screensOf := map[string][]string{}
 	for _, b := range broken {
 		var screens []string
-		if b.call.File != nil {
+		if s, ok := calledBy[b.gone]; ok {
+			screens = s
+		} else if b.call.File != nil {
 			file := *b.call.File
 			if s, ok := screensOf[file]; ok {
 				screens = s

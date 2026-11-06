@@ -1,51 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 336" width="1200" height="336" role="img" aria-label="MCP tool schema loaded before the first prompt: weave 1433 tokens, filesystem 3500, Notion 9000, GitHub 18000.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 274" width="1200" height="274" role="img" aria-label="Tool schema tokens: weave 1430, GitHub 18000, Notion 9000, filesystem 3500">
+
   <style>
-    :root { --ground:#f5f6f8; --ink:#131a26; --ink2:#3a4454; --ink3:#5a6474; --rule:#dbe0e8; --rule2:#e8ebf0;
-            --weave:#1d4bb0; --other:#8f9bb0; }
+    :root { --bg:#ffffff; --ink:#131a26; --ink2:#3a4454; --ink3:#5a6474; --rule:#e3e7ee; --weave:#2456c7; --alt:#c2621c; --none:#d5dae3; }
     @media (prefers-color-scheme: dark) {
-      :root { --ground:#0b111d; --ink:#e8ecf3; --ink2:#bcc5d4; --ink3:#8f9bb0; --rule:#22304a; --rule2:#1a2439;
-              --weave:#9cb9f5; --other:#41506b; }
+      :root { --bg:#0d1117; --ink:#e8ecf3; --ink2:#c3cad6; --ink3:#8f9bb0; --rule:#222b3a; --weave:#5b86e6; --alt:#cf7434; --none:#2a3344; }
     }
-    .bg { fill: var(--ground); }
-    .title { font: 600 19px "Segoe UI", system-ui, sans-serif; fill: var(--ink); }
-    .sub { font: 400 13px "Segoe UI", system-ui, sans-serif; fill: var(--ink3); }
-    .name { font: 400 14px "Segoe UI", system-ui, sans-serif; fill: var(--ink2); }
-    .track { fill: var(--rule2); }
-    .barW { fill: var(--weave); }
-    .barO { fill: var(--other); }
-    .value { font: 700 15px "Cascadia Mono", Consolas, ui-monospace, monospace; font-variant-numeric: tabular-nums; fill: var(--ink2); }
-    .note { font: 400 12px "Cascadia Mono", Consolas, ui-monospace, monospace; fill: var(--ink3); }
-    .axis { stroke: var(--rule); stroke-width: 1; }
+    .bg { fill: var(--bg); }
+    .title { font: 600 22px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--ink); }
+    .sub { font: 400 14px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--ink3); }
+    .group { font: 600 15px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--ink); }
+    .label { font: 400 14px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--ink2); }
+    .value { font: 600 14px ui-monospace, "SF Mono", Menlo, Consolas, monospace; fill: var(--ink); font-variant-numeric: tabular-nums; }
+    .note { font: 400 13px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--ink3); }
+    .rule { stroke: var(--rule); stroke-width: 1; }
+    .w { fill: var(--weave); } .a { fill: var(--alt); } .n { fill: var(--none); }
   </style>
-
-  <rect class="bg" x="0" y="0" width="1200" height="336" rx="10"/>
-  <text class="title" x="40" y="44">What every session pays before the first prompt</text>
-  <text class="sub" x="40" y="68">MCP tool schemas, in context on every turn · lower is better</text>
-
-  <line class="axis" x1="300" y1="96" x2="300" y2="284"/>
-
-  <text class="name" x="40" y="118">weave — 14 tools</text>
-  <rect class="track" x="300" y="102" width="700" height="18" rx="4"/>
-  <rect class="barW" x="300" y="102" width="56" height="18" rx="4"/>
-  <text class="value" x="368" y="117" fill="var(--weave)">1,433</text>
-
-  <text class="name" x="40" y="160">filesystem</text>
-  <rect class="track" x="300" y="144" width="700" height="18" rx="4"/>
-  <rect class="barO" x="300" y="144" width="136" height="18" rx="4"/>
-  <text class="value" x="448" y="159">3,500</text>
-
-  <text class="name" x="40" y="202">Notion</text>
-  <rect class="track" x="300" y="186" width="700" height="18" rx="4"/>
-  <rect class="barO" x="300" y="186" width="350" height="18" rx="4"/>
-  <text class="value" x="662" y="201">9,000</text>
-
-  <text class="name" x="40" y="244">GitHub — 93 tools</text>
-  <rect class="track" x="300" y="228" width="700" height="18" rx="4"/>
-  <rect class="barO" x="300" y="228" width="700" height="18" rx="4"/>
-  <text class="value" x="1012" y="243">18,000</text>
-
-  <line class="axis" x1="300" y1="284" x2="1000" y2="284"/>
-  <text class="note" x="300" y="304">0</text>
-  <text class="note" x="1000" y="304" text-anchor="end">18,000 tokens</text>
-  <text class="note" x="40" y="324">weave measured from its own schema; the others from published measurements of those servers</text>
+  <rect class="bg" x="0" y="0" width="1200" height="274" rx="12"/>
+  <text class="title" x="40" y="48">Context every session pays before the first prompt</text>
+  <text class="sub" x="40" y="74">MCP tool schema, in tokens. weave measured; the others as published by their maintainers</text>
+  
+  <text class="group" x="40" y="102">MCP servers</text><text class="label" x="196" y="131" text-anchor="end">weave (14 tools)</text><line class="rule" x1="210" x2="210" y1="113" y2="139"/><path class="w" d="M210,116 h47.638888888888886 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-47.638888888888886 z"/><text class="value" x="271.6388888888889" y="131">1,430</text><text class="label" x="196" y="161" text-anchor="end">GitHub</text><line class="rule" x1="210" x2="210" y1="143" y2="169"/><path class="a" d="M210,146 h646 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-646 z"/><text class="value" x="870" y="161">18,000</text><text class="label" x="196" y="191" text-anchor="end">Notion</text><line class="rule" x1="210" x2="210" y1="173" y2="199"/><path class="a" d="M210,176 h321 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-321 z"/><text class="value" x="545" y="191">9,000</text><text class="label" x="196" y="221" text-anchor="end">filesystem</text><line class="rule" x1="210" x2="210" y1="203" y2="229"/><path class="a" d="M210,206 h122.38888888888889 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-122.38888888888889 z"/><text class="value" x="346.3888888888889" y="221">3,500</text>
 </svg>

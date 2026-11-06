@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 244" width="1200" height="244" role="img" aria-label="documenso (2458 files): weave check 1027 ms; RealWorld (Express + React) (109 files): weave check 45 ms; RealWorld (NestJS) (43 files): weave check 29 ms">
+
+  <style>
+    :root { --bg:#ffffff; --ink:#131a26; --ink2:#3a4454; --ink3:#5a6474; --rule:#e3e7ee; --weave:#2456c7; --alt:#c2621c; --none:#d5dae3; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0d1117; --ink:#e8ecf3; --ink2:#c3cad6; --ink3:#8f9bb0; --rule:#222b3a; --weave:#5b86e6; --alt:#cf7434; --none:#2a3344; }
+    }
+    .bg { fill: var(--bg); }
+    .title { font: 600 22px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--ink); }
+    .sub { font: 400 14px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--ink3); }
+    .group { font: 600 15px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--ink); }
+    .label { font: 400 14px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--ink2); }
+    .value { font: 600 14px ui-monospace, "SF Mono", Menlo, Consolas, monospace; fill: var(--ink); font-variant-numeric: tabular-nums; }
+    .note { font: 400 13px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--ink3); }
+    .rule { stroke: var(--rule); stroke-width: 1; }
+    .w { fill: var(--weave); } .a { fill: var(--alt); } .n { fill: var(--none); }
+  </style>
+  <rect class="bg" x="0" y="0" width="1200" height="244" rx="12"/>
+  <text class="title" x="40" y="48">Fast enough to run on every agent turn</text>
+  <text class="sub" x="40" y="74">weave check: re-index the repository and run the gate. Median wall time, one static binary</text>
+  
+  <text class="group" x="40" y="102">weave check</text><text class="label" x="196" y="131" text-anchor="end">documenso</text><line class="rule" x1="210" x2="210" y1="113" y2="139"/><path class="w" d="M210,116 h646 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-646 z"/><text class="value" x="870" y="131">1,027 ms  (2,458 files)</text><text class="label" x="196" y="161" text-anchor="end">RW Express + React</text><line class="rule" x1="210" x2="210" y1="143" y2="169"/><path class="w" d="M210,146 h24.481012658227847 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-24.481012658227847 z"/><text class="value" x="248.48101265822785" y="161">45 ms  (109 files)</text><text class="label" x="196" y="191" text-anchor="end">RW NestJS</text><line class="rule" x1="210" x2="210" y1="173" y2="199"/><path class="w" d="M210,176 h14.354430379746834 a4,4 0 0 1 4,4 v12 a4,4 0 0 1 -4,4 h-14.354430379746834 z"/><text class="value" x="238.35443037974684" y="191">29 ms  (43 files)</text>
+</svg>

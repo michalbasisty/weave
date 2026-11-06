@@ -208,3 +208,32 @@ func TestLazyImportWithMagicComment(t *testing.T) {
 		t.Fatalf("pages = %+v", st.Pages)
 	}
 }
+
+// Renaming a route must leave its callers unmatched, not quietly re-matched to a
+// neighbour: a variable leaf is never a fixed route, and a longer call needs a
+// literal in common with a shorter endpoint.
+func TestCallsDoNotFallIntoNeighbourRoutes(t *testing.T) {
+	eps := []Endpoint{
+		{Method: "GET", Path: "/articles/feed"},
+		{Method: "GET", Path: "/articles/:slug"},
+		{Method: "GET", Path: "/api/users/:id"},
+	}
+	for path, want := range map[string]string{
+		"/articles/${slug}":          "/articles/:slug",
+		"/articles/feed":             "/articles/feed",
+		"/articles/${slug}/comments": "",
+		"/v1/api/users/${id}":        "/api/users/:id",
+	} {
+		got := ""
+		if e := MatchEndpoint(Call{Method: "GET", Path: path}, eps); e != nil {
+			got = e.Path
+		}
+		if got != want {
+			t.Errorf("%s matched %q, want %q", path, got, want)
+		}
+	}
+	// with /articles/:slug renamed away, its callers are broken, not "feed"
+	if e := MatchEndpoint(Call{Method: "GET", Path: "/articles/${slug}"}, eps[:1]); e != nil {
+		t.Errorf("/articles/${slug} matched %s", e.Path)
+	}
+}
