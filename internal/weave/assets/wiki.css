@@ -1,22 +1,22 @@
 /* Documentation, not a dashboard: sidebar, article, contents. Same ink as the map. */
 :root{
-  --ground:#f5f6f8;--surface:#ffffff;--sunk:#eceff4;
-  --ink:#131a26;--ink2:#3a4454;--ink3:#5a6474;
-  --rule:#dbe0e8;--rule2:#e8ebf0;
-  --shell:#14233f;--shell-ink:#ffffff;--shell-ink2:#c3cede;--shell-field:#22355b;--shell-rule:#2c4170;
-  --link:#1d4bb0;--ok:#17723f;--bad:#b4261a;--code:#eceff4;
-  --ring:#1d4bb0;--mark:#cfe0f8;
-  --ui:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
-  --mono:"Cascadia Mono","Cascadia Code",Consolas,ui-monospace,monospace;
+  --ground:#f6f7f9;--surface:#ffffff;--sunk:#f0f2f5;
+  --ink:#111827;--ink2:#374151;--ink3:#6b7280;
+  --rule:#e3e6eb;--rule2:#eef0f3;
+  --shell:#ffffff;--shell-ink:#111827;--shell-ink2:#4b5563;--shell-field:#f3f4f6;--shell-rule:#e3e6eb;
+  --link:#2f4fc4;--ok:#17723f;--bad:#b4261a;--code:#f0f2f5;
+  --ring:#3b5bdb;--mark:#dfe6fb;
+  --ui:ui-sans-serif,system-ui,-apple-system,"Segoe UI Variable Text","Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono","SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme:dark){
   :root{
-    --ground:#0b111d;--surface:#101827;--sunk:#18233a;
-    --ink:#e8ecf3;--ink2:#bcc5d4;--ink3:#8f9bb0;
-    --rule:#22304a;--rule2:#1a2439;
-    --shell:#18294f;--shell-ink2:#b9c6dd;--shell-field:#24396b;--shell-rule:#36507f;
-    --link:#9cb9f5;--ok:#4cc493;--bad:#f2907f;--code:#101827;
-    --ring:#9cb9f5;--mark:#2a3a5c;
+    --ground:#0d1117;--surface:#151b23;--sunk:#1c2430;
+    --ink:#e6e9ef;--ink2:#c0c7d2;--ink3:#8b95a5;
+    --rule:#2a313c;--rule2:#20262f;
+    --shell:#151b23;--shell-ink:#e6e9ef;--shell-ink2:#aab3c0;--shell-field:#1c2430;--shell-rule:#2a313c;
+    --link:#9cb4ff;--ok:#62cf91;--bad:#f2907f;--code:#1c2430;
+    --ring:#9cb4ff;--mark:#2b4475;
   }
 }
 *{box-sizing:border-box;scrollbar-color:var(--rule) transparent;scrollbar-width:thin}
@@ -31,7 +31,7 @@ code,.path{font-family:var(--mono);font-size:.8125rem}
 .skip:focus{left:8px;top:8px;background:var(--surface);padding:8px;z-index:50}
 
 /* top bar: search is always one keystroke away */
-.bar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;height:56px;padding:0 20px;background:var(--shell);color:var(--shell-ink)}
+.bar{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;height:56px;padding:0 20px;background:var(--shell);color:var(--shell-ink);border-bottom:1px solid var(--rule)}
 .brand{color:var(--shell-ink);font:700 1.125rem/1 var(--ui)}
 .brand:hover{text-decoration:none}
 .repo{color:var(--shell-ink2);font-size:.8125rem}

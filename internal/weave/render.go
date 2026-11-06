@@ -88,22 +88,26 @@ const afterCSS = `</style></head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
-  <a class="brand" href="#today">weave</a>
+  <a class="brand" href="#today"><svg class="logo" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h12"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="8" r="2"/></svg>weave</a>
   <select id="proj" aria-label="Project" hidden></select>
-  <nav class="tabs" id="tabs" aria-label="Places"></nav>
   <div class="find" role="search">
     <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
     <label class="sr" for="q">Find a screen, endpoint, table or change</label>
-    <input id="q" type="search" placeholder="Search the map" autocomplete="off" spellcheck="false">
+    <input id="q" type="search" placeholder="Search screens, endpoints, tables, files" autocomplete="off" spellcheck="false">
     <kbd class="key" aria-hidden="true">/</kbd>
   </div>
   <button id="theme" class="themebtn" type="button"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11a5.5 5.5 0 0 0 0-11z" class="fill"/></svg><span id="themelabel"></span></button>
 </header>
+<div class="frame">
+<nav class="tabs" id="tabs" aria-label="Places"></nav>
+<div class="content">
 <nav class="crumbs" id="crumbs" aria-label="You are here"></nav>
 <main id="main" tabindex="-1">
   <section id="list" aria-label="List"></section>
   <section id="detail" aria-label="Item"></section>
 </main>
+</div>
+</div>
 <p class="sr" id="live" aria-live="polite"></p>
 <script>const D=`
 

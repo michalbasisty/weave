@@ -215,8 +215,8 @@ try {
   // ---- Specs: menu place, views table, owner, rendered spec page
   await go('#specs');
   check('Specs opens', await page.waitFor(`!!document.querySelector('#wfullview .wcaps a.wcname')`));
-  check('menu is Today, Map, Changes, Checks, Specs, Wiki', await page.eval(
-    `[...document.querySelectorAll('#tabs a')].map(a => a.textContent.replace(/\\d+$/, '')).join(',') === 'Today,Map,Changes,Checks,Specs,Wiki'`));
+  check('menu is Overview, the four lines, Checks, Changes, Specs, Wiki', await page.eval(
+    `[...document.querySelectorAll('#tabs a')].map(a => a.textContent.replace(/\\d+$/, '')).join(',') === 'Overview,Screens,Endpoints,Modules,Tables,Checks,Changes,Specs,Wiki'`));
   check('Specs takes the full width', await page.eval(`document.querySelector('#main').classList.contains('wfull')`));
   check('Views table lists the screen', await page.eval(`document.querySelectorAll('.wviewtable tbody tr').length >= 1`));
   check('Views row names the owning spec', await page.eval(
