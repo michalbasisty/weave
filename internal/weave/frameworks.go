@@ -17,6 +17,7 @@ type ExtractStats struct {
 	Silent    []string
 	Ignored   []string
 	Endpoints []Endpoint
+	Pages     []Page // screens a file-routing framework declared
 }
 
 // ---------------------------------------------------------------- Next.js
@@ -159,6 +160,7 @@ func ExtractNextPages(files []SourceFile, b *Builder, nextRepo bool) ExtractStat
 
 		pid := PageID(route)
 		b.Node(&GNode{ID: pid, Kind: KindPage, Name: route, File: Ptr(f.Rel), Meta: strMeta("desc", TopComment(f.Lines, 220), "framework", "next")})
+		st.Pages = append(st.Pages, Page{route, "", f.Rel})
 		b.Edge(pid, FileID(f.Rel), "renders")
 		st.Found++
 	}
@@ -324,9 +326,9 @@ func isIdentChar(c byte) bool {
 
 // ExtractTRPC reads tRPC routers, following aliases and imported procedures across
 // files so `team: teamRouter` and `find: findTeamsRoute` produce `team.find`.
-func ExtractTRPC(files []SourceFile, b *Builder) ExtractStats {
+func ExtractTRPC(files []SourceFile, b *Builder, al *Aliases) ExtractStats {
 	st := ExtractStats{Silent: []string{}}
-	procs := ResolveTRPC(files)
+	procs := ResolveTRPC(files, al)
 	byRouter := map[string]bool{}
 	for _, p := range procs {
 		byRouter[p.router] = true

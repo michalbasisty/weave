@@ -1542,7 +1542,7 @@ func CoverageLines(g *Graph, full bool) []string {
 	}
 	out = append(out, "  routes        "+itoa(c.Pages.Mapped)+"/"+itoa(c.Pages.Declared)+" <Route> entries mapped ("+pct(c.Pages.Mapped, c.Pages.Declared)+"%"+skipped+")")
 	out = append(out, "  task files    "+itoa(c.Specs.Parsed)+"/"+itoa(c.Specs.Files)+" parsed ("+pct(c.Specs.Parsed, c.Specs.Files)+"%)")
-	out = append(out, "  prisma        "+itoa(c.Prisma.Tables)+"/"+itoa(c.Prisma.Models)+" models mapped to tables")
+	out = append(out, "  schema        "+itoa(c.Prisma.Tables)+"/"+itoa(c.Prisma.Models)+" models mapped to tables (Prisma, Drizzle, TypeORM)")
 	if c.Next != nil && (c.Next.Files != 0 || c.Next.Found != 0) {
 		out = append(out, "  file routes   "+itoa(c.Next.Found)+"/"+itoa(c.Next.Files)+" route files produced endpoints ("+pct(c.Next.Found, c.Next.Files)+"%)")
 	}

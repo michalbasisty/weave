@@ -154,7 +154,8 @@ func helpText() string {
   weave evidence [REQ...]       which requirements a JUnit report proves
   weave doctor                  graph health
   weave perf    [--runs N]      index timings over time, or N fresh runs
-  weave init    [--upgrade]     connect Claude, Cursor, opencode, Codex
+  weave init    [--upgrade]     connect Claude, Cursor, VS Code, opencode
+  weave init    --only claude   write only the configs you name (claude,cursor,vscode,opencode)
   weave init    --hooks         also install the Stop hook that runs the gate
   weave forget  <name>          drop a project from the list
   weave mcp                     MCP server on stdio (--all: serve every project)

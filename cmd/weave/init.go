@@ -51,6 +51,11 @@ func cmdInit() int {
 	}
 	args := []string{"mcp", "--root", "."}
 	upgrade := hasFlag("upgrade")
+	want, bad := initTargets(flagValues("only"))
+	if bad != "" {
+		fmt.Fprintf(os.Stderr, "weave init: unknown --only target %q (use claude, cursor, vscode, opencode)\n", bad)
+		return 2
+	}
 	var did, skipped []string
 
 	writeValue := func(p string, value any) bool {
@@ -112,21 +117,29 @@ func cmdInit() int {
 		servers["weave"] = map[string]any{"command": exe, "args": args}
 		doc["mcpServers"] = servers
 	}
-	ensure(".mcp.json", mcpFile{MCPServers: map[string]stdioConfig{"weave": {Command: exe, Args: args}}}, setMCP)
-	ensure(filepath.Join(".cursor", "mcp.json"), mcpFile{MCPServers: map[string]stdioConfig{"weave": {Command: exe, Args: args}}}, setMCP)
-	ensure(filepath.Join(".vscode", "mcp.json"), vsFile{Servers: map[string]vsConfig{
-		"weave": {Type: "stdio", Command: exe, Args: args},
-	}}, func(doc map[string]any) {
-		servers, _ := doc["servers"].(map[string]any)
-		if servers == nil {
-			servers = map[string]any{}
-		}
-		servers["weave"] = map[string]any{"type": "stdio", "command": exe, "args": args}
-		doc["servers"] = servers
-	})
+	if want["claude"] {
+		ensure(".mcp.json", mcpFile{MCPServers: map[string]stdioConfig{"weave": {Command: exe, Args: args}}}, setMCP)
+	}
+	if want["cursor"] {
+		ensure(filepath.Join(".cursor", "mcp.json"), mcpFile{MCPServers: map[string]stdioConfig{"weave": {Command: exe, Args: args}}}, setMCP)
+	}
+	if want["vscode"] {
+		ensure(filepath.Join(".vscode", "mcp.json"), vsFile{Servers: map[string]vsConfig{
+			"weave": {Type: "stdio", Command: exe, Args: args},
+		}}, func(doc map[string]any) {
+			servers, _ := doc["servers"].(map[string]any)
+			if servers == nil {
+				servers = map[string]any{}
+			}
+			servers["weave"] = map[string]any{"type": "stdio", "command": exe, "args": args}
+			doc["servers"] = servers
+		})
+	}
 
 	oc := filepath.Join(root, "opencode.json")
-	if !pathExists(oc) {
+	if !want["opencode"] {
+		// not asked for
+	} else if !pathExists(oc) {
 		if writeValue(oc, openCodeFile{Mcp: map[string]localConfig{
 			"weave": {Type: "local", Command: []string{exe, "mcp", "--root", "."}, Enabled: true},
 		}}) {
@@ -258,4 +271,31 @@ prove a requirement is tested (needed for `+"`weave evidence`"+` and the check g
   then: weave evidence
 `, exe, exe, exe, exe, exe)
 	return 0
+}
+
+// initTargets reads `--only claude,cursor` (repeatable). No flag means every client.
+func initTargets(only []string) (map[string]bool, string) {
+	all := []string{"claude", "cursor", "vscode", "opencode"}
+	want := map[string]bool{}
+	if len(only) == 0 {
+		for _, t := range all {
+			want[t] = true
+		}
+		return want, ""
+	}
+	for _, v := range only {
+		for _, t := range strings.Split(v, ",") {
+			t = strings.ToLower(strings.TrimSpace(t))
+			switch t {
+			case "":
+			case "claude", "cursor", "vscode", "opencode":
+				want[t] = true
+			case "code", "vs-code":
+				want["vscode"] = true
+			default:
+				return nil, t
+			}
+		}
+	}
+	return want, ""
 }

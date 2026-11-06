@@ -43,6 +43,7 @@ type trpcProc struct {
 type trpcResolver struct {
 	files   map[string]*SourceFile
 	known   map[string]bool
+	al      *Aliases
 	routers map[string][]trpcRouterDef   // by variable name
 	defs    map[string][]string          // const name → files that declare it
 	defAt   map[string]int               // "file#name" → index just past the `=`
@@ -52,10 +53,11 @@ type trpcResolver struct {
 	used    map[string]bool // routers reached from another router
 }
 
-func newTRPCResolver(files []SourceFile) *trpcResolver {
+func newTRPCResolver(files []SourceFile, al *Aliases) *trpcResolver {
 	r := &trpcResolver{
 		files:   map[string]*SourceFile{},
 		known:   knownSet(files),
+		al:      al,
 		routers: map[string][]trpcRouterDef{},
 		defs:    map[string][]string{},
 		defAt:   map[string]int{},
@@ -103,7 +105,7 @@ func (r *trpcResolver) importSource(f *SourceFile, ident string) string {
 	if !ok {
 		imp = map[string]string{}
 		for _, m := range reImportList.FindAllStringSubmatch(f.Text, -1) {
-			src := ResolveImport(f.Rel, m[2], r.known)
+			src := r.al.Resolve(f.Rel, m[2], r.known)
 			if src == "" {
 				continue
 			}
@@ -286,8 +288,8 @@ func (r *trpcResolver) procValue(f *SourceFile, ident string) (kind, file string
 // ResolveTRPC names every procedure reachable from a root router, across files.
 // A root is a router no other router references; `appRouter` carries no prefix,
 // other roots keep their variable name without the `Router` suffix.
-func ResolveTRPC(files []SourceFile) []trpcProc {
-	r := newTRPCResolver(files)
+func ResolveTRPC(files []SourceFile, al *Aliases) []trpcProc {
+	r := newTRPCResolver(files, al)
 	names := make([]string, 0, len(r.routers))
 	for n := range r.routers {
 		names = append(names, n)

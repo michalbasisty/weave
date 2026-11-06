@@ -19,9 +19,10 @@ requirements hang off that map. One static binary, nothing to run beside it.
 - **An agent interface.** `weave mcp` answers "what is this file, what does it touch, what
   proves it" in a few hundred tokens instead of a few thousand.
 
-**Works with** Express, Next.js (app and pages router), Remix and React Router v7 file
-routes, React Router `<Route>` tables, tRPC, OpenAPI JSON and Prisma. Anything else (Nest,
-Fastify, your own fetch wrapper) takes a one-line regex in
+**Works with** Express, Fastify, NestJS, Next.js (app and pages router), Remix and React
+Router v7 file routes, React Router `<Route>` tables, tRPC and OpenAPI JSON, with tables from
+Prisma, Drizzle or TypeORM, across monorepo packages and tsconfig path aliases. Anything else
+(GraphQL, your own fetch wrapper) takes a one-line regex in
 [`.weave/patterns.json`](docs/REFERENCE.md#your-own-patterns), and `weave doctor` names every
 file it could not read, so you know where the map ends.
 
@@ -168,7 +169,8 @@ not a team server: loopback only, one origin, no uploads.
 
 ## Agents
 
-`weave init` writes MCP configs for Claude Code, Cursor, VS Code and opencode. The server is
+`weave init` writes MCP configs for Claude Code, Cursor, VS Code and opencode (`--only claude`
+to pick). The server is
 stdio, answers from one JSON index, writes only change records and their task checkboxes, and
 every answer ends with the tokens it cost:
 

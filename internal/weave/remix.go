@@ -132,6 +132,7 @@ func ExtractRemixRoutes(files []SourceFile, b *Builder) (routes, pages ExtractSt
 			pid := PageID(route)
 			b.Node(&GNode{ID: pid, Kind: KindPage, Name: route, File: Ptr(f.Rel), Meta: strMeta("desc", TopComment(f.Lines, 220), "framework", "react-router")})
 			b.Edge(pid, FileID(f.Rel), "renders")
+			pages.Pages = append(pages.Pages, Page{route, "", f.Rel})
 			pages.Found++
 			continue
 		}

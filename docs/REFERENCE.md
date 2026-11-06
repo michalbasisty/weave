@@ -30,7 +30,7 @@ weave evidence [REQ...]    # which requirements a JUnit report proves
 weave doctor               # graph health and what it could not read
 weave perf    [--runs N]   # index timings over time
 weave projects             # every registered repo
-weave init    [--upgrade] [--hooks]
+weave init    [--upgrade] [--hooks] [--only claude,cursor,vscode,opencode]
 weave forget  <name>
 weave mcp     [--all]      # MCP server on stdio
 weave --version
@@ -88,6 +88,8 @@ and the server answers for the repo it was started in.
 | VS Code / Copilot | `.vscode/mcp.json` |
 | opencode | `opencode.json` (merged) |
 
+`--only claude` (or `--only cursor,vscode`) writes just the ones you name.
+
 It also appends `.weave/` to `.gitignore` and prints the `claude mcp add` line plus an
 `AGENTS.md` snippet. `--upgrade` replaces only a stale `weave` entry; `--hooks` adds the
 Claude Code `Stop` hook that runs the gate at the end of a turn.
@@ -115,8 +117,12 @@ claude mcp add weave -- /abs/path/weave mcp --root .
 | `fetch('https://api.github.com/…')` | a call to another host is not a contract with this repo and is never counted as broken | — |
 | page → endpoint | `<Route>` + lazy imports + the component import graph | exact / inferred |
 | `model` → `@@map` table, relations | `schema.prisma` | exact |
-| module → table | `prisma.<model>` use inside the module | exact |
-| file → file importers | relative imports | exact |
+| `pgTable('users', …)` / `mysqlTable` / `sqliteTable` → table | Drizzle schema files | exact |
+| `@Entity('users') class User` → table (default: snake_case class name) | TypeORM entities | exact |
+| `@Controller('users')` + `@Get(':id')` (+ `setGlobalPrefix`) → endpoint | NestJS controllers | exact |
+| `fastify.get('/x')`, `fastify.route({ method, url })` → endpoint | Fastify | exact |
+| module → table | `prisma.<model>`, Drizzle `.from(users)` / `db.query.users`, TypeORM `Repository<User>` inside the module | exact |
+| file → file importers | relative imports, tsconfig/jsconfig `paths`, workspace package names (`@acme/lib/x`) | exact |
 | test → endpoint / page | e2e request calls, `page.goto` | exact / inferred |
 | change → task → file | `tasks.md` Evidence paths | exact |
 
@@ -152,7 +158,7 @@ coverage
   client calls  224/224 resolvable matched an endpoint (100%)
   routes        33/35 <Route> entries mapped (94%, 2 redirect)
   task files    87/87 parsed (100%)
-  prisma        46/46 models mapped to tables
+  schema        46/46 models mapped to tables (Prisma, Drizzle, TypeORM)
   file routes   12/12 route files produced endpoints (100%)
   file pages    14/14 page files produced pages (100%)
   tRPC routers  4/4 parsed (100%)
@@ -279,9 +285,9 @@ renamed route, the Stop hook, explore, wiki, MCP, gain and init.
 
 ## Known limits
 
-- Express, Next.js, Remix / React Router v7 file routes, React Router `<Route>` tables, tRPC
-  routers and OpenAPI JSON specs. Nest, Fastify, GraphQL and SvelteKit need a
-  `.weave/patterns.json` rule (see [Your own patterns](#your-own-patterns)); the coverage block
+- Express, Fastify, NestJS, Next.js, Remix / React Router v7 file routes, React Router
+  `<Route>` tables, tRPC routers and OpenAPI JSON specs; Prisma, Drizzle and TypeORM tables.
+  GraphQL and SvelteKit need a `.weave/patterns.json` rule (see [Your own patterns](#your-own-patterns)); the coverage block
   names what was skipped.
 - An OpenAPI spec is read in JSON only, up to 4 MB. A YAML spec is named in the coverage
   block, never guessed at.

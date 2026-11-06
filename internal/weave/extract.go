@@ -55,7 +55,7 @@ func ResolveImport(importer, spec string, known map[string]bool) string {
 	if !strings.HasPrefix(spec, ".") {
 		return ""
 	}
-	base := StripExt(JoinPosix(DirOf(importer), spec))
+	base := stripCodeExt(JoinPosix(DirOf(importer), spec))
 	for _, g := range []string{
 		base + ".ts", base + ".tsx", base + ".js", base + ".jsx", base + ".mjs",
 		base + "/index.ts", base + "/index.tsx", base + "/index.js",
@@ -105,13 +105,13 @@ func (m *ImportMap) Get(rel string) []string {
 }
 
 // BuildImportMap reads every file's import/export-from specs.
-func BuildImportMap(files []SourceFile, known map[string]bool) *ImportMap {
+func BuildImportMap(files []SourceFile, known map[string]bool, al *Aliases) *ImportMap {
 	m := &ImportMap{by: map[string]int{}}
 	for i := range files {
 		f := &files[i]
 		targets := []string{}
 		for _, spec := range importSpecs(f.Text) {
-			if r := ResolveImport(f.Rel, spec, known); r != "" && r != f.Rel {
+			if r := al.Resolve(f.Rel, spec, known); r != "" && r != f.Rel {
 				targets = append(targets, r)
 			}
 		}
@@ -156,20 +156,26 @@ type Endpoint struct {
 var (
 	// `router.get`, `app.get`, `userRouter.post`, `routes.delete`, `app.all`: the
 	// receivers Express code uses. A client (`api.get`) is never one of them.
-	reRouterVerb  = jsRe("\\b(?:app|server|router|routes|[A-Za-z_$][\\w$]*Router)\\.(get|post|put|patch|delete|all)\\s*\\(\\s*['\"`](\\/[^'\"`]*)['\"`]")
-	reRouterAny   = jsRe(`\b(?:app|server|router|routes|[A-Za-z_$][\w$]*Router)\.(?:get|post|put|patch|delete|all)\s*\(\s*['"\x60]\/`)
+	reRouterVerb  = jsRe("\\b(?:app|server|fastify|router|routes|[A-Za-z_$][\\w$]*Router)\\.(get|post|put|patch|delete|all)\\s*\\(\\s*['\"`](\\/[^'\"`]*)['\"`]")
+	reRouterAny   = jsRe(`\b(?:app|server|fastify|router|routes|[A-Za-z_$][\w$]*Router)\.(?:get|post|put|patch|delete|all)\s*\(\s*['"\x60]\/`)
 	reMount       = jsRe("app\\.use\\s*\\(\\s*['\"`](\\/api[^'\"`]*)['\"`]\\s*,\\s*(\\w+)\\s*\\)")
 	reDefaultImp  = jsRe(`import\s+(\w+)\s+from\s+['"](\.{1,2}\/[^'"]+)['"]`)
 	reRouterFirst = jsRe("router\\.(?:get|post)\\(\\s*['\"`](\\/[^'\"`]*)['\"`]")
 	reTrailSlash  = regexp.MustCompile(`/+$`)
 )
 
+// mayDeclareRoutes is a cheap filter before reRouterAny, whose open-ended receiver
+// (`*Router`) has no literal prefix for the regexp engine to scan for.
+func mayDeclareRoutes(t string) bool {
+	return strings.Contains(t, "outer.") || strings.Contains(t, "app.") || strings.Contains(t, "routes.") || strings.Contains(t, "server.") || strings.Contains(t, "fastify.")
+}
+
 // ExtractEndpoints finds Express-style routes and the /api mounts that prefix them.
 func ExtractEndpoints(files []SourceFile, b *Builder) []Endpoint {
 	known := knownSet(files)
 	var routeFiles []*SourceFile
 	for i := range files {
-		if isCode(files[i].Rel) && reRouterAny.MatchString(files[i].Text) {
+		if isCode(files[i].Rel) && mayDeclareRoutes(files[i].Text) && reRouterAny.MatchString(files[i].Text) {
 			routeFiles = append(routeFiles, &files[i])
 		}
 	}
@@ -532,7 +538,7 @@ var (
 )
 
 // ExtractPages reads <Route path> declarations and the component each one renders.
-func ExtractPages(webFiles []SourceFile, b *Builder, allFiles []SourceFile) PageInfo {
+func ExtractPages(webFiles []SourceFile, b *Builder, allFiles []SourceFile, al *Aliases) PageInfo {
 	// Resolve against every file, not only the JSX subset: the route table often
 	// imports a `.ts` chunk map, and a page's own file can be imported from it.
 	resolveFiles := allFiles
@@ -553,7 +559,7 @@ func ExtractPages(webFiles []SourceFile, b *Builder, allFiles []SourceFile) Page
 		idents := map[string]string{}
 		for _, re := range []*regexp.Regexp{reNamedImp, reStarImp, reLazyImp} {
 			for _, m := range re.FindAllStringSubmatch(f.Text, -1) {
-				if r := ResolveImport(f.Rel, m[2], known); r != "" {
+				if r := al.Resolve(f.Rel, m[2], known); r != "" {
 					idents[m[1]] = r
 				}
 			}
