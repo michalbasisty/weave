@@ -1,0 +1,255 @@
+{
+  "measuredAt": "2026-11-06T12:28:32.137Z",
+  "weave": "weave 0.1.1-0.20261106122831-ee38a730fd93",
+  "repos": [
+    {
+      "name": "documenso",
+      "url": "https://github.com/documenso/documenso",
+      "commit": "fdd0337",
+      "stack": "Remix + tRPC + Prisma monorepo",
+      "files": 2458,
+      "pages": 119,
+      "endpoints": 327,
+      "modules": 103,
+      "tables": 55,
+      "tablesUsed": 55,
+      "pagesLinked": 87,
+      "calls": {
+        "total": 312,
+        "resolved": 312,
+        "dynamic": 2,
+        "silent": [
+          "apps/docs/src/components/ai/page-actions.tsx",
+          "apps/openpage-api/app/community/total-forks/route.ts",
+          "apps/openpage-api/app/community/total-issues/route.ts",
+          "apps/openpage-api/app/community/total-prs/route.ts",
+          "apps/openpage-api/app/community/total-stars/route.ts",
+          "apps/openpage-api/app/github/forks/route.ts",
+          "apps/openpage-api/app/github/issues/route.ts",
+          "apps/openpage-api/app/github/prs/route.ts",
+          "apps/openpage-api/app/github/stars/route.ts",
+          "apps/openpage-api/app/growth/total-customers/route.ts",
+          "apps/remix/app/components/dialogs/envelope-cancel-dialog.tsx",
+          "apps/remix/app/components/dialogs/envelope-delete-dialog.tsx"
+        ]
+      },
+      "broken": 0,
+      "grep": {
+        "found": 30,
+        "of": 327
+      },
+      "indexMs": 1030,
+      "checkMs": 1136,
+      "screens": {
+        "n": 119,
+        "weave": 222,
+        "file": 1365,
+        "byHand": 12778,
+        "files": 4
+      },
+      "old": {
+        "endpoints": 20,
+        "pages": 0,
+        "broken": 315,
+        "calls": {
+          "total": 317,
+          "resolved": 98,
+          "dynamic": 2,
+          "silent": [
+            "apps/docs/src/components/ai/page-actions.tsx",
+            "apps/openpage-api/app/github/forks/route.ts",
+            "apps/openpage-api/app/github/issues/route.ts",
+            "apps/openpage-api/app/github/prs/route.ts",
+            "apps/openpage-api/app/github/stars/route.ts",
+            "apps/remix/app/components/dialogs/envelope-cancel-dialog.tsx",
+            "apps/remix/app/components/dialogs/envelope-delete-dialog.tsx",
+            "apps/remix/app/components/dialogs/envelope-redistribute-dialog.tsx",
+            "apps/remix/app/components/dialogs/envelope-rename-dialog.tsx",
+            "apps/remix/app/components/dialogs/envelopes-bulk-download-dialog.tsx",
+            "apps/remix/app/components/dialogs/template-direct-link-dialog.tsx",
+            "apps/remix/app/components/general/admin-email-blocklist-section.tsx"
+          ]
+        }
+      }
+    },
+    {
+      "name": "RealWorld (Express + React)",
+      "url": "https://github.com/gothinkster/node-express-realworld-example-app + https://github.com/khaledosman/react-redux-realworld-example-app",
+      "commit": "30b68e1 + 53b0b4c",
+      "stack": "Express + Prisma backend, React + Redux front end",
+      "files": 109,
+      "pages": 8,
+      "endpoints": 20,
+      "modules": 5,
+      "tables": 4,
+      "tablesUsed": 4,
+      "pagesLinked": 8,
+      "calls": {
+        "total": 18,
+        "resolved": 18,
+        "dynamic": 0,
+        "silent": [
+          "frontend/cypress/plugins/index.js"
+        ]
+      },
+      "broken": 0,
+      "grep": {
+        "found": 20,
+        "of": 20
+      },
+      "indexMs": 38,
+      "checkMs": 53,
+      "screens": {
+        "n": 8,
+        "weave": 215.5,
+        "file": 1150,
+        "byHand": 3898,
+        "files": 6
+      },
+      "old": {
+        "endpoints": 19,
+        "pages": 0,
+        "broken": 0,
+        "calls": {
+          "total": 0,
+          "resolved": 0,
+          "dynamic": 0,
+          "silent": [
+            "frontend/cypress/plugins/index.js",
+            "frontend/src/agent.js"
+          ]
+        }
+      },
+      "mutations": {
+        "tried": 15,
+        "caught": 14,
+        "named": 14,
+        "rows": [
+          {
+            "endpoint": "GET /articles",
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /articles/feed",
+            "exit": 0,
+            "named": false
+          },
+          {
+            "endpoint": "POST /articles",
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /articles/:slug",
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "PUT /articles/:slug",
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /articles/:slug/comments",
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /articles/:slug/comments",
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /articles/:slug/favorite",
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /users",
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /users/login",
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /user",
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "PUT /user",
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /profiles/:username",
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /profiles/:username/follow",
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /tags",
+            "exit": 1,
+            "named": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "RealWorld (NestJS)",
+      "url": "https://github.com/lujakob/nestjs-realworld-example-app",
+      "commit": "c1c2cc4",
+      "stack": "NestJS + TypeORM API",
+      "files": 43,
+      "pages": 0,
+      "endpoints": 21,
+      "modules": 5,
+      "tables": 5,
+      "tablesUsed": 5,
+      "pagesLinked": 0,
+      "calls": {
+        "total": 0,
+        "resolved": 0,
+        "dynamic": 0,
+        "silent": []
+      },
+      "broken": 0,
+      "grep": {
+        "found": 0,
+        "of": 21
+      },
+      "indexMs": 22,
+      "checkMs": 35,
+      "screens": {
+        "n": 0,
+        "weave": 0,
+        "file": 0,
+        "byHand": 0,
+        "files": 0
+      },
+      "old": {
+        "endpoints": 0,
+        "pages": 0,
+        "broken": 0,
+        "calls": {
+          "total": 0,
+          "resolved": 0,
+          "dynamic": 0,
+          "silent": []
+        }
+      }
+    }
+  ],
+  "schema": {
+    "tools": 14,
+    "tokens": 1430
+  }
+}

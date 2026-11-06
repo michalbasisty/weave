@@ -1,6 +1,8 @@
 package verify
 
 import (
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -120,4 +122,49 @@ func TestMarkdownNamesScreensOfABrokenCall(t *testing.T) {
 		t.Fatalf("no screens for %s:\n%s", gone, md)
 	}
 	t.Log("\n" + md)
+}
+
+// The gate must not pass the second time it sees the same broken edit: the last
+// index has moved on by then, the commit has not.
+func TestSecondCheckStillFails(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("no git")
+	}
+	root := t.TempDir()
+	write := func(rel, text string) {
+		p := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	git := func(args ...string) {
+		cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	write("backend/src/tags.ts", "router.get('/tags', (req, res) => res.json([]))\n")
+	write("frontend/src/api.ts", "export const tags = () => axios.get('/tags')\n")
+	write(".gitignore", ".weave/\n")
+	git("init", "-q")
+	git("add", "-A")
+	git("commit", "-qm", "base")
+	if _, err := weave.Reindex(root); err != nil {
+		t.Fatal(err)
+	}
+	write("backend/src/tags.ts", "router.get('/tag-list', (req, res) => res.json([]))\n")
+	for run := 1; run <= 2; run++ {
+		g, err := weave.Reindex(root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res := Run(g, root, "", false, nil)
+		if len(res.Errors) == 0 || !strings.Contains(res.Errors[0], "GET /tags from frontend/src/api.ts:1") {
+			t.Fatalf("run %d: errors = %v", run, res.Errors)
+		}
+	}
 }

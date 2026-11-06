@@ -684,6 +684,12 @@ func MatchEndpoint(call Call, endpoints []Endpoint) *Endpoint {
 				continue
 			}
 			if b == "*" {
+				// A variable leaf names one of many items (`/articles/${slug}`), never a
+				// fixed route beside them (`/articles/feed`).
+				if k == 1 && len(cs) > 1 {
+					ok = false
+					break
+				}
 				score += 0.4
 				continue
 			}
@@ -697,7 +703,9 @@ func MatchEndpoint(call Call, endpoints []Endpoint) *Endpoint {
 		}
 		// A call may omit the mount prefix, but it must share at least one literal
 		// segment: otherwise `/orders` would match `/api/reports/:id`.
-		if ok && len(cs) < len(es) && literals == 0 {
+		// The same holds the other way: a longer call (`/articles/${slug}/comments`) is
+		// not `/articles/:slug` with a mount prefix unless a literal lines up.
+		if ok && len(cs) != len(es) && literals == 0 {
 			ok = false
 		}
 		if ok && score > bestScore {
