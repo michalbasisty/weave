@@ -412,7 +412,7 @@
   };
 
   const buildWiki = () => {
-    wikiBody.replaceChildren(el('p', { class: 'whint', text: 'Building…' }));
+    wikiBody.replaceChildren(el('p', { class: 'whint wbuilding', text: 'Building the wiki from the index…' }));
     api('/api/wiki', {}).then(r => {
       if (r.exit === 0) wikiBody.replaceChildren(el('iframe', { class: 'wwikiframe', src: '/wiki/', title: 'Wiki' }));
       else wikiBody.replaceChildren(el('pre', { text: r.output }));
@@ -420,6 +420,12 @@
   };
   wikiBar.querySelector('.wmark').addEventListener('click', buildWiki);
 
+  // The same chevron the map's own crumbs use, so every place reads alike.
+  const chev = () => {
+    const t = document.createElement('template');
+    t.innerHTML = '<svg class="ico sep" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>';
+    return t.content.firstChild;
+  };
   const setCrumbs = (kind, name) => {
     const crumbs = document.getElementById('crumbs');
     if (!crumbs || !kind) return;
@@ -429,7 +435,7 @@
     const home = el('li', {});
     if (first) home.append(first.cloneNode(true));
     else home.append(el('a', { href: '#today', text: 'weave' }));
-    home.append(el('span', { class: 'sep', text: '›' }));
+    home.append(chev());
 
     const here = el('li', {});
     if (kind === 'wiki') {
@@ -437,7 +443,7 @@
       ol.append(home, here);
     } else if (name) {
       here.append(el('a', { href: '#specs', text: 'Specs' }));
-      here.append(el('span', { class: 'sep', text: '›' }));
+      here.append(chev());
       const leaf = el('li', {});
       leaf.append(el('span', { 'aria-current': 'page', text: name }));
       ol.append(home, here, leaf);

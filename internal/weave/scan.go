@@ -18,7 +18,7 @@ var skip = map[string]bool{
 
 var code = map[string]bool{
 	".ts": true, ".tsx": true, ".js": true, ".jsx": true, ".mjs": true, ".cjs": true, ".vue": true, ".svelte": true,
-	".prisma": true, ".md": true, ".json": true,
+	".prisma": true, ".md": true, ".json": true, ".graphql": true, ".gql": true,
 }
 
 // MaxBytes is the largest file the walk reads.

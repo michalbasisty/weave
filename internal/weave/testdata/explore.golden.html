@@ -282,6 +282,11 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .path{display:inline-block;margin-top:var(--s3);max-width:100%;min-height:32px;padding:5px 10px;border:1px solid var(--rule);border-radius:var(--r);background:var(--surface);font:var(--fs-xs) var(--mono);color:var(--ink2);cursor:copy;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 .path:hover{border-color:var(--ink3);color:var(--ink)}
 .path.copied{border-color:var(--ok);color:var(--ok)}
+.pathrow{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2) var(--s3);margin-top:var(--s3)}
+.pathrow .path{margin-top:0}
+.openwrap{display:inline-flex;align-items:center;gap:var(--s2);font-size:var(--fs-xs);color:var(--ink3)}
+.openin{padding:4px 8px;border:1px solid var(--rule);border-radius:var(--r);color:var(--ink2);text-decoration:none}
+.openin:hover{border-color:var(--ink3);color:var(--ink)}
 .desc{margin:var(--s4) 0 0;max-width:70ch;color:var(--ink2);line-height:1.6}
 .intro p{color:var(--ink2);max-width:66ch;margin:var(--s2) 0 var(--s5)}
 .intro h1{font:650 var(--fs-xl)/1.3 var(--display)}
@@ -309,6 +314,11 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .stop h3{font:600 var(--fs-s)/1.35 var(--ui);color:var(--ink2);margin:0 0 var(--s2)}
 .stop h3.none{font-weight:400;color:var(--ink3)}
 .stop[data-here="1"] h3{color:var(--ink)}
+/* In a quarter-width column a path breaks only where brk() allows, and an
+   endpoint's method sits above its path instead of squeezing it. */
+.trace .ref,.trace .here{overflow-wrap:normal;word-break:normal}
+.trace .ref .ring{align-self:flex-start;margin-top:5px}
+.trace .ep{display:flex;flex-direction:column;align-items:flex-start;gap:2px}
 .here{margin:0;font:600 var(--fs-s)/1.45 var(--mono);overflow-wrap:anywhere}
 .here .mt{min-width:0;margin-right:.5em}
 .sec{margin-top:var(--s5);padding:var(--s4) var(--s5);border:1px solid var(--rule);border-radius:var(--r);background:var(--surface)}
@@ -633,6 +643,7 @@ function nm(id){
   const n=ix.get(id),k=kindOf(id);
   if(k==='endpoint'){const p=splitEp(n.n);return '<span class="ep"><span class="mt" data-m="'+esc(p[0])+'">'+esc(p[0])+'</span><span class="pth">'+brk(p[1])+'</span></span>'}
   if(k==='change')return esc(changeTitle(id).title);
+  if(k==='page'||k==='file'||k==='call')return brk(nameOf(id));
   if(k==='task'&&n.t)return esc(taskTitle(n.t));
   if(k==='req'&&n.t)return '<span class="mt">'+esc(n.n)+'</span> '+esc(plain(n.t));
   return esc(nameOf(id));
@@ -1011,7 +1022,7 @@ function nodeDetail(n){
   let h='<article class="item">';
   h+='<header class="ihead"><h1 tabindex="-1">'+ring(k,true)+'<span class="'+(LANE_OF[k]||k==='call'||k==='test'||k==='file'?'code':'')+'">'+(k==='change'?esc(changeTitle(n.i).title):nm(n.i))+'</span></h1>';
   h+='<p class="sub">'+subline(n)+'</p>';
-  if(n.f)h+='<button class="path" type="button" data-path="'+esc(n.f)+'" data-label="'+esc(n.f+(n.l?':'+n.l:''))+'" title="Copy the path">'+esc(n.f)+(n.l?':'+n.l:'')+'</button>';
+  if(n.f)h+='<div class="pathrow"><button class="path" type="button" data-path="'+esc(n.f)+'" data-label="'+esc(n.f+(n.l?':'+n.l:''))+'" title="Copy the path">'+esc(n.f)+(n.l?':'+n.l:'')+'</button>'+openIn(n.f,n.l)+'</div>';
   const desc=k==='task'?'':descOf(n);
   if(desc)h+='<p class="desc">'+esc(desc)+'</p>';
   if(n.x==='suspect')h+='<p class="note">The requirement text changed after this code was written. Check the code again.</p>';
@@ -1020,6 +1031,18 @@ function nodeDetail(n){
   else if(LANE_OF[k]){h+=diagram(n.i);h+=nodeSections(n)}
   else h+=allRelations(n);
   return h+'</article>';
+}
+// Editors register a URL scheme that opens a file at a line: vscode://file/<abs>:<line>.
+const EDITORS=[['vscode','VS Code'],['cursor','Cursor']];
+function editorURL(scheme,f,l){
+  const r=String(S.root||'').replace(/\\/g,'/').replace(/\/+$/,'');
+  if(!r)return '';
+  const abs=r+'/'+String(f).replace(/^\.?\//,'');
+  return scheme+'://file'+(abs[0]==='/'?'':'/')+encodeURI(abs)+(l?':'+l+':1':'');
+}
+function openIn(f,l){
+  const links=EDITORS.map(([s,label])=>{const u=editorURL(s,f,l);return u?'<a class="openin" href="'+esc(u)+'" title="Open '+esc(f)+' in '+label+'">'+label+'</a>':''}).join('');
+  return links?'<span class="openwrap">Open in '+links+'</span>':'';
 }
 function subline(n){
   const k=n.k,bits=[esc(KINDS[k]||k)];

@@ -20,9 +20,10 @@ requirements hang off that map. One static binary, nothing to run beside it.
   proves it" in a few hundred tokens instead of a few thousand.
 
 **Works with** Express, Fastify, NestJS, Next.js (app and pages router), Remix and React
-Router v7 file routes, React Router `<Route>` tables, tRPC and OpenAPI JSON, with tables from
-Prisma, Drizzle or TypeORM, across monorepo packages and tsconfig path aliases. Anything else
-(GraphQL, your own fetch wrapper) takes a one-line regex in
+Router v7 file routes, React Router `<Route>` tables, tRPC, GraphQL (SDL, NestJS resolvers,
+Pothos / Nexus, `gql` documents) and OpenAPI JSON, with tables from Prisma, Drizzle or
+TypeORM, across monorepo packages and tsconfig path aliases. Anything else (your own fetch
+wrapper) takes a one-line regex in
 [`.weave/patterns.json`](docs/REFERENCE.md#your-own-patterns), and `weave doctor` names every
 file it could not read, so you know where the map ends.
 
@@ -36,6 +37,31 @@ weave init --hooks    # connect Claude, Cursor, VS Code, opencode, and the Stop 
 weave serve           # http://127.0.0.1:7777: the map, hosted
 weave check           # what a change breaks (exit 1)
 ```
+
+## On real repositories
+
+<img src="docs/img/screens/documenso-overview.png" alt="weave's Overview on documenso: the gate passes, 119 screens, 327 endpoints, 103 modules and 55 tables, all 312 frontend calls matched." width="100%">
+
+[documenso](https://github.com/documenso/documenso) is a 2,458-file Remix + tRPC + Prisma
+monorepo. weave reads it with no configuration in under a second:
+
+| | documenso | RealWorld (Express + React) | RealWorld (NestJS + TypeORM) |
+|---|---|---|---|
+| screens | 119 | 8 | (API only) |
+| endpoints | 327 (tRPC across 15 routers, Remix resource routes) | 20 | 21 |
+| frontend calls matched | **312 / 312** | **18 / 18** | — |
+| screens linked to their endpoints | 87 / 119 | 8 / 8 | — |
+| tables with a module that uses them | **55 / 55** | 4 / 4 | 5 / 5 |
+| index time | ~0.85 s | ~20 ms | ~15 ms |
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/screens/documenso-dark.png">
+  <img src="docs/img/screens/documenso-screen.png" alt="One documenso screen on the line: the documents page calls 17 tRPC endpoints, handled in the trpc module, reaching 12 tables, with links to open the route file in VS Code or Cursor." width="100%">
+</picture>
+
+A screen is followed through package-alias imports (`@documenso/lib/…`, `~/…`) to the tRPC
+procedures it calls, and from there to the tables behind them. Rename one of those procedures
+and `weave check` fails with the `file:line` that still calls it.
 
 ## What you use it for
 
@@ -54,8 +80,9 @@ weave check           # what a change breaks (exit 1)
 
 <img src="docs/img/gate.svg" alt="The gate: an agent claims done, weave check exits 1 naming the caller's file and line, the agent keeps working." width="100%">
 
-The gate runs at the end of an agent turn (Stop hook), before a commit, and in CI. Three
-failures, no opinions:
+The gate runs at the end of an agent turn (Stop hook), before a commit, and in CI, where the
+bundled GitHub Action comments on the pull request with each broken call and the screens it
+reaches (`weave check --markdown` prints the same report). Three failures, no opinions:
 
 - a **removed endpoint is still called**: it compares the endpoint set with the previous one;
 - a **call site matches no endpoint**: a route that was renamed, or a typo;
@@ -79,7 +106,8 @@ what the extractors could read, so a zero is never a guess.
 Open any screen, endpoint, module or table and it is drawn on the line it sits on: who calls
 it, who handles it, what it uses, which test proves it, and how far a change would reach.
 Every neighbour is a link, and the handler's `file:line` has an **open** button that shows the
-code beside the map and takes a note for the next session.
+code beside the map and takes a note for the next session, plus **VS Code** and **Cursor**
+links that open the file at that line in your editor.
 
 ### Finding what nothing proves
 
@@ -131,8 +159,8 @@ Every page is generated, so the documentation cannot drift into a document nobod
 | a route question | **66 tokens** | found by hand: not findable with grep | `GET /api/v1/tasks/:id` is `/:id` under a mount in the source |
 | a screen's whole context | **346 tokens** | 4,657 for the screen's file alone; 61,687 gathering the same facts | about **13x** less than the file, about **178x** less than by hand |
 | install cost | **1,433 tokens** of MCP schema (14 tools) | GitHub 18,000, Notion 9,000, filesystem 3,500 | see the chart below |
-| index a 954-file repo | **330 ms** | | one static binary |
-| run the gate | **406 ms** | | quiet when it is right |
+| index a 2,458-file monorepo (documenso) | **~0.85 s** | | one static binary |
+| run the gate on it | **~0.95 s** | | quiet when it is right |
 
 <img src="docs/img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 1,433 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
 
@@ -151,7 +179,8 @@ would; until it runs, other tools' reported savings are context, not a promise:
 ## The panel
 
 `weave serve` binds `127.0.0.1` and keeps its write token in `.weave/serve.token`, so a restart
-keeps the URLs people have open (`--new-token` rotates it). It serves one page with a sidebar:
+keeps the URLs people have open (`--new-token` rotates it). It follows the system's light or
+dark theme (the header button switches it), and serves one page with a sidebar:
 
 | Place | Holds |
 |---|---|
@@ -195,7 +224,7 @@ and what that says about the tool surface, is in [`docs/AGENTS.md`](docs/AGENTS.
 
 Every extractor misses something, and a tool that misses a route silently gives a confident
 wrong answer. So coverage is measured and printed (route files, client calls, task files,
-Prisma models, tRPC routers) and any file that looks like a contract but produced nothing is
+ORM models, tRPC routers) and any file that looks like a contract but produced nothing is
 named. That list is the honest boundary of every answer weave gives.
 
 ```bash
@@ -209,13 +238,13 @@ weave doctor
 - [`docs/PLAN.md`](docs/PLAN.md): where this is going, and the replay that says what not to build.
 - [`docs/DESIGN.md`](docs/DESIGN.md): the research the product rests on.
 - [`docs/explorer/DESIGN.md`](docs/explorer/DESIGN.md): the visual contract of the map.
-
-## License
-
-[MIT](LICENSE)
 - [`test/ui/README.md`](test/ui/README.md): the browser smoke test, which also regenerates the
   screenshots here: `node test/ui/panel.mjs --out docs/img/screens`.
 
 ```bash
 go test ./...    # unit, golden and integration suites
 ```
+
+## License
+
+[MIT](LICENSE)

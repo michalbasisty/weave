@@ -206,6 +206,7 @@ function nm(id){
   const n=ix.get(id),k=kindOf(id);
   if(k==='endpoint'){const p=splitEp(n.n);return '<span class="ep"><span class="mt" data-m="'+esc(p[0])+'">'+esc(p[0])+'</span><span class="pth">'+brk(p[1])+'</span></span>'}
   if(k==='change')return esc(changeTitle(id).title);
+  if(k==='page'||k==='file'||k==='call')return brk(nameOf(id));
   if(k==='task'&&n.t)return esc(taskTitle(n.t));
   if(k==='req'&&n.t)return '<span class="mt">'+esc(n.n)+'</span> '+esc(plain(n.t));
   return esc(nameOf(id));
@@ -584,7 +585,7 @@ function nodeDetail(n){
   let h='<article class="item">';
   h+='<header class="ihead"><h1 tabindex="-1">'+ring(k,true)+'<span class="'+(LANE_OF[k]||k==='call'||k==='test'||k==='file'?'code':'')+'">'+(k==='change'?esc(changeTitle(n.i).title):nm(n.i))+'</span></h1>';
   h+='<p class="sub">'+subline(n)+'</p>';
-  if(n.f)h+='<button class="path" type="button" data-path="'+esc(n.f)+'" data-label="'+esc(n.f+(n.l?':'+n.l:''))+'" title="Copy the path">'+esc(n.f)+(n.l?':'+n.l:'')+'</button>';
+  if(n.f)h+='<div class="pathrow"><button class="path" type="button" data-path="'+esc(n.f)+'" data-label="'+esc(n.f+(n.l?':'+n.l:''))+'" title="Copy the path">'+esc(n.f)+(n.l?':'+n.l:'')+'</button>'+openIn(n.f,n.l)+'</div>';
   const desc=k==='task'?'':descOf(n);
   if(desc)h+='<p class="desc">'+esc(desc)+'</p>';
   if(n.x==='suspect')h+='<p class="note">The requirement text changed after this code was written. Check the code again.</p>';
@@ -593,6 +594,18 @@ function nodeDetail(n){
   else if(LANE_OF[k]){h+=diagram(n.i);h+=nodeSections(n)}
   else h+=allRelations(n);
   return h+'</article>';
+}
+// Editors register a URL scheme that opens a file at a line: vscode://file/<abs>:<line>.
+const EDITORS=[['vscode','VS Code'],['cursor','Cursor']];
+function editorURL(scheme,f,l){
+  const r=String(S.root||'').replace(/\\/g,'/').replace(/\/+$/,'');
+  if(!r)return '';
+  const abs=r+'/'+String(f).replace(/^\.?\//,'');
+  return scheme+'://file'+(abs[0]==='/'?'':'/')+encodeURI(abs)+(l?':'+l+':1':'');
+}
+function openIn(f,l){
+  const links=EDITORS.map(([s,label])=>{const u=editorURL(s,f,l);return u?'<a class="openin" href="'+esc(u)+'" title="Open '+esc(f)+' in '+label+'">'+label+'</a>':''}).join('');
+  return links?'<span class="openwrap">Open in '+links+'</span>':'';
 }
 function subline(n){
   const k=n.k,bits=[esc(KINDS[k]||k)];

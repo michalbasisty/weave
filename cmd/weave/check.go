@@ -15,7 +15,11 @@ func cmdCheck() int {
 		return 1
 	}
 	res := verify.Run(g, root, arg("against", ""), hasFlag("strict-tests"), pos)
-	fmt.Println(res.Text())
+	if arg("format", "") == "markdown" || hasFlag("markdown") {
+		fmt.Print(res.Markdown())
+	} else {
+		fmt.Println(res.Text())
+	}
 	if len(res.Errors) > 0 {
 		return 1
 	}

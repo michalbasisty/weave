@@ -87,7 +87,7 @@ func ExtractORMModels(files []SourceFile, b *Builder) []Model {
 		use := func(model string) {
 			if model != "" && !seen[model] {
 				seen[model] = true
-				b.Edge(ModuleID(mod), ModelID(model), "uses")
+				b.Use(mod, f.Rel, model)
 			}
 		}
 		if len(drizzle) > 0 {

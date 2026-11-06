@@ -56,6 +56,7 @@ func BuildGraph(root string) *Graph {
 	trpcStats := ExtractTRPC(files, b, aliases)
 	apiStats := ExtractOpenAPI(files, b)
 	nestEndpoints := ExtractNestAndFastify(files, b)
+	gqlEndpoints, gqlCalls := ExtractGraphQL(files, b)
 
 	// Patterns from .weave/patterns.json: the escape hatch for a team's own wrapper.
 	pat := CompilePatterns(LoadPatterns(root))
@@ -70,7 +71,7 @@ func BuildGraph(root string) *Graph {
 	}
 
 	var allEndpoints []Endpoint
-	for _, list := range [][]Endpoint{endpoints, nestEndpoints, nextStats.Endpoints, trpcStats.Endpoints, apiStats.Endpoints, customEndpoints} {
+	for _, list := range [][]Endpoint{endpoints, nestEndpoints, gqlEndpoints, nextStats.Endpoints, trpcStats.Endpoints, apiStats.Endpoints, customEndpoints} {
 		allEndpoints = append(allEndpoints, list...)
 	}
 	ExtractModels(t.Prisma, b, files)
@@ -94,6 +95,7 @@ func BuildGraph(root string) *Graph {
 		}
 	}
 	calls := ExtractCalls(callFiles)
+	calls = append(calls, gqlCalls...)
 	for _, c := range PatternCalls(files, pat) {
 		calls = append(calls, Call{c.Method, c.Path, c.File, c.Line, strings.Contains(c.Path, "${")})
 	}
@@ -216,6 +218,7 @@ func BuildGraph(root string) *Graph {
 	}
 
 	tm.Lap("evidence")
+	b.AddUsedModules()
 	g := withCoverage(b.Finish(root, len(files)), files, allEndpoints, calls, dynamicCalls, pageInfo, nextStats, nextPageStats, trpcStats, apiStats, len(customRoutes), t.Specs, tasks)
 	tm.Lap("coverage")
 	var ms runtime.MemStats

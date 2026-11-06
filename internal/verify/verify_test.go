@@ -92,3 +92,32 @@ func TestStrictTurnsAnUntestedEndpointIntoAFailure(t *testing.T) {
 		t.Fatalf("strict did not fail:\n%s", strict.Text())
 	}
 }
+
+// The PR comment names the removed endpoint, its caller and the screens that reach it.
+func TestMarkdownNamesScreensOfABrokenCall(t *testing.T) {
+	root := filepath.Join("..", "..", "test", "fixture")
+	g := weave.BuildGraph(root)
+	// The backend dropped GET /api/v1/orders; Orders.tsx still calls it.
+	gone, file, line := "GET /api/v1/orders", "packages/web/src/pages/Orders.tsx", 9
+	kept := g.Nodes[:0]
+	for _, n := range g.Nodes {
+		if !(n.Kind == weave.KindEndpoint && n.Name == gone) {
+			kept = append(kept, n)
+		}
+	}
+	g.Nodes = append(kept, &weave.GNode{ID: weave.CallID("GET", "/api/v1/orders"), Kind: weave.KindCall, Name: gone, File: &file, Line: &line})
+	g.PrevEndpoints = []string{gone}
+
+	res := Run(g, root, "", false, []string{"README.md"})
+	if len(res.Broken) == 0 {
+		t.Fatalf("nothing broken: %+v", res)
+	}
+	md := res.Markdown()
+	if !strings.HasPrefix(md, Marker+"\n### ❌ weave check") || !strings.Contains(md, "`"+gone+"`") {
+		t.Fatalf("markdown:\n%s", md)
+	}
+	if len(res.Broken[0].Screens) == 0 || !strings.Contains(md, "`"+res.Broken[0].Screens[0]+"`") {
+		t.Fatalf("no screens for %s:\n%s", gone, md)
+	}
+	t.Log("\n" + md)
+}

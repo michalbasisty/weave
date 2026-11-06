@@ -615,6 +615,9 @@ func (w *wikiWriter) nav(from string) string {
 		cur = ` aria-current="page"`
 	}
 	b.WriteString(`<a class="side-home" href="` + home + `"` + cur + `>Overview</a>` + "\n")
+	// Once per page: asking per sidebar item slugged every node of the kind for
+	// every item, 15 s of a 16 s build on a 327-endpoint repo.
+	curName := w.currentName()
 
 	for _, k := range wikiKinds {
 		nodes := w.ix.OfKind(k.kind)
@@ -631,7 +634,7 @@ func (w *wikiWriter) nav(from string) string {
 		}
 		item := func(n *GNode) string {
 			active := ""
-			if n.Name == w.currentName() {
+			if n.Name == curName {
 				active = ` aria-current="page"`
 			}
 			return `<li><a href="` + w.href(from, k.base+"/"+Slug(n.Name)+".html") + `"` + active + `>` + esc(n.Name) + `</a></li>` + "\n"

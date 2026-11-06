@@ -18,7 +18,7 @@ weave plan    <change> [T3]
 weave change  [slug]
 weave search  <query>
 weave grep    <text>       # --regex, --limit; graph files rank first
-weave check   [file...]    # no args = git diff; exit 1 on a broken contract
+weave check   [file...]    # no args = git diff; exit 1 on a broken contract (--markdown for a PR comment)
 weave hook                 # for an agent hook: exit 2, failure on stderr
 weave fires   [--since N]  # what the hook has seen: runs, failures, average time
 weave delta   [ref]        # what the graph gained or lost
@@ -121,6 +121,8 @@ claude mcp add weave -- /abs/path/weave mcp --root .
 | `@Entity('users') class User` → table (default: snake_case class name) | TypeORM entities | exact |
 | `@Controller('users')` + `@Get(':id')` (+ `setGlobalPrefix`) → endpoint | NestJS controllers | exact |
 | `fastify.get('/x')`, `fastify.route({ method, url })` → endpoint | Fastify | exact |
+| `type Query { users }` (`.graphql`, `.gql`, `typeDefs`), `@Query()` / `@Mutation()`, `queryField('x')` → `QUERY /graphql/users` | GraphQL schemas, NestJS resolvers, Pothos / Nexus | exact |
+| `` gql`query { users { id } }` `` → call to `QUERY /graphql/users`, only when the repo declares a schema | GraphQL client documents | exact |
 | module → table | `prisma.<model>`, Drizzle `.from(users)` / `db.query.users`, TypeORM `Repository<User>` inside the module | exact |
 | file → file importers | relative imports, tsconfig/jsconfig `paths`, workspace package names (`@acme/lib/x`) | exact |
 | test → endpoint / page | e2e request calls, `page.goto` | exact / inferred |
@@ -195,13 +197,25 @@ often the gate ran, how often it failed, and what it caught.
 **In CI**, this repository ships `action.yml`:
 
 ```yaml
-- uses: actions/checkout@v4
-  with: { fetch-depth: 0 }
-- uses: michalbasisty/weave@main
-  with: { root: '.', strict-tests: 'true', against: origin/main, wiki: 'true' }
+permissions: { contents: read, pull-requests: write }   # write only for the PR comment
+steps:
+  - uses: actions/checkout@v4
+    with: { fetch-depth: 0 }
+  - uses: michalbasisty/weave@main
+    with: { root: '.', strict-tests: 'true', against: origin/main, wiki: 'true' }
 ```
 
-It builds the Go binary, indexes, checks, prints coverage, and with `wiki: 'true'` fails a
+It builds the Go binary, indexes, checks, prints coverage, writes the report to the job
+summary and, on a pull request, comments with each removed endpoint that is still called, the
+line that calls it and the screens that reach that line:
+
+| endpoint | called from | screens |
+|---|---|---|
+| `GET /api/v1/orders` | `packages/web/src/pages/Orders.tsx:9` | `/orders` |
+
+`comment: on-failure` (the default) posts only when the check fails and then keeps that one
+comment current, `always` posts on every run, `false` never does. `weave check --markdown`
+prints the same report locally. With `wiki: 'true'` fails a
 branch whose committed `docs/wiki` describes an older tree. It exits 1 when:
 
 - a **removed endpoint is still called** — compared with the previous index's endpoint set;
@@ -286,8 +300,8 @@ renamed route, the Stop hook, explore, wiki, MCP, gain and init.
 ## Known limits
 
 - Express, Fastify, NestJS, Next.js, Remix / React Router v7 file routes, React Router
-  `<Route>` tables, tRPC routers and OpenAPI JSON specs; Prisma, Drizzle and TypeORM tables.
-  GraphQL and SvelteKit need a `.weave/patterns.json` rule (see [Your own patterns](#your-own-patterns)); the coverage block
+  `<Route>` tables, tRPC routers, GraphQL and OpenAPI JSON specs; Prisma, Drizzle and TypeORM
+  tables. SvelteKit needs a `.weave/patterns.json` rule (see [Your own patterns](#your-own-patterns)); the coverage block
   names what was skipped.
 - An OpenAPI spec is read in JSON only, up to 4 MB. A YAML spec is named in the coverage
   block, never guessed at.
