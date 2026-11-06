@@ -25,7 +25,7 @@ weave fires   [--since N]  # what the hook has seen: runs, failures, average tim
 weave delta   [ref]        # what the graph gained or lost
 weave remember --note "…" <file...>
 weave recall  [file...]
-weave memory               # all notes (--clear drops them)
+weave memory               # all notes (--prune drops ownership notes and repeats, --clear drops all)
 weave gain    [--since N]  # tokens served over the last N days
 weave evidence [REQ...]    # which requirements a JUnit report proves
 weave doctor               # graph health and what it could not read
@@ -276,6 +276,9 @@ Four small pieces, stored beside the graph (inside `.weave/`, never committed):
   carry graph nodes rank first.
 - **`remember --note "…" <file...>`** keeps a decision or gotcha next to the files it
   concerns; `context` returns it as `note … (not evidence)`, and `recall` lists it.
+  A note that only says who owns a file (`Owner: …`, `Owned by …`) is not stored or shown,
+  because CODEOWNERS and the map already say it; the same note twice is kept once.
+  `weave memory --prune` removes such notes written before.
 - **`gain [--since N]`** reads the receipt every MCP answer carries and reports total,
   median and p95 tokens by tool.
 

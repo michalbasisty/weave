@@ -253,7 +253,10 @@ func callTool(name string, a map[string]any, g *weave.Graph, invalidate func()) 
 		}
 		entry, err := weave.Remember(g.Root, files, note, time.Now().UTC().Format("2006-01-02T15:04:05.000Z"))
 		if err != nil || entry == nil {
-			return "nothing to remember", nil
+			if weave.Derivable(note) {
+				return "not stored: who owns a file is in CODEOWNERS and the map; keep notes for decisions and gotchas", nil
+			}
+			return "nothing new to remember", nil
 		}
 		return fmt.Sprintf("remembered for %d file(s): %s", len(entry.Files), entry.Note), nil
 	case "recall":
