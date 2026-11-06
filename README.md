@@ -54,7 +54,10 @@ monorepo. weave reads it with no configuration in under a second:
 | tables with a module that uses them | **55 / 55** | 4 / 4 | 5 / 5 |
 | index time | ~0.85 s | ~20 ms | ~15 ms |
 
-<img src="docs/img/screens/documenso-screen.png" alt="One documenso screen on the line: the documents page calls 17 tRPC endpoints, handled in the trpc module, reaching 12 tables, with links to open the route file in VS Code or Cursor." width="100%">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/screens/documenso-dark.png">
+  <img src="docs/img/screens/documenso-screen.png" alt="One documenso screen on the line: the documents page calls 17 tRPC endpoints, handled in the trpc module, reaching 12 tables, with links to open the route file in VS Code or Cursor." width="100%">
+</picture>
 
 A screen is followed through package-alias imports (`@documenso/lib/…`, `~/…`) to the tRPC
 procedures it calls, and from there to the tables behind them. Rename one of those procedures
@@ -176,7 +179,8 @@ would; until it runs, other tools' reported savings are context, not a promise:
 ## The panel
 
 `weave serve` binds `127.0.0.1` and keeps its write token in `.weave/serve.token`, so a restart
-keeps the URLs people have open (`--new-token` rotates it). It serves one page with a sidebar:
+keeps the URLs people have open (`--new-token` rotates it). It follows the system's light or
+dark theme (the header button switches it), and serves one page with a sidebar:
 
 | Place | Holds |
 |---|---|

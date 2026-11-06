@@ -73,6 +73,7 @@
 .wok { color: var(--ok); font: 600 var(--fs-s) var(--ui); }
 .wbad { color: var(--bad); font: 600 var(--fs-s) var(--ui); }
 .whint { color: var(--ink3); font: var(--fs-s) var(--ui); margin: 4px 0 8px; }
+.wbuilding { padding: 16px 24px; margin: 0; }
 
 .wnote { display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
 .wnote input {
