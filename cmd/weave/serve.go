@@ -5,7 +5,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -62,6 +64,11 @@ func cmdServe() int {
 	}
 	fmt.Println("  the token is kept in .weave/serve.token; --new-token rotates it")
 	fmt.Println("  one page: the map, a Check button, file:line that opens, notes, specs, the wiki under /wiki/")
+	if !hasFlag("no-open") {
+		if openBrowser("http://" + addr + "/?t=" + token) {
+			fmt.Println("  opened in your browser; --no-open skips that")
+		}
+	}
 	fmt.Println("  Ctrl+C stops it. Loopback only; it writes nothing outside .weave/, specs/ and the files you note.")
 	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 		fmt.Fprintln(os.Stderr, err)
@@ -120,4 +127,29 @@ func listenFrom(port int, mayMove bool) (net.Listener, error) {
 		return nil, fmt.Errorf("weave serve: ports %d-%d are all taken: %v", port, port+tries-1, first)
 	}
 	return nil, fmt.Errorf("weave serve: port %d is taken (another weave serve?): stop it, or pass a free --port: %v", port, first)
+}
+
+// openBrowser hands the URL to the system's default browser. It does nothing in CI,
+// over SSH or on a Linux box with no display, where a browser cannot appear.
+func openBrowser(url string) bool {
+	if os.Getenv("CI") != "" || os.Getenv("SSH_CONNECTION") != "" {
+		return false
+	}
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
+			return false
+		}
+		cmd = exec.Command("xdg-open", url)
+	}
+	if cmd.Start() != nil {
+		return false
+	}
+	go cmd.Wait() // reap it; the browser outlives the opener
+	return true
 }
