@@ -260,6 +260,8 @@ try {
   await page.eval(`document.querySelector('.wdialog').close()`);
   await go('#node/page%3A%2Forders');
   check('page detail offers open', await page.waitFor(`!!document.querySelector('.path + .wopen')`));
+  check('page detail links to VS Code and Cursor', await page.eval(
+    `(() => { const h = [...document.querySelectorAll('a.openin')].map(a => a.getAttribute('href')); return h.length === 2 && h[0].startsWith('vscode://file/') && h[1].startsWith('cursor://file/') && h[0].includes('Orders.tsx') })()`));
   await page.eval(`document.querySelector('.path + .wopen').click()`);
   check('File shows the file window', await page.waitFor(`document.querySelector('.wdialog').open && !!document.querySelector('.wpane[data-on="1"] pre')`));
   check('File names the path', await page.eval(`document.querySelector('.wdialog b').textContent.endsWith('Orders.tsx')`));

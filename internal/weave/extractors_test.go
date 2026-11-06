@@ -163,3 +163,48 @@ func TestNestAndFastifyRoutes(t *testing.T) {
 		t.Fatalf("got\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }
+
+func TestGraphQL(t *testing.T) {
+	files := []SourceFile{
+		src("api/schema.graphql", "\"\"\"Root\"\"\"\ntype Query {\n  users(first: Int = 10): [User!]!\n  # a comment: not a field\n  user(id: ID!): User\n}\nextend type Mutation { createUser(input: UserInput!): User! }\ntype User { id: ID! name: String }\n"),
+		src("api/orders.resolver.ts", "@Resolver()\nexport class OrdersResolver {\n  @Query(() => [Order], { name: 'orders' })\n  async list() {}\n  @Mutation(() => Order)\n  cancelOrder(@Args('id') id: string) {}\n}\n"),
+		src("api/pothos.ts", "builder.queryField('me', (t) => t.field({}))\n"),
+		src("web/users.tsx", "const Q = gql`\n  query Users($n: Int) {\n    list: users(first: $n) { id ...UserBits }\n    me { id }\n  }\n`\nconst M = gql`mutation { createUser(input: $i) { id } }`\nconst B = gql`query { missing { id } }`\n"),
+	}
+	b := NewBuilder()
+	eps, calls := ExtractGraphQL(files, b)
+	var got []string
+	for _, e := range eps {
+		got = append(got, e.Method+" "+e.Path)
+	}
+	sort.Strings(got)
+	want := []string{"MUTATION /graphql/cancelOrder", "MUTATION /graphql/createUser", "QUERY /graphql/me", "QUERY /graphql/orders", "QUERY /graphql/user", "QUERY /graphql/users"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("endpoints\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	got = nil
+	for _, c := range calls {
+		got = append(got, c.Method+" "+c.Path)
+	}
+	sort.Strings(got)
+	want = []string{"MUTATION /graphql/createUser", "QUERY /graphql/me", "QUERY /graphql/missing", "QUERY /graphql/users"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("calls\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	// A front end with no schema of its own calls nothing it can break.
+	if e, c := ExtractGraphQL(files[3:], NewBuilder()); len(e)+len(c) != 0 {
+		t.Fatalf("client-only repo produced %v %v", e, c)
+	}
+}
+
+// `lazy(() => import(/* webpackChunkName: "x" */ '../a'))` names its screen's file.
+func TestLazyImportWithMagicComment(t *testing.T) {
+	files := []SourceFile{
+		src("src/App.js", "const Article = lazy(() =>\n  import(\n    /* webpackChunkName: \"Article\" */ './Article'\n  )\n);\nexport default () => <Routes><Route path=\"/article/:slug\" element={<Article />} /></Routes>\n"),
+		src("src/Article.js", "export default function Article() {}\n"),
+	}
+	st := ExtractPages(files, NewBuilder(), files, nil)
+	if len(st.Pages) != 1 || st.Pages[0].File != "src/Article.js" {
+		t.Fatalf("pages = %+v", st.Pages)
+	}
+}

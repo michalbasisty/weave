@@ -24,6 +24,18 @@ type Result struct {
 	Warnings []string
 	Commands []string
 	Changes  []string
+	// Broken lists each removed endpoint that something still calls, with the
+	// screens that reach the caller. Pages and Endpoints are what the change touches.
+	Broken    []Broken
+	Pages     []string
+	Endpoints []string
+}
+
+// Broken is one removed endpoint that a live call site still names.
+type Broken struct {
+	Endpoint string
+	Caller   string
+	Screens  []string
 }
 
 // Text renders the result the way `weave check` prints it: one scope line, then
@@ -96,6 +108,22 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 				break
 			}
 		}
+	}
+	screensOf := map[string][]string{}
+	for _, b := range broken {
+		var screens []string
+		if b.call.File != nil {
+			file := *b.call.File
+			if s, ok := screensOf[file]; ok {
+				screens = s
+			} else if fa := weave.Analyze(g, []string{file}); fa != nil {
+				for _, p := range fa.Pages {
+					screens = append(screens, p.Name)
+				}
+			}
+			screensOf[file] = screens
+		}
+		res.Broken = append(res.Broken, Broken{b.gone, locNode(b.call), screens})
 	}
 	if len(broken) > 0 {
 		var parts []string
@@ -174,6 +202,12 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 			warnings = append(warnings, fmt.Sprintf("%d requirement(s) linked but no JUnit report — evidence not checked", len(f.Reqs)))
 		}
 		res.Commands = f.Commands
+		for _, p := range f.Pages {
+			res.Pages = append(res.Pages, p.Name)
+		}
+		for _, e := range f.Endpoints {
+			res.Endpoints = append(res.Endpoints, e.Name)
+		}
 	}
 
 	scope := ""

@@ -1,6 +1,7 @@
 package weave
 
 import (
+	"sort"
 	"time"
 
 	"github.com/michalbasisty/weave/internal/jsjson"
@@ -14,6 +15,40 @@ type Builder struct {
 	byID  map[string]int
 	edges []GEdge
 	seen  map[string]struct{}
+	// usedBy is the first file seen for a module that queries a model. Shared
+	// packages (packages/lib/…) declare no endpoints, so no extractor names their
+	// module; AddUsedModules gives them one so their tables show a user.
+	usedBy map[string]string
+}
+
+// Use records that the module holding file queries model.
+func (b *Builder) Use(mod, file, model string) {
+	if b.usedBy == nil {
+		b.usedBy = map[string]string{}
+	}
+	if _, ok := b.usedBy[mod]; !ok {
+		b.usedBy[mod] = file
+	}
+	b.Edge(ModuleID(mod), ModelID(model), "uses")
+}
+
+// AddUsedModules adds a node for every module that uses a model but that no
+// extractor declared.
+func (b *Builder) AddUsedModules() {
+	mods := make([]string, 0, len(b.usedBy))
+	for m := range b.usedBy {
+		mods = append(mods, m)
+	}
+	sort.Strings(mods)
+	for _, m := range mods {
+		id := ModuleID(m)
+		if _, ok := b.byID[id]; ok {
+			continue
+		}
+		file := b.usedBy[m]
+		b.Node(&GNode{ID: id, Kind: KindModule, Name: m, File: Ptr(DirOf(file))})
+		b.Edge(id, FileID(file), "contains")
+	}
 }
 
 // NewBuilder returns an empty builder.

@@ -373,7 +373,7 @@ func ExtractModels(files []SourceFile, b *Builder, usedIn []SourceFile) []Model 
 		}
 		for _, name := range prismaUses(file.Text) {
 			if model, ok := modelByLower[strings.ToLower(name)]; ok {
-				b.Edge(ModuleID(mod), ModelID(model), "uses")
+				b.Use(mod, file.Rel, model)
 			}
 		}
 	}
@@ -531,7 +531,7 @@ var (
 	reRouteLine = jsRe(`<Route\b(.*?)\bpath=\{?["'\x60]([^"'\x60]+)["'\x60]\}?(.*)$`)
 	reNamedImp  = jsRe(`import\s+(?:\w+\s*,\s*)?\{?\s*(\w+)\s*\}?\s*(?:,\s*\w+\s*)?from\s+['"](\.{1,2}\/[^'"]+)['"]`)
 	reStarImp   = jsRe(`import\s+\*\s+as\s+(\w+)\s+from\s+['"](\.{1,2}\/[^'"]+)['"]`)
-	reLazyImp   = jsRe(`const\s+(\w+)\s*=\s*(?:React\.)?lazy\(\s*\(\)\s*=>\s*import\(\s*['"](\.{1,2}\/[^'"]+)['"]`)
+	reLazyImp   = jsRe(`const\s+(\w+)\s*=\s*(?:React\.)?lazy\(\s*\(\)\s*=>\s*import\(\s*(?:\/\*[\s\S]*?\*\/\s*)*['"]([^'"]+)['"]`)
 	reLazyChunk = jsRe(`const\s+(\w+)\s*=\s*(?:React\.)?lazy\(\s*(\w+)\.(\w+)\s*\)`)
 	reJSXTag    = jsRe(`<\s*([A-Z]\w*)`)
 	notAPage    = map[string]bool{"ProtectedRoute": true, "Navigate": true, "Suspense": true, "Fragment": true, "Routes": true, "Route": true}

@@ -19,6 +19,18 @@ inputs:
     required: false
     default: origin/main
 
+  comment:
+    description: >-
+      Comment on the pull request with what the change breaks and which screens it reaches.
+      on-failure (default) posts when the check fails and keeps an existing comment current;
+      always posts every time; false never comments. Needs `pull-requests: write`.
+    required: false
+    default: on-failure
+  github-token:
+    description: Token used to post the comment.
+    required: false
+    default: ${{ github.token }}
+
   wiki:
     description: Fail when the committed wiki (docs/wiki) no longer describes this tree. Run `weave wiki --out docs/wiki` locally first.
     required: false
@@ -47,13 +59,54 @@ runs:
       run: '"$WEAVE_BIN" index --root "${{ inputs.root }}"'
 
     - name: Check
+      id: check
       shell: bash
       run: |
-        set -euo pipefail
+        set -uo pipefail
         args=(check --root "${{ inputs.root }}")
         if [ -n "${{ inputs.against }}" ]; then args+=(--against "${{ inputs.against }}"); fi
         if [ "${{ inputs.strict-tests }}" = "true" ]; then args+=(--strict-tests); fi
-        "$WEAVE_BIN" "${args[@]}"
+        report="$RUNNER_TEMP/weave-check.md"
+        "$WEAVE_BIN" "${args[@]}" --markdown > "$report"
+        rc=$?
+        cat "$report"
+        cat "$report" >> "$GITHUB_STEP_SUMMARY"
+        printf 'report=%s\nfailed=%s\n' "$report" "$([ $rc -ne 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        exit 0
+
+    - name: Comment on the pull request
+      if: ${{ github.event.pull_request && inputs.comment != 'false' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        PR: ${{ github.event.pull_request.number }}
+        MODE: ${{ inputs.comment }}
+        FAILED: ${{ steps.check.outputs.failed }}
+        REPORT: ${{ steps.check.outputs.report }}
+      run: |
+        set -uo pipefail
+        existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+          --jq '.[] | select(.body | startswith("<!-- weave-check -->")) | .id' 2>/dev/null | head -n1)
+        if [ "$MODE" != "always" ] && [ "$FAILED" != "true" ] && [ -z "$existing" ]; then
+          echo "check passed, no earlier comment: nothing to post"
+          exit 0
+        fi
+        body=$(jq -Rs '{body: .}' < "$REPORT")
+        if [ -n "$existing" ]; then
+          echo "$body" | gh api -X PATCH "repos/$REPO/issues/comments/$existing" --input - > /dev/null \
+            || echo "::warning::weave could not update its PR comment (needs pull-requests: write)"
+        else
+          echo "$body" | gh api -X POST "repos/$REPO/issues/$PR/comments" --input - > /dev/null \
+            || echo "::warning::weave could not comment on the PR (needs pull-requests: write)"
+        fi
+
+    - name: Fail on problems
+      if: ${{ steps.check.outputs.failed == 'true' }}
+      shell: bash
+      run: |
+        echo "::error::weave check found problems — see the report above"
+        exit 1
 
     - name: Coverage
       if: always()

@@ -241,10 +241,13 @@ func ExplorePayload(g *Graph) *Project {
 				e = append(e, x.From)
 			}
 		}
-		if len(e) == 0 {
+		// A shared package handles no endpoint but still queries tables: keep it, so
+		// its tables show who uses them.
+		t := tablesOf(m.ID)
+		if len(e) == 0 && len(t) == 0 {
 			continue
 		}
-		modules = append(modules, Module{M: m.ID, E: e, T: tablesOf(m.ID)})
+		modules = append(modules, Module{M: m.ID, E: e, T: t})
 	}
 	for _, m := range modules {
 		for _, t := range m.T {
