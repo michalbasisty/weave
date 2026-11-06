@@ -95,7 +95,7 @@ also      /login, /register, /editor/:slug, /editor share these endpoints
 
 It is quick enough to run on every agent turn:
 
-<img src="docs/img/chart-speed.svg" alt="weave check wall time: documenso 2,458 files about 1 second, RealWorld Express + React 45 ms, RealWorld NestJS 29 ms." width="100%">
+<img src="docs/img/chart-speed.svg" alt="weave check wall time: documenso 2,458 files about 1.1 seconds, RealWorld Express + React 53 ms, RealWorld NestJS 35 ms." width="100%">
 
 ## Measured on real repositories
 
@@ -107,7 +107,7 @@ It is quick enough to run on every agent turn:
 | screens linked to their endpoints | 87 of 119 | 8 of 8 | — |
 | tables with a module that uses them | 55 of 55 | 4 of 4 | 5 of 5 |
 | false failures on the unchanged repo | **0** | **0** | **0** |
-| `weave check` | ~1 s | 45 ms | 29 ms |
+| `weave check` | ~1.1 s | 53 ms | 35 ms |
 
 No configuration on any of them. Every number comes from [`bench/run.mjs`](bench/run.mjs),
 which fetches these repositories at fixed commits ([`bench/fetch.sh`](bench/fetch.sh)) and

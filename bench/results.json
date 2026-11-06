@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-11-06T12:23:39.935Z",
-  "weave": "weave 0.1.1-0.20261106121253-fe904f74c211+dirty",
+  "measuredAt": "2026-11-06T12:28:32.137Z",
+  "weave": "weave 0.1.1-0.20261106122831-ee38a730fd93",
   "repos": [
     {
       "name": "documenso",
@@ -38,8 +38,8 @@
         "found": 30,
         "of": 327
       },
-      "indexMs": 948,
-      "checkMs": 1027,
+      "indexMs": 1030,
+      "checkMs": 1136,
       "screens": {
         "n": 119,
         "weave": 222,
@@ -97,8 +97,8 @@
         "found": 20,
         "of": 20
       },
-      "indexMs": 32,
-      "checkMs": 45,
+      "indexMs": 38,
+      "checkMs": 53,
       "screens": {
         "n": 8,
         "weave": 215.5,
@@ -226,8 +226,8 @@
         "found": 0,
         "of": 21
       },
-      "indexMs": 17,
-      "checkMs": 29,
+      "indexMs": 22,
+      "checkMs": 35,
       "screens": {
         "n": 0,
         "weave": 0,

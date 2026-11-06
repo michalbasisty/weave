@@ -71,7 +71,7 @@ written. It now compares with the last commit too.
 
 ## 4. Speed
 
-<img src="img/chart-speed.svg" alt="weave check wall time: documenso about 1 second, RealWorld Express + React 45 ms, RealWorld NestJS 29 ms." width="100%">
+<img src="img/chart-speed.svg" alt="weave check wall time: documenso about 1.1 seconds, RealWorld Express + React 53 ms, RealWorld NestJS 35 ms." width="100%">
 
 **Method.** `weave check` on a clean tree, which re-indexes and runs the gate; median of
 three runs after five fresh `weave index` runs. Linux, one process, no daemon.
