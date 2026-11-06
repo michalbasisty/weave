@@ -728,7 +728,7 @@ func (w *wikiWriter) stampLine() string {
 		strconv.Itoa(c.Calls.Resolved) + " of " + strconv.Itoa(c.Calls.Total) + " calls matched",
 	}
 	if c.NextPage != nil && c.NextPage.Files > 0 {
-		parts = append(parts, "next pages "+strconv.Itoa(c.NextPage.Found)+"/"+strconv.Itoa(c.NextPage.Files))
+		parts = append(parts, "file pages "+strconv.Itoa(c.NextPage.Found)+"/"+strconv.Itoa(c.NextPage.Files))
 	}
 	return strings.Join(parts, " · ")
 }
@@ -1160,12 +1160,15 @@ func (w *wikiWriter) indexPage() string {
 	tables := w.ix.OfKind(KindTable)
 	changes := w.ix.OfKind(KindChange)
 
-	broken := 0
+	// Count broken call sites the way the panel does: one per distinct call, not one
+	// per file that makes it, so both surfaces print the same number.
+	brokenIDs := map[string]bool{}
 	for _, e := range w.g.Edges {
 		if e.Kind == "calls_missing" {
-			broken++
+			brokenIDs[e.To] = true
 		}
 	}
+	broken := len(brokenIDs)
 	gate := `<p class="gate">The contract gate passes: every frontend call matches an endpoint.</p>` + "\n"
 	if broken > 0 {
 		gate = `<p class="gate bad">` + plural(broken, "broken call") + ` — <code>weave check</code> fails.</p>` + "\n"

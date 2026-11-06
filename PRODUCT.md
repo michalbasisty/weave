@@ -62,7 +62,7 @@ Name is lowercase `weave`. Voice: plain, factual, short; relations are written a
 
 ## Evidence on Hand
 
-Real graphs from this repo and from `G:\QR-gent`. No customers, testimonials or benchmarks
+Real graphs from this repo and from a private 761-file monorepo. No customers, testimonials or benchmarks
 beyond those in README.md and docs/DESIGN.md.
 
 ## Product Principles

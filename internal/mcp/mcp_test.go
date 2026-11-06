@@ -16,7 +16,14 @@ import (
 func TestMain(m *testing.M) {
 	// Tool calls record usage; tests must not write a ledger into the fixture.
 	_ = os.Setenv("WEAVE_NO_USAGE", "1")
-	os.Exit(m.Run())
+	home, err := os.MkdirTemp("", "weave-home-")
+	if err != nil {
+		panic(err)
+	}
+	_ = os.Setenv("WEAVE_HOME", home)
+	code := m.Run()
+	_ = os.RemoveAll(home)
+	os.Exit(code)
 }
 
 func replay(t *testing.T, flags string, src GraphSource, input string) ([]map[string]any, []string) {

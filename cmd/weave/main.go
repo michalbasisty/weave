@@ -129,7 +129,7 @@ func helpText() string {
 
   weave                         status, and what to do next
   weave explore                 open the map in your browser (--all: every project)
-  weave wiki                write a read-only wiki: a page per module, endpoint, screen, table, change
+  weave wiki                    write a read-only wiki: a page per module, endpoint, screen, table, change
   weave wiki --check            fail when the wiki no longer describes HEAD
   weave projects                every repo weave knows, and where they are
   weave context <file...>       one file, explained (--budget tokens, --depth code)

@@ -47,6 +47,10 @@ func BuildGraph(root string) *Graph {
 	endpoints := ExtractEndpoints(files, b)
 	nextStats := ExtractNextRoutes(files, b)
 	nextPageStats := ExtractNextPages(files, b, isNextRepo(files))
+	// Remix / React Router v7 file routes count with Next's: both are file routes.
+	rrRoutes, rrPages := ExtractRemixRoutes(files, b)
+	nextStats = mergeStats(nextStats, rrRoutes)
+	nextPageStats = mergeStats(nextPageStats, rrPages)
 	trpcStats := ExtractTRPC(files, b)
 	apiStats := ExtractOpenAPI(files, b)
 
@@ -67,7 +71,15 @@ func BuildGraph(root string) *Graph {
 		allEndpoints = append(allEndpoints, list...)
 	}
 	ExtractModels(t.Prisma, b, files)
-	pageInfo := ExtractPages(t.Web, b, files)
+	// Any module that declares a <Route> can hold the route table: App.js, router.jsx,
+	// src/main.tsx. Reading only the web folders missed every one outside them.
+	var routeFiles []SourceFile
+	for i := range files {
+		if isCode(files[i].Rel) && !reTestOrSpec.MatchString(files[i].Rel) && strings.Contains(files[i].Text, "<Route") {
+			routeFiles = append(routeFiles, files[i])
+		}
+	}
+	pageInfo := ExtractPages(routeFiles, b, files)
 	pages := pageInfo.Pages
 	var callFiles []SourceFile
 	for i := range files {
@@ -461,4 +473,13 @@ func matchPage(path string, pages []Page) *Page {
 		}
 	}
 	return best
+}
+
+func mergeStats(a, b ExtractStats) ExtractStats {
+	a.Files += b.Files
+	a.Found += b.Found
+	a.Silent = append(a.Silent, b.Silent...)
+	a.Ignored = append(a.Ignored, b.Ignored...)
+	a.Endpoints = append(a.Endpoints, b.Endpoints...)
+	return a
 }

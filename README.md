@@ -19,6 +19,15 @@ requirements hang off that map. One static binary, nothing to run beside it.
 - **An agent interface.** `weave mcp` answers "what is this file, what does it touch, what
   proves it" in a few hundred tokens instead of a few thousand.
 
+**Works with** Express, Next.js (app and pages router), Remix and React Router v7 file
+routes, React Router `<Route>` tables, tRPC, OpenAPI JSON and Prisma. Anything else (Nest,
+Fastify, your own fetch wrapper) takes a one-line regex in
+[`.weave/patterns.json`](docs/REFERENCE.md#your-own-patterns), and `weave doctor` names every
+file it could not read, so you know where the map ends.
+
+Download a binary for macOS, Linux or Windows from
+[Releases](https://github.com/michalbasisty/weave/releases), or build it:
+
 ```bash
 go install github.com/michalbasisty/weave/cmd/weave@latest   # Go 1.22+ to build, nothing to run
 cd /path/to/your/project
@@ -198,6 +207,10 @@ weave doctor
 - [`docs/PLAN.md`](docs/PLAN.md): where this is going, and the replay that says what not to build.
 - [`docs/DESIGN.md`](docs/DESIGN.md): the research the product rests on.
 - [`docs/explorer/DESIGN.md`](docs/explorer/DESIGN.md): the visual contract of the map.
+
+## License
+
+[MIT](LICENSE)
 - [`test/ui/README.md`](test/ui/README.md): the browser smoke test, which also regenerates the
   screenshots here: `node test/ui/panel.mjs --out docs/img/screens`.
 

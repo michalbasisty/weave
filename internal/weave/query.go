@@ -1544,10 +1544,10 @@ func CoverageLines(g *Graph, full bool) []string {
 	out = append(out, "  task files    "+itoa(c.Specs.Parsed)+"/"+itoa(c.Specs.Files)+" parsed ("+pct(c.Specs.Parsed, c.Specs.Files)+"%)")
 	out = append(out, "  prisma        "+itoa(c.Prisma.Tables)+"/"+itoa(c.Prisma.Models)+" models mapped to tables")
 	if c.Next != nil && (c.Next.Files != 0 || c.Next.Found != 0) {
-		out = append(out, "  next routes   "+itoa(c.Next.Found)+"/"+itoa(c.Next.Files)+" route files produced endpoints ("+pct(c.Next.Found, c.Next.Files)+"%)")
+		out = append(out, "  file routes   "+itoa(c.Next.Found)+"/"+itoa(c.Next.Files)+" route files produced endpoints ("+pct(c.Next.Found, c.Next.Files)+"%)")
 	}
 	if c.NextPage != nil && c.NextPage.Files != 0 {
-		out = append(out, "  next pages    "+itoa(c.NextPage.Found)+"/"+itoa(c.NextPage.Files)+" page files produced pages ("+pct(c.NextPage.Found, c.NextPage.Files)+"%)")
+		out = append(out, "  file pages    "+itoa(c.NextPage.Found)+"/"+itoa(c.NextPage.Files)+" page files produced pages ("+pct(c.NextPage.Found, c.NextPage.Files)+"%)")
 	}
 	if c.Trpc != nil && (c.Trpc.Files != 0 || c.Trpc.Found != 0) {
 		out = append(out, "  tRPC routers  "+itoa(c.Trpc.Found)+"/"+itoa(c.Trpc.Files)+" parsed ("+pct(c.Trpc.Found, c.Trpc.Files)+"%)")
