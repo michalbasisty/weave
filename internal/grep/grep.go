@@ -61,11 +61,7 @@ func render(g *weave.Graph, query string, limit int, useRegex bool, files []cach
 					continue
 				}
 				text := jsstr.Slice(jsstr.Trim(line), 0, 160)
-				rank := 1
-				if inGraph[f.rel] {
-					rank = 0
-				}
-				hits = append(hits, hit{f.rel, i + 1, text, rank})
+				hits = append(hits, hit{f.rel, i + 1, text, rankOf(f.rel, inGraph[f.rel])})
 				if len(hits) > maxHits {
 					break
 				}
@@ -74,10 +70,7 @@ func render(g *weave.Graph, query string, limit int, useRegex bool, files []cach
 	} else {
 		needle := strings.ToLower(q)
 		for _, f := range files {
-			rank := 1
-			if inGraph[f.rel] {
-				rank = 0
-			}
+			rank := rankOf(f.rel, inGraph[f.rel])
 			from := 0
 			for {
 				j := strings.Index(f.lower[from:], needle)
@@ -237,4 +230,27 @@ func isHex4(s string) bool {
 		}
 	}
 	return true
+}
+
+// rankOf orders hits: source the map knows, other source, data and config, then
+// prose, and archived or example material last. A plan in docs/archive/ that
+// mentions a name is rarely what the search was for; the code is.
+func rankOf(rel string, inGraph bool) int {
+	r := 0
+	if !inGraph {
+		r = 1
+	}
+	switch weave.Ext(rel) {
+	case ".md", ".mdx", ".txt":
+		r += 3
+	case ".json", ".yaml", ".yml":
+		r += 2
+	}
+	for _, seg := range strings.Split(strings.ToLower(rel), "/") {
+		switch seg {
+		case "archive", "archived", "old", "deprecated", "legacy", "examples", "example", "fixtures", "__fixtures__", "testdata", "__mocks__":
+			return r + 4
+		}
+	}
+	return r
 }

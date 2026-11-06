@@ -237,3 +237,34 @@ func TestCallsDoNotFallIntoNeighbourRoutes(t *testing.T) {
 		t.Errorf("/articles/${slug} matched %s", e.Path)
 	}
 }
+
+// A template segment typed as a literal union is a choice between fixed routes, not a
+// broken call; a value that matches no route is still caught.
+func TestUnionSegmentIsAChoiceOfRoutes(t *testing.T) {
+	eps := []Endpoint{
+		{Method: "PUT", Path: "/tasks/:id/start", ID: "s"},
+		{Method: "PUT", Path: "/tasks/:id/stop", ID: "t"},
+		{Method: "GET", Path: "/articles/feed", ID: "f"},
+		{Method: "GET", Path: "/articles/:slug/comments", ID: "c"},
+	}
+	text := "type TaskAction = 'start' | 'stop'\nconst act = (id: string, action: TaskAction) => api.put(`/tasks/${id}/${action}`)\n"
+	c := Call{Method: "PUT", Path: "/tasks/${id}/${action}", File: "a.ts", Line: 2}
+	got := expandUnion(c, text, unionAliases([]SourceFile{{Rel: "a.ts", Text: text}}))
+	if len(got) != 2 || got[0] != "/tasks/${id}/start" || got[1] != "/tasks/${id}/stop" {
+		t.Fatalf("expand: %v", got)
+	}
+	inline := "function f(id: string, action: 'start' | 'pause') {}"
+	if got := expandUnion(c, inline, nil); len(got) != 2 || MatchEndpoint(Call{Method: "PUT", Path: got[1]}, eps) != nil {
+		t.Fatalf("inline union should expand and 'pause' should not match: %v", got)
+	}
+	if got := expandUnion(c, "const x = { action: 'start' }", nil); got != nil {
+		t.Fatalf("an object property is not a type: %v", got)
+	}
+	// type unknown: two fixed siblings are a choice, one is not
+	if got := variableLeafChoices(c, eps); len(got) != 2 {
+		t.Fatalf("choices: %v", got)
+	}
+	if got := variableLeafChoices(Call{Method: "GET", Path: "/articles/${slug}"}, eps); got != nil {
+		t.Fatalf("/articles/${slug} must not become /articles/feed: %v", got)
+	}
+}
