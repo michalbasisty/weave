@@ -23,7 +23,7 @@ One static Go binary. No server, no account, no network.
 go install github.com/michalbasisty/weave/cmd/weave@latest   # or grab a binary from Releases
 cd your-app
 weave check          # what the uncommitted change breaks; exit 1 if anything
-weave serve          # the map in your browser, http://127.0.0.1:7777
+weave serve          # the map in your browser, every project you use in one dropdown
 weave init --hooks   # wire it into Claude Code, Cursor, VS Code, opencode
 ```
 
@@ -135,8 +135,8 @@ jobs:
 
 **The panel.** `weave serve` hosts the map on `127.0.0.1`: an overview with the gate's
 verdict, every screen, endpoint, module and table drawn on its line, the checks, your specs
-and a generated wiki. Every `file:line` opens in VS Code or Cursor. Light and dark follow
-your system.
+and a generated wiki. A dropdown switches between every repo weave has indexed. Every
+`file:line` opens in VS Code or Cursor. Light and dark follow your system.
 
 <img src="docs/img/screens/documenso-overview.png" alt="The panel's overview on documenso: the contract gate passes, 119 screens, 327 endpoints, 103 modules and 55 tables, all 312 frontend calls matched, and the next tests worth writing." width="100%">
 

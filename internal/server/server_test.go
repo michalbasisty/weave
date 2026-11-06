@@ -35,7 +35,7 @@ func TestPageCarriesTheActionLayer(t *testing.T) {
 		t.Fatalf("status %d", rec.Code)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"/app.js", "/app.css", `window.__weave={token:"tok"}`} {
+	for _, want := range []string{`src="app.js"`, `href="app.css"`, `window.__weave={token:"tok",projects:[]}`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page is missing %q", want)
 		}
@@ -365,5 +365,37 @@ func TestSpecsListsViewsAndOwners(t *testing.T) {
 	}
 	if len(v.Tables) != 1 || v.Tables[0] != "Session" {
 		t.Errorf("tables: %v", v.Tables)
+	}
+}
+
+// One server, several projects: /p/<name>/ is that project's own panel and API,
+// and an unknown name is a 404, not the primary project's data.
+func TestMultiServesEachProjectUnderItsPrefix(t *testing.T) {
+	mk := func(root string) Config {
+		return Config{Root: root, Token: "tok", Graph: func() (*weave.Graph, error) { return &weave.Graph{}, nil }}
+	}
+	h := Multi(mk("/a"), func(name string) (Config, bool) {
+		if name == "b" {
+			return mk("/b"), true
+		}
+		return Config{}, false
+	})
+	get := func(path string) int {
+		r := httptest.NewRequest("GET", "http://127.0.0.1"+path, nil)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w.Code
+	}
+	if c := get("/app.js"); c != 200 {
+		t.Fatalf("/app.js: %d", c)
+	}
+	if c := get("/p/b/app.js"); c != 200 {
+		t.Fatalf("/p/b/app.js: %d", c)
+	}
+	if c := get("/p/b"); c != 302 {
+		t.Fatalf("/p/b should redirect to /p/b/: %d", c)
+	}
+	if c := get("/p/zzz/app.js"); c != 404 {
+		t.Fatalf("unknown project: %d", c)
 	}
 }

@@ -8,6 +8,25 @@
     body: body === undefined ? undefined : JSON.stringify(body),
   }).then(r => r.json());
 
+  // One panel, every project: the explorer's own switcher swaps embedded data, but
+  // here each project has its own server-side checks, specs and wiki, so a choice
+  // navigates to that project's panel instead.
+  const projects = (window.__weave && window.__weave.projects) || [];
+  const old = document.getElementById('proj');
+  if (old && projects.length > 1) {
+    const proj = old.cloneNode(false); // drops the explorer's listener
+    proj.hidden = false;
+    for (const p of projects) {
+      const o = document.createElement('option');
+      o.value = p.href; o.textContent = p.name; o.selected = !!p.current;
+      proj.append(o);
+    }
+    proj.addEventListener('change', () => {
+      location.href = proj.value + (token ? '?t=' + encodeURIComponent(token) : '');
+    });
+    old.replaceWith(proj);
+  }
+
   const el = (tag, props = {}, kids = []) => {
     const n = document.createElement(tag);
     for (const [k, v] of Object.entries(props)) {
@@ -98,7 +117,7 @@
   };
 
   const openFile = (path, line) => {
-    api('/api/file?path=' + encodeURIComponent(path) + (line ? '&line=' + line : ''))
+    api('api/file?path=' + encodeURIComponent(path) + (line ? '&line=' + line : ''))
       .then(res => {
         if (res.error) {
           setPane('file', [el('p', { class: 'wbad', text: res.error })]);
@@ -114,7 +133,7 @@
           const text = input.value.trim();
           if (!text) return;
           save.disabled = true;
-          api('/api/note', { note: text, files: [path] }).then(r => {
+          api('api/note', { note: text, files: [path] }).then(r => {
             save.disabled = false;
             input.value = '';
             panes.file.prepend(el('p', { class: r.exit === 0 ? 'wok' : 'wbad', text: r.exit === 0 ? 'Saved. context() returns it as a note, not evidence.' : r.output }));
@@ -137,7 +156,7 @@
   const runCheck = show => {
     setGate('busy', 'checking…');
     const t0 = Date.now();
-    api('/api/check', {}).then(r => {
+    api('api/check', {}).then(r => {
       checkedAt = Date.now();
       const bad = r.exit !== 0;
       setGate(bad ? 'bad' : 'ok', bad ? 'contract broken' : 'checked ' + Math.round((Date.now() - t0) / 100) / 10 + 's');
@@ -191,7 +210,7 @@
     });
     box.addEventListener('click', () => {
       box.disabled = true;
-      api('/api/task-done', { change, task: task.id, done: !task.done }).then(r => {
+      api('api/task-done', { change, task: task.id, done: !task.done }).then(r => {
         if (r.exit !== 0) {
           box.disabled = false;
           if (specsHost) specsHost.prepend(el('p', { class: 'wbad', text: r.output }));
@@ -206,7 +225,7 @@
 
   const renderSpecs = host => {
     specsHost = host;
-    api('/api/specs').then(r => {
+    api('api/specs').then(r => {
       if (r.error) { host.replaceChildren(el('p', { class: 'wbad', text: r.error })); return; }
       const changes = r.changes || [];
       const caps = r.capabilities || [];
@@ -330,7 +349,7 @@
         const value = name.value.trim();
         if (!value) return;
         create.disabled = true;
-        api('/api/spec-new', { name: value }).then(res => {
+        api('api/spec-new', { name: value }).then(res => {
           create.disabled = false;
           if (res.exit !== 0) { host.prepend(el('p', { class: 'wbad', text: res.output })); return; }
           specsDirty = true;
@@ -364,7 +383,7 @@
     ]);
     const saveIt = () => {
       save.disabled = true;
-      api('/api/spec-save', { path, text: area.value }).then(r => {
+      api('api/spec-save', { path, text: area.value }).then(r => {
         save.disabled = false;
         if (r.error) {
           status.textContent = r.error;
@@ -390,7 +409,7 @@
   const renderSpecPage = (host, name, note) => {
     host.replaceChildren(el('p', { class: 'whint', text: 'Loading…' }));
     const path = 'specs/capabilities/' + name + '/spec.md';
-    api('/api/spec?path=' + encodeURIComponent(path)).then(r => {
+    api('api/spec?path=' + encodeURIComponent(path)).then(r => {
       const back = el('a', { href: '#specs', class: 'wback', text: '← All specs' });
       if (r.error) {
         host.replaceChildren(back, el('p', { class: 'wbad', text: r.error }));
@@ -413,8 +432,8 @@
 
   const buildWiki = () => {
     wikiBody.replaceChildren(el('p', { class: 'whint wbuilding', text: 'Building the wiki from the index…' }));
-    api('/api/wiki', {}).then(r => {
-      if (r.exit === 0) wikiBody.replaceChildren(el('iframe', { class: 'wwikiframe', src: '/wiki/', title: 'Wiki' }));
+    api('api/wiki', {}).then(r => {
+      if (r.exit === 0) wikiBody.replaceChildren(el('iframe', { class: 'wwikiframe', src: 'wiki/', title: 'Wiki' }));
       else wikiBody.replaceChildren(el('pre', { text: r.output }));
     }).catch(() => wikiBody.replaceChildren(el('p', { class: 'wbad', text: 'Wiki build failed.' })));
   };
@@ -561,7 +580,7 @@
     const mark = el('button', { type: 'button', class: 'wmark', text: 'Mark reviewed' });
     mark.addEventListener('click', () => {
       mark.disabled = true;
-      api('/api/review/mark', {}).then(r => {
+      api('api/review/mark', {}).then(r => {
         if (r.marked) { mark.textContent = 'Reviewed'; renderReview(); attribute(); }
         else { mark.disabled = false; mark.textContent = r.error || 'Could not mark'; }
       });
@@ -585,7 +604,7 @@
     const slot = document.getElementById('reviewslot');
     if (slot) slot.append(node); else detail.prepend(node);
   };
-  const loadReview = () => api('/api/review').then(r => { review = r; renderReview(); }).catch(() => {});
+  const loadReview = () => api('api/review').then(r => { review = r; renderReview(); }).catch(() => {});
 
   // the review sheet belongs to Today only, and Today is re-rendered on navigation
   const attribute = () => {
