@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -45,13 +46,24 @@ func cmdServe() int {
 		},
 	}
 
-	addr := "127.0.0.1:" + strconv.Itoa(port)
-	srv := &http.Server{Addr: addr, Handler: server.Handler(cfg), ReadHeaderTimeout: 5 * time.Second}
-	fmt.Printf("weave serve: http://%s/?t=%s\n", addr, token)
+	// Bind before printing a URL. A second `weave serve` used to print its link and
+	// then fail on the busy port, so the link opened the first server's project.
+	ln, err := listenFrom(port, arg("port", "") == "")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	addr := ln.Addr().String()
+	srv := &http.Server{Handler: server.Handler(cfg), ReadHeaderTimeout: 5 * time.Second}
+	fmt.Printf("weave serve: %s\n", root)
+	fmt.Printf("  http://%s/?t=%s\n", addr, token)
+	if p := ln.Addr().(*net.TCPAddr).Port; p != port {
+		fmt.Printf("  port %d is taken (another weave serve?), so this one is on %d\n", port, p)
+	}
 	fmt.Println("  the token is kept in .weave/serve.token; --new-token rotates it")
 	fmt.Println("  one page: the map, a Check button, file:line that opens, notes, specs, the wiki under /wiki/")
 	fmt.Println("  Ctrl+C stops it. Loopback only; it writes nothing outside .weave/, specs/ and the files you note.")
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -85,4 +97,27 @@ func validToken(t string) bool {
 		}
 	}
 	return true
+}
+
+// listenFrom binds 127.0.0.1:port. When the port was not asked for by name and is
+// busy, it tries the next twenty, so each project can have its own panel open.
+func listenFrom(port int, mayMove bool) (net.Listener, error) {
+	tries := 1
+	if mayMove {
+		tries = 20
+	}
+	var first error
+	for p := port; p < port+tries && p <= 65535; p++ {
+		ln, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(p))
+		if err == nil {
+			return ln, nil
+		}
+		if first == nil {
+			first = err
+		}
+	}
+	if mayMove {
+		return nil, fmt.Errorf("weave serve: ports %d-%d are all taken: %v", port, port+tries-1, first)
+	}
+	return nil, fmt.Errorf("weave serve: port %d is taken (another weave serve?): stop it, or pass a free --port: %v", port, first)
 }
