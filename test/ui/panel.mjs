@@ -156,7 +156,7 @@ try {
   fs.copyFileSync(path.join(here, 'orders-spec.md'), path.join(capDir, 'spec.md'));
 
   const port = await freePort();
-  serve = spawn(bin, ['serve', '--root', root, '--port', String(port)], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
+  serve = spawn(bin, ['serve', '--no-open', '--root', root, '--port', String(port)], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = '';
   serve.stdout.on('data', d => { out += d; });
   serve.stderr.on('data', d => { out += d; });

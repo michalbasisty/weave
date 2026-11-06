@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/michalbasisty/weave/internal/baseline"
 	"github.com/michalbasisty/weave/internal/delta"
@@ -36,6 +37,14 @@ type Config struct {
 	Root  string
 	Graph func() (*weave.Graph, error)
 	Token string
+	// Projects, when set, lists every project this server can show, for the page's
+	// project switcher. Each one's Href is where its panel lives.
+	Projects func() []Project
+}
+
+// Project is one entry in the switcher.
+type Project struct {
+	Name, Root, Href string
 }
 
 // NewToken is the per-run write token embedded in the page.
@@ -130,7 +139,7 @@ func Handler(c Config) http.Handler {
 		}
 		page := weave.RenderExplore([]weave.NamedGraph{ng})
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = io.WriteString(w, inject(page, c.Token))
+		_, _ = io.WriteString(w, inject(page, c.Token, c.projectList()))
 	})
 
 	mux.HandleFunc("/app.js", func(w http.ResponseWriter, r *http.Request) {
@@ -664,13 +673,66 @@ func partsTable(md string) (rows, line int) {
 
 // inject puts the action layer into the rendered page: a stylesheet, the script, and
 // the write token the script uses.
-func inject(page, token string) string {
-	layer := `<link rel="stylesheet" href="/app.css">
-<script>window.__weave={token:"` + token + `"}</script>
-<script src="/app.js"></script>
+// projectList is the switcher's data, with this server's own project marked.
+func (c Config) projectList() []map[string]any {
+	if c.Projects == nil {
+		return nil
+	}
+	var out []map[string]any
+	for _, p := range c.Projects() {
+		out = append(out, map[string]any{"name": p.Name, "href": p.Href, "current": filepath.Clean(p.Root) == filepath.Clean(c.Root)})
+	}
+	return out
+}
+
+// inject adds the hosted layer. Its paths are relative, so the same page works at /
+// and under /p/<name>/.
+func inject(page, token string, projects []map[string]any) string {
+	list, _ := json.Marshal(projects)
+	if projects == nil {
+		list = []byte("[]")
+	}
+	layer := `<link rel="stylesheet" href="app.css">
+<script>window.__weave={token:"` + token + `",projects:` + string(list) + `}</script>
+<script src="app.js"></script>
 `
 	if i := strings.LastIndex(page, "</body>"); i >= 0 {
 		return page[:i] + layer + page[i:]
 	}
 	return page + layer
+}
+
+// Multi serves the primary project at / and every other known project at
+// /p/<name>/, each with its own index, checks, specs and wiki, so one panel can
+// switch between them. A project's handler is built on first use and kept.
+func Multi(primary Config, open func(name string) (Config, bool)) http.Handler {
+	main := Handler(primary)
+	var mu sync.Mutex
+	cache := map[string]http.Handler{}
+	return localOnly(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rest, ok := strings.CutPrefix(r.URL.Path, "/p/")
+		if !ok {
+			main.ServeHTTP(w, r)
+			return
+		}
+		name, _, slash := strings.Cut(rest, "/")
+		if !slash {
+			http.Redirect(w, r, "/p/"+name+"/?"+r.URL.RawQuery, http.StatusFound)
+			return
+		}
+		mu.Lock()
+		h, hit := cache[name]
+		if !hit {
+			if c, found := open(name); found {
+				h = http.StripPrefix("/p/"+name, Handler(c))
+				cache[name] = h
+			}
+		}
+		mu.Unlock()
+		if h == nil {
+			http.NotFound(w, r)
+			return
+		}
+		h.ServeHTTP(w, r)
+	}))
 }

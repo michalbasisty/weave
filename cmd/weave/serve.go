@@ -2,13 +2,18 @@ package main
 
 import (
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/michalbasisty/weave/internal/registry"
 	"github.com/michalbasisty/weave/internal/server"
 	"github.com/michalbasisty/weave/internal/weave"
 )
@@ -32,26 +37,44 @@ func cmdServe() int {
 	// write access. `--new-token` rotates it.
 	token := serveToken(root, hasFlag("new-token"))
 
-	cfg := server.Config{
-		Root:  root,
-		Token: token,
-		Graph: func() (*weave.Graph, error) {
-			if weave.IsFresh(root, "") {
-				if g, err := weave.LoadGraph(root); err == nil {
-					return g, nil
-				}
-			}
-			return weave.Reindex(root)
-		},
-	}
+	cfg := projectConfig(root, token)
+	cfg.Projects = func() []server.Project { return servedProjects(root) }
 
-	addr := "127.0.0.1:" + strconv.Itoa(port)
-	srv := &http.Server{Addr: addr, Handler: server.Handler(cfg), ReadHeaderTimeout: 5 * time.Second}
-	fmt.Printf("weave serve: http://%s/?t=%s\n", addr, token)
+	// Bind before printing a URL. A second `weave serve` used to print its link and
+	// then fail on the busy port, so the link opened the first server's project.
+	ln, err := listenFrom(port, arg("port", "") == "")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	addr := ln.Addr().String()
+	srv := &http.Server{Handler: server.Multi(cfg, func(name string) (server.Config, bool) {
+		for _, e := range registry.Load() {
+			if e.Name == name && registry.Exists(e.Root) && filepath.Clean(e.Root) != filepath.Clean(root) {
+				c := projectConfig(e.Root, token)
+				c.Projects = cfg.Projects
+				return c, true
+			}
+		}
+		return server.Config{}, false
+	}), ReadHeaderTimeout: 5 * time.Second}
+	fmt.Printf("weave serve: %s\n", root)
+	fmt.Printf("  http://%s/?t=%s\n", addr, token)
+	if p := ln.Addr().(*net.TCPAddr).Port; p != port {
+		fmt.Printf("  port %d is taken (another weave serve?), so this one is on %d\n", port, p)
+	}
+	if n := len(servedProjects(root)); n > 1 {
+		fmt.Printf("  %d projects in the switcher (every repo weave has indexed); /p/<name>/ opens one\n", n)
+	}
 	fmt.Println("  the token is kept in .weave/serve.token; --new-token rotates it")
 	fmt.Println("  one page: the map, a Check button, file:line that opens, notes, specs, the wiki under /wiki/")
+	if !hasFlag("no-open") {
+		if openBrowser("http://" + addr + "/?t=" + token) {
+			fmt.Println("  opened in your browser; --no-open skips that")
+		}
+	}
 	fmt.Println("  Ctrl+C stops it. Loopback only; it writes nothing outside .weave/, specs/ and the files you note.")
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+	if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
@@ -85,4 +108,84 @@ func validToken(t string) bool {
 		}
 	}
 	return true
+}
+
+// listenFrom binds 127.0.0.1:port. When the port was not asked for by name and is
+// busy, it tries the next twenty, so each project can have its own panel open.
+func listenFrom(port int, mayMove bool) (net.Listener, error) {
+	tries := 1
+	if mayMove {
+		tries = 20
+	}
+	var first error
+	for p := port; p < port+tries && p <= 65535; p++ {
+		ln, err := net.Listen("tcp", "127.0.0.1:"+strconv.Itoa(p))
+		if err == nil {
+			return ln, nil
+		}
+		if first == nil {
+			first = err
+		}
+	}
+	if mayMove {
+		return nil, fmt.Errorf("weave serve: ports %d-%d are all taken: %v", port, port+tries-1, first)
+	}
+	return nil, fmt.Errorf("weave serve: port %d is taken (another weave serve?): stop it, or pass a free --port: %v", port, first)
+}
+
+// openBrowser hands the URL to the system's default browser. It does nothing in CI,
+// over SSH or on a Linux box with no display, where a browser cannot appear.
+func openBrowser(url string) bool {
+	if os.Getenv("CI") != "" || os.Getenv("SSH_CONNECTION") != "" {
+		return false
+	}
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	default:
+		if os.Getenv("DISPLAY") == "" && os.Getenv("WAYLAND_DISPLAY") == "" {
+			return false
+		}
+		cmd = exec.Command("xdg-open", url)
+	}
+	if cmd.Start() != nil {
+		return false
+	}
+	go cmd.Wait() // reap it; the browser outlives the opener
+	return true
+}
+
+// projectConfig is one project's panel: its index, rebuilt when stale.
+func projectConfig(dir, token string) server.Config {
+	return server.Config{
+		Root:  dir,
+		Token: token,
+		Graph: func() (*weave.Graph, error) {
+			if weave.IsFresh(dir, "") {
+				if g, err := weave.LoadGraph(dir); err == nil {
+					return g, nil
+				}
+			}
+			return weave.Reindex(dir)
+		},
+	}
+}
+
+// servedProjects is the switcher: this project at /, every other registered repo
+// that still exists at /p/<name>/.
+func servedProjects(primary string) []server.Project {
+	out := []server.Project{{Name: filepath.Base(primary), Root: primary, Href: "/"}}
+	for _, e := range registry.Load() {
+		if filepath.Clean(e.Root) == filepath.Clean(primary) {
+			out[0].Name = e.Name
+			continue
+		}
+		if registry.Exists(e.Root) {
+			out = append(out, server.Project{Name: e.Name, Root: e.Root, Href: "/p/" + url.PathEscape(e.Name) + "/"})
+		}
+	}
+	return out
 }

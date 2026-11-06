@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -36,5 +37,32 @@ func TestServeTokenIsStable(t *testing.T) {
 	replaced := serveToken(root, false)
 	if !validToken(replaced) || replaced == rotated {
 		t.Fatalf("malformed file was trusted: %q", replaced)
+	}
+}
+
+// A second serve must not print a link to the first one's port: without --port it
+// moves to the next free port, with --port it refuses.
+func TestServeMovesOffABusyPort(t *testing.T) {
+	busy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Skip(err)
+	}
+	defer busy.Close()
+	port := busy.Addr().(*net.TCPAddr).Port
+
+	ln, err := listenFrom(port, true)
+	if err != nil {
+		t.Fatalf("default port busy: %v", err)
+	}
+	if got := ln.Addr().(*net.TCPAddr).Port; got == port {
+		t.Fatalf("bound the busy port %d", got)
+	}
+	ln.Close()
+
+	if ln, err := listenFrom(port, false); err == nil {
+		ln.Close()
+		t.Fatal("explicit --port on a busy port should fail")
+	} else if !strings.Contains(err.Error(), "taken") {
+		t.Fatalf("error: %v", err)
 	}
 }
