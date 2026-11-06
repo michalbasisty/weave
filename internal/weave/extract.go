@@ -55,7 +55,7 @@ func ResolveImport(importer, spec string, known map[string]bool) string {
 	if !strings.HasPrefix(spec, ".") {
 		return ""
 	}
-	base := StripExt(JoinPosix(DirOf(importer), spec))
+	base := stripCodeExt(JoinPosix(DirOf(importer), spec))
 	for _, g := range []string{
 		base + ".ts", base + ".tsx", base + ".js", base + ".jsx", base + ".mjs",
 		base + "/index.ts", base + "/index.tsx", base + "/index.js",
@@ -105,13 +105,13 @@ func (m *ImportMap) Get(rel string) []string {
 }
 
 // BuildImportMap reads every file's import/export-from specs.
-func BuildImportMap(files []SourceFile, known map[string]bool) *ImportMap {
+func BuildImportMap(files []SourceFile, known map[string]bool, al *Aliases) *ImportMap {
 	m := &ImportMap{by: map[string]int{}}
 	for i := range files {
 		f := &files[i]
 		targets := []string{}
 		for _, spec := range importSpecs(f.Text) {
-			if r := ResolveImport(f.Rel, spec, known); r != "" && r != f.Rel {
+			if r := al.Resolve(f.Rel, spec, known); r != "" && r != f.Rel {
 				targets = append(targets, r)
 			}
 		}
@@ -154,20 +154,28 @@ type Endpoint struct {
 }
 
 var (
-	reRouterVerb  = jsRe("router\\.(get|post|put|patch|delete)\\s*\\(\\s*['\"`]([^'\"`]*)['\"`]")
-	reRouterAny   = jsRe(`router\.(?:get|post|put|patch|delete)\s*\(`)
+	// `router.get`, `app.get`, `userRouter.post`, `routes.delete`, `app.all`: the
+	// receivers Express code uses. A client (`api.get`) is never one of them.
+	reRouterVerb  = jsRe("\\b(?:app|server|fastify|router|routes|[A-Za-z_$][\\w$]*Router)\\.(get|post|put|patch|delete|all)\\s*\\(\\s*['\"`](\\/[^'\"`]*)['\"`]")
+	reRouterAny   = jsRe(`\b(?:app|server|fastify|router|routes|[A-Za-z_$][\w$]*Router)\.(?:get|post|put|patch|delete|all)\s*\(\s*['"\x60]\/`)
 	reMount       = jsRe("app\\.use\\s*\\(\\s*['\"`](\\/api[^'\"`]*)['\"`]\\s*,\\s*(\\w+)\\s*\\)")
 	reDefaultImp  = jsRe(`import\s+(\w+)\s+from\s+['"](\.{1,2}\/[^'"]+)['"]`)
 	reRouterFirst = jsRe("router\\.(?:get|post)\\(\\s*['\"`](\\/[^'\"`]*)['\"`]")
 	reTrailSlash  = regexp.MustCompile(`/+$`)
 )
 
+// mayDeclareRoutes is a cheap filter before reRouterAny, whose open-ended receiver
+// (`*Router`) has no literal prefix for the regexp engine to scan for.
+func mayDeclareRoutes(t string) bool {
+	return strings.Contains(t, "outer.") || strings.Contains(t, "app.") || strings.Contains(t, "routes.") || strings.Contains(t, "server.") || strings.Contains(t, "fastify.")
+}
+
 // ExtractEndpoints finds Express-style routes and the /api mounts that prefix them.
 func ExtractEndpoints(files []SourceFile, b *Builder) []Endpoint {
 	known := knownSet(files)
 	var routeFiles []*SourceFile
 	for i := range files {
-		if isCode(files[i].Rel) && reRouterAny.MatchString(files[i].Text) {
+		if isCode(files[i].Rel) && mayDeclareRoutes(files[i].Text) && reRouterAny.MatchString(files[i].Text) {
 			routeFiles = append(routeFiles, &files[i])
 		}
 	}
@@ -241,6 +249,9 @@ func ExtractEndpoints(files []SourceFile, b *Builder) []Endpoint {
 		for _, m := range reRouterVerb.FindAllStringSubmatchIndex(f.Text, -1) {
 			line := lineAt(f.Text, m[0])
 			method := strings.ToUpper(f.Text[m[2]:m[3]])
+			if method == "ALL" {
+				method = "ANY"
+			}
 			sub := f.Text[m[4]:m[5]]
 			if sub == "/" {
 				sub = ""
@@ -437,19 +448,48 @@ func unknowablePath(p string) bool {
 	return false
 }
 
+// externalURL reports whether a call names another host: `https://api.github.com/…`.
+// Such a call is a contract with someone else's service, never with this repo's
+// endpoints, so it can be neither matched nor broken. Loopback hosts are this repo.
+func externalURL(p string) bool {
+	rest, ok := strings.CutPrefix(p, "https://")
+	if !ok {
+		rest, ok = strings.CutPrefix(p, "http://")
+	}
+	if !ok {
+		rest, ok = strings.CutPrefix(p, "//")
+	}
+	if !ok {
+		return false
+	}
+	host := rest
+	if i := strings.IndexAny(host, "/?#"); i >= 0 {
+		host = host[:i]
+	}
+	if i := strings.LastIndexByte(host, ':'); i >= 0 {
+		host = host[:i]
+	}
+	switch host {
+	case "localhost", "127.0.0.1", "0.0.0.0", "[::1]":
+		return false
+	}
+	return true
+}
+
 // ExtractCalls finds axios-style, fetch and tRPC client calls, one per line and kind.
+// Calls to another host are left out: see externalURL.
 func ExtractCalls(files []SourceFile) []Call {
 	var calls []Call
 	for i := range files {
 		f := &files[i]
 		for n, line := range f.Lines {
-			if verb, path, ok := callMatch(line); ok {
+			if verb, path, ok := callMatch(line); ok && !externalURL(path) {
 				calls = append(calls, Call{strings.ToUpper(verb), path, f.Rel, n + 1, strings.Contains(path, "${")})
 			}
 		}
 		for n, line := range f.Lines {
 			path, method, ok := fetchMatch(line)
-			if !ok || (!strings.HasPrefix(path, "/") && !strings.Contains(path, "/api/")) {
+			if !ok || externalURL(path) || (!strings.HasPrefix(path, "/") && !strings.Contains(path, "/api/")) {
 				continue
 			}
 			if method == "" {
@@ -488,18 +528,17 @@ type PageInfo struct {
 }
 
 var (
-	reRouteLine  = jsRe(`<Route\s+path=["']([^"']+)["'](.*)$`)
-	reNamedImp   = jsRe(`import\s+(?:\w+\s*,\s*)?\{?\s*(\w+)\s*\}?\s*(?:,\s*\w+\s*)?from\s+['"](\.{1,2}\/[^'"]+)['"]`)
-	reStarImp    = jsRe(`import\s+\*\s+as\s+(\w+)\s+from\s+['"](\.{1,2}\/[^'"]+)['"]`)
-	reLazyImp    = jsRe(`const\s+(\w+)\s*=\s*(?:React\.)?lazy\(\s*\(\)\s*=>\s*import\(\s*['"](\.{1,2}\/[^'"]+)['"]`)
-	reLazyChunk  = jsRe(`const\s+(\w+)\s*=\s*(?:React\.)?lazy\(\s*(\w+)\.(\w+)\s*\)`)
-	reJSXTag     = jsRe(`<\s*([A-Z]\w*)`)
-	reRoutesFile = jsRe(`routes?\.tsx?$`)
-	notAPage     = map[string]bool{"ProtectedRoute": true, "Navigate": true, "Suspense": true, "Fragment": true, "Routes": true, "Route": true}
+	reRouteLine = jsRe(`<Route\b(.*?)\bpath=\{?["'\x60]([^"'\x60]+)["'\x60]\}?(.*)$`)
+	reNamedImp  = jsRe(`import\s+(?:\w+\s*,\s*)?\{?\s*(\w+)\s*\}?\s*(?:,\s*\w+\s*)?from\s+['"](\.{1,2}\/[^'"]+)['"]`)
+	reStarImp   = jsRe(`import\s+\*\s+as\s+(\w+)\s+from\s+['"](\.{1,2}\/[^'"]+)['"]`)
+	reLazyImp   = jsRe(`const\s+(\w+)\s*=\s*(?:React\.)?lazy\(\s*\(\)\s*=>\s*import\(\s*['"](\.{1,2}\/[^'"]+)['"]`)
+	reLazyChunk = jsRe(`const\s+(\w+)\s*=\s*(?:React\.)?lazy\(\s*(\w+)\.(\w+)\s*\)`)
+	reJSXTag    = jsRe(`<\s*([A-Z]\w*)`)
+	notAPage    = map[string]bool{"ProtectedRoute": true, "Navigate": true, "Suspense": true, "Fragment": true, "Routes": true, "Route": true}
 )
 
 // ExtractPages reads <Route path> declarations and the component each one renders.
-func ExtractPages(webFiles []SourceFile, b *Builder, allFiles []SourceFile) PageInfo {
+func ExtractPages(webFiles []SourceFile, b *Builder, allFiles []SourceFile, al *Aliases) PageInfo {
 	// Resolve against every file, not only the JSX subset: the route table often
 	// imports a `.ts` chunk map, and a page's own file can be imported from it.
 	resolveFiles := allFiles
@@ -514,13 +553,13 @@ func ExtractPages(webFiles []SourceFile, b *Builder, allFiles []SourceFile) Page
 	info := PageInfo{Skipped: []string{}}
 	for i := range webFiles {
 		f := &webFiles[i]
-		if !strings.HasSuffix(f.Rel, "App.tsx") && !strings.HasSuffix(f.Rel, "App.jsx") && !reRoutesFile.MatchString(f.Rel) {
+		if !strings.Contains(f.Text, "<Route") {
 			continue
 		}
 		idents := map[string]string{}
 		for _, re := range []*regexp.Regexp{reNamedImp, reStarImp, reLazyImp} {
 			for _, m := range re.FindAllStringSubmatch(f.Text, -1) {
-				if r := ResolveImport(f.Rel, m[2], known); r != "" {
+				if r := al.Resolve(f.Rel, m[2], known); r != "" {
 					idents[m[1]] = r
 				}
 			}
@@ -552,10 +591,11 @@ func ExtractPages(webFiles []SourceFile, b *Builder, allFiles []SourceFile) Page
 				continue
 			}
 			line := n + 1
-			route := m[1]
+			route := m[2]
 			info.Declared++
 			component := ""
-			for _, x := range reJSXTag.FindAllStringSubmatch(m[2], -1) {
+			// the element may sit before or after path=
+			for _, x := range reJSXTag.FindAllStringSubmatch(m[1]+" "+m[3], -1) {
 				if !notAPage[x[1]] {
 					component = x[1]
 					break

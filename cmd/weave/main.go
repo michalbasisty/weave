@@ -129,7 +129,7 @@ func helpText() string {
 
   weave                         status, and what to do next
   weave explore                 open the map in your browser (--all: every project)
-  weave wiki                write a read-only wiki: a page per module, endpoint, screen, table, change
+  weave wiki                    write a read-only wiki: a page per module, endpoint, screen, table, change
   weave wiki --check            fail when the wiki no longer describes HEAD
   weave projects                every repo weave knows, and where they are
   weave context <file...>       one file, explained (--budget tokens, --depth code)
@@ -154,7 +154,8 @@ func helpText() string {
   weave evidence [REQ...]       which requirements a JUnit report proves
   weave doctor                  graph health
   weave perf    [--runs N]      index timings over time, or N fresh runs
-  weave init    [--upgrade]     connect Claude, Cursor, opencode, Codex
+  weave init    [--upgrade]     connect Claude, Cursor, VS Code, opencode
+  weave init    --only claude   write only the configs you name (claude,cursor,vscode,opencode)
   weave init    --hooks         also install the Stop hook that runs the gate
   weave forget  <name>          drop a project from the list
   weave mcp                     MCP server on stdio (--all: serve every project)

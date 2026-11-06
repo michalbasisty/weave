@@ -6,38 +6,42 @@
 <script>try{var p=localStorage.getItem('weave:theme')||'auto',d=p==='dark'||(p==='auto'&&matchMedia('(prefers-color-scheme:dark)').matches);document.documentElement.dataset.theme=d?'dark':'light'}catch(e){try{document.documentElement.dataset.theme=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'}catch(e2){}}</script>
 <style>
 :root{
-  /* type: one humanist UI family, mono only for routes, tables, paths and counts */
-  --ui:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Roboto,Arial,sans-serif;
-  --display:"Segoe UI Variable Display","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Roboto,Arial,sans-serif;
-  --mono:"Cascadia Mono","Cascadia Code",Consolas,ui-monospace,SFMono-Regular,Menlo,monospace;
+  /* type: the system UI family; mono only for routes, tables, paths and counts */
+  --ui:ui-sans-serif,system-ui,-apple-system,"Segoe UI Variable Text","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --display:ui-sans-serif,system-ui,-apple-system,"Segoe UI Variable Display","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Mono","SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
   --fs-xs:.75rem;--fs-s:.8125rem;--fs-c:.875rem;--fs-m:.9375rem;--fs-l:1.125rem;--fs-xl:1.375rem;--fs-2xl:1.75rem;
   --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;--s7:48px;
-  --r:6px;--list:400px;
-  /* the network: porcelain ground, navy signboard, four line colours */
-  --ground:#f5f6f8;--surface:#ffffff;--sunk:#eceff4;
-  --ink:#131a26;--ink2:#3a4454;--ink3:#5a6474;
-  --rule:#dbe0e8;--rule2:#e8ebf0;
-  --shell:#14233f;--shell-ink:#ffffff;--shell-ink2:#b9c6de;--shell-field:#22355b;--shell-rule:#2c4170;
-  --link:#1d4bb0;--focus:#1d4bb0;
+  --r:8px;--list:380px;--side:224px;
+  --ground:#f6f7f9;--surface:#ffffff;--sunk:#f0f2f5;--hover:#f3f5f8;
+  --ink:#111827;--ink2:#374151;--ink3:#6b7280;
+  --rule:#e3e6eb;--rule2:#eef0f3;
+  /* the header and sidebar share the page's surface; the old navy signboard is gone */
+  --shell:#ffffff;--shell-ink:#111827;--shell-ink2:#4b5563;--shell-field:#f3f4f6;--shell-rule:#e3e6eb;
+  --accent:#3b5bdb;--accent-bg:#edf1fd;
+  --link:#2f4fc4;--focus:#3b5bdb;
   --screen:#2a5cc4;--api:#12805a;--module:#a8650a;--data:#8a3ea0;
-  --ok:#17723f;--bad:#b4261a;--bad-bg:#fbeeec;
+  --ok:#17723f;--ok-bg:#eaf6ef;--bad:#b4261a;--bad-bg:#fdeeec;
   --sel:#c8d7f6;
+  --shadow:0 1px 2px rgba(16,24,40,.05);
   color-scheme:light;
 }
 :root[data-theme=dark]{
-  --ground:#0b111d;--surface:#101827;--sunk:#18233a;
-  --ink:#e8ecf3;--ink2:#bcc5d4;--ink3:#8f9bb0;
-  --rule:#243049;--rule2:#1a243a;
-  --shell:#18294f;--shell-ink:#ffffff;--shell-ink2:#c3cfe6;--shell-field:#24396b;--shell-rule:#36507f;
-  --link:#9cb9f5;--focus:#9cb9f5;
+  --ground:#0d1117;--surface:#151b23;--sunk:#1c2430;--hover:#1a212b;
+  --ink:#e6e9ef;--ink2:#c0c7d2;--ink3:#8b95a5;
+  --rule:#2a313c;--rule2:#20262f;
+  --shell:#151b23;--shell-ink:#e6e9ef;--shell-ink2:#aab3c0;--shell-field:#1c2430;--shell-rule:#2a313c;
+  --accent:#8ea8ff;--accent-bg:#1e2742;
+  --link:#9cb4ff;--focus:#9cb4ff;
   --screen:#7aa2f2;--api:#4cc493;--module:#e3a64c;--data:#c992dc;
-  --ok:#62cf91;--bad:#f2907f;--bad-bg:#2a1718;
+  --ok:#62cf91;--ok-bg:#15291e;--bad:#f2907f;--bad-bg:#2c1816;
   --sel:#2b4475;
+  --shadow:none;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scrollbar-color:var(--rule) transparent}
-body{margin:0;height:100dvh;display:grid;grid-template-rows:auto auto minmax(0,1fr);background:var(--ground);color:var(--ink);font:var(--fs-m)/1.5 var(--ui);-webkit-font-smoothing:antialiased;caret-color:var(--link)}
+body{margin:0;height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr);background:var(--ground);color:var(--ink);font:var(--fs-m)/1.5 var(--ui);-webkit-font-smoothing:antialiased;caret-color:var(--link)}
 ::selection{background:var(--sel);color:var(--ink)}
 a{color:var(--link);text-decoration:none;text-underline-offset:3px}
 a:hover{text-decoration:underline}
@@ -53,73 +57,61 @@ h1,h2,h3{margin:0;font-family:var(--display);text-wrap:balance}
 .ico .fill{fill:currentColor;stroke:none}
 .cn{font:500 var(--fs-xs) var(--mono);color:var(--ink3);font-variant-numeric:tabular-nums}
 
-/* ------------------------------------------------ header: the signboard */
-.top{display:flex;align-items:center;gap:var(--s5);min-height:56px;padding:0 var(--s5);background:var(--shell);color:var(--shell-ink)}
-.top :focus-visible{outline-color:var(--shell-ink)}
-.brand{display:flex;align-items:center;min-height:44px;font:700 var(--fs-l)/1 var(--display);color:var(--shell-ink);letter-spacing:-.01em}
+/* ------------------------------------------------ header */
+.top{display:flex;align-items:center;gap:var(--s4);min-height:56px;padding:0 var(--s4) 0 var(--s5);background:var(--shell);color:var(--shell-ink);border-bottom:1px solid var(--rule)}
+.brand{display:flex;align-items:center;gap:10px;min-height:44px;width:calc(var(--side) - var(--s5) - var(--s4));font:700 var(--fs-l)/1 var(--display);color:var(--ink);letter-spacing:-.02em}
 .brand:hover{text-decoration:none}
-#proj{height:36px;border:1px solid var(--shell-rule);border-radius:var(--r);background:var(--shell-field);color:var(--shell-ink);padding:0 var(--s2);font:var(--fs-s) var(--ui);max-width:200px}
+.logo{width:22px;height:22px;fill:var(--surface);stroke:var(--accent);stroke-width:1.7}
+#proj{height:34px;border:1px solid var(--rule);border-radius:var(--r);background:var(--surface);color:var(--ink);padding:0 var(--s2);font:var(--fs-s) var(--ui);max-width:200px}
 #proj[hidden]{display:none}
-.tabs{display:flex;align-self:stretch;gap:var(--s2)}
-.tabs a{display:flex;align-items:center;gap:6px;padding:0 var(--s3);color:var(--shell-ink2);font:500 var(--fs-m) var(--ui);border-bottom:3px solid transparent;border-top:3px solid transparent;min-height:44px;outline-offset:-2px}
-.tabs a:hover{color:var(--shell-ink);text-decoration:none}
-.tabs a[aria-current=page]{color:var(--shell-ink);border-bottom-color:var(--shell-ink);font-weight:600}
-.tc{font:600 var(--fs-xs)/1 var(--mono);padding:3px 6px;border-radius:999px;background:var(--shell-field);color:var(--shell-ink2);font-variant-numeric:tabular-nums}
-.tc.bad{background:#c8382a;color:#fff}
-.find{position:relative;margin-left:auto;display:flex;align-items:center;width:min(360px,34vw)}
-.find .ico{position:absolute;left:11px;color:var(--shell-ink2);pointer-events:none}
-#q{width:100%;height:38px;padding:0 34px 0 34px;border:1px solid var(--shell-rule);border-radius:var(--r);background:var(--shell-field);color:var(--shell-ink);font:var(--fs-c) var(--ui);caret-color:var(--shell-ink)}
-#q::placeholder{color:var(--shell-ink2);opacity:1}
-#q:focus{outline:2px solid var(--shell-ink);outline-offset:1px}
-.key{position:absolute;right:8px;background:transparent;border-color:var(--shell-rule);color:var(--shell-ink2)}
-.themebtn{display:flex;align-items:center;gap:6px;min-height:38px;padding:0 var(--s3);border:1px solid var(--shell-rule);border-radius:var(--r);background:transparent;color:var(--shell-ink2);font-size:var(--fs-s);cursor:pointer}
-.themebtn:hover{color:var(--shell-ink);border-color:var(--shell-ink2)}
+.find{position:relative;display:flex;align-items:center;flex:1 1 auto;max-width:520px}
+.find .ico{position:absolute;left:11px;color:var(--ink3);pointer-events:none}
+#q{width:100%;height:36px;padding:0 34px;border:1px solid var(--rule);border-radius:var(--r);background:var(--sunk);color:var(--ink);font:var(--fs-c) var(--ui);caret-color:var(--accent)}
+#q::placeholder{color:var(--ink3);opacity:1}
+#q:focus{outline:2px solid var(--focus);outline-offset:0;background:var(--surface)}
+.key{position:absolute;right:8px;background:var(--surface);color:var(--ink3)}
+.themebtn{display:flex;align-items:center;gap:6px;margin-left:auto;min-height:34px;padding:0 var(--s3);border:1px solid var(--rule);border-radius:var(--r);background:var(--surface);color:var(--ink2);font-size:var(--fs-s);cursor:pointer}
+.themebtn:hover{color:var(--ink);border-color:var(--ink3)}
+
+/* ------------------------------------------------ frame: sidebar + content */
+.frame{display:grid;grid-template-columns:var(--side) minmax(0,1fr);min-height:0}
+.content{display:grid;grid-template-rows:auto minmax(0,1fr);min-height:0;min-width:0}
+.tabs{display:flex;flex-direction:column;gap:2px;padding:var(--s3) var(--s3) var(--s5);background:var(--surface);border-right:1px solid var(--rule);overflow:auto}
+.tabs a{display:flex;align-items:center;gap:10px;min-height:36px;padding:0 10px;border-radius:6px;color:var(--ink2);font:500 var(--fs-c) var(--ui)}
+.tabs a .ico{color:var(--ink3)}
+.tabs a:hover{background:var(--hover);color:var(--ink);text-decoration:none}
+.tabs a[aria-current=page]{background:var(--accent-bg);color:var(--accent);font-weight:600}
+.tabs a[aria-current=page] .ico{color:var(--accent)}
+.tabs .tl{flex:1 1 auto;min-width:0}
+.tabs .tn{font:500 var(--fs-xs) var(--mono);color:var(--ink3);font-variant-numeric:tabular-nums}
+.tabs .dot{width:10px;height:10px;margin:0 3px;border-radius:50%;border:2.5px solid var(--ln);flex:0 0 auto}
+.tabs a[aria-current=page] .dot{background:var(--ln)}
+.navh{margin:var(--s4) 10px var(--s1);font:600 var(--fs-xs) var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3)}
+.tc{margin-left:auto;font:600 var(--fs-xs)/1 var(--mono);padding:3px 7px;border-radius:999px;background:var(--sunk);color:var(--ink3);font-variant-numeric:tabular-nums}
+.tc.bad{background:var(--bad);color:#fff}
 
 /* ------------------------------------------------ breadcrumb: you are here */
-.crumbs{display:flex;align-items:center;gap:var(--s4);min-height:44px;padding:0 var(--s5);background:var(--surface);border-bottom:1px solid var(--rule)}
+.crumbs{display:flex;align-items:center;gap:var(--s4);min-height:44px;padding:0 var(--s5);background:var(--ground);border-bottom:1px solid var(--rule)}
 .crumbs ol{display:flex;align-items:center;flex-wrap:wrap;gap:2px;margin:0;padding:0;list-style:none;min-width:0;font-size:var(--fs-s)}
 .crumbs li{display:flex;align-items:center;gap:2px;min-width:0}
-.crumbs a{display:inline-flex;align-items:center;min-height:32px;padding:0 4px;color:var(--ink2)}
+.crumbs a{display:inline-flex;align-items:center;min-height:32px;padding:0 4px;color:var(--ink3)}
+.crumbs a:hover{color:var(--ink)}
 .crumbs .sep{color:var(--ink3);width:14px;height:14px}
 .crumbs .upico{display:none}
 .crumbs [aria-current=page]{color:var(--ink);font-weight:600;padding:0 4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60ch}
-.stamp{margin-left:auto;font:var(--fs-xs) var(--mono);color:var(--ink3);white-space:nowrap}
+.stamp{margin-left:auto;font:var(--fs-xs) var(--ui);color:var(--ink3);white-space:nowrap}
 
 /* ------------------------------------------------ panes */
-main{display:grid;grid-template-columns:minmax(320px,var(--list)) minmax(0,1fr);min-height:0}
+main{display:grid;grid-template-columns:minmax(300px,var(--list)) minmax(0,1fr);min-height:0}
 main:focus{outline:0}
 main.solo{grid-template-columns:minmax(0,1fr)}
 #list{overflow:auto;min-height:0;background:var(--surface);border-right:1px solid var(--rule);padding-bottom:var(--s6)}
 main.solo #list{display:none}
 #detail{overflow:auto;min-height:0}
-
-/* ------------------------------------------------ the network strip */
-.net{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));padding:var(--s4) var(--s4) var(--s3);border-bottom:1px solid var(--rule);background:var(--surface)}
-.st{position:relative;display:grid;gap:2px;padding:20px 4px 4px 0;color:var(--ink2);min-height:44px}
-.st:hover{text-decoration:none;color:var(--ink)}
-.st::before{content:"";position:absolute;left:0;right:0;top:7px;height:4px;background:var(--ln)}
-.st:last-child::before{right:auto;width:16px}
-.st .stn{position:absolute;left:0;top:1px;width:16px;height:16px;border-radius:50%;background:var(--surface);border:4px solid var(--ln)}
-.st[aria-current=page] .stn{background:var(--ln);box-shadow:0 0 0 3px var(--surface)}
-.st[aria-current=page] .sn{color:var(--ink);font-weight:600}
-.sn{font-size:var(--fs-s);line-height:1.3}
-.sn b{font:600 var(--fs-s) var(--mono);font-variant-numeric:tabular-nums}
-.sv{font-size:var(--fs-xs);color:var(--ink3)}
 [data-lane=screen]{--ln:var(--screen)}
 [data-lane=api]{--ln:var(--api)}
 [data-lane=module]{--ln:var(--module)}
 [data-lane=data]{--ln:var(--data)}
-.net.big{padding:var(--s5) 0 var(--s4);background:transparent;border-bottom:0}
-.net.big .st{padding-top:40px}
-.net.big .st::before{top:11px;height:8px}
-.net.big .st .stn{width:30px;height:30px;border-width:7px;top:0}
-.net.big .st:last-child::before{width:30px}
-.net.big .sn{font-size:var(--fs-s);letter-spacing:.05em;color:var(--ink2)}
-.net.big .sn b{display:block;font:700 var(--fs-2xl)/.95 var(--mono);font-variant-numeric:tabular-nums;color:var(--ink);margin-bottom:3px;letter-spacing:-.01em}
-/* The verb is a station name on the wire, knocked out of the segment it labels. */
-.net.big .sv{position:absolute;top:15px;left:42px;transform:translateY(-50%);padding:0 8px;background:var(--ground);font-size:var(--fs-xs);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
-.net.big .st:hover .stn{background:var(--ln)}
-.net.big .st[aria-current=page] .sn b{color:var(--ln)}
 
 /* ------------------------------------------------ rings: a station per kind */
 .ring{display:inline-block;width:12px;height:12px;border-radius:50%;border:3px solid var(--k,var(--ink3));background:var(--surface);flex:0 0 auto}
@@ -140,12 +132,12 @@ main.solo #list{display:none}
 .toggle:hover{border-color:var(--ink3)}
 .toggle[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
 .toggle[aria-pressed=true] .cn{color:inherit}
-.grp{position:sticky;top:52px;z-index:2;display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2);padding:var(--s3) var(--s4) 6px;background:var(--surface);border-bottom:1px solid var(--rule2)}
-.grp .gt{font:600 var(--fs-s) var(--ui);color:var(--ink2)}
+.grp{position:sticky;top:52px;z-index:2;display:flex;justify-content:space-between;align-items:baseline;gap:var(--s2);padding:var(--s3) var(--s4) 6px;background:var(--ground);border-bottom:1px solid var(--rule2)}
+.grp .gt{font:600 var(--fs-xs) var(--ui);letter-spacing:.05em;text-transform:uppercase;color:var(--ink3)}
 .grp .gm{font:var(--fs-xs) var(--ui);color:var(--ink3);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:65%}
 /* A sub-group inside a gap list: not sticky, quieter than the section above it. */
 .grp.sub{position:static;padding-top:var(--s2);padding-bottom:4px;background:var(--ground)}
-.grp.sub .gt{font-weight:500;color:var(--ink3)}
+.grp.sub .gt{font-weight:500;text-transform:none;letter-spacing:0;color:var(--ink3)}
 .grp.bad .gt{color:var(--bad)}
 details.grpwrap>summary{position:static;cursor:pointer;list-style:none}
 details.grpwrap>summary::-webkit-details-marker{display:none}
@@ -153,16 +145,26 @@ details.grpwrap>summary.grp .gt::after{content:" +";color:var(--ink3)}
 details.grpwrap[open]>summary.grp .gt::after{content:""}
 .moresum{display:block;padding:var(--s3) var(--s4);color:var(--link);font-size:var(--fs-s)}
 
-.row{display:grid;grid-template-columns:12px minmax(0,1fr) auto;column-gap:var(--s3);row-gap:2px;align-items:baseline;min-height:52px;padding:var(--s3) var(--s4);border-bottom:1px solid var(--rule2);color:var(--ink)}
-.row:hover{background:var(--sunk);text-decoration:none}
+.row{display:grid;grid-template-columns:12px minmax(0,1fr) auto;column-gap:var(--s3);row-gap:2px;align-items:baseline;min-height:48px;padding:10px var(--s4);border-bottom:1px solid var(--rule2);color:var(--ink);border-left:3px solid transparent}
+.row:hover{background:var(--hover);text-decoration:none}
 .row .ring{align-self:center;grid-row:1}
-.row[aria-current=true]{background:var(--sunk)}
+.row[aria-current=true]{background:var(--accent-bg);border-left-color:var(--accent)}
 .row[aria-current=true] .ring{background:var(--k,var(--ink3))}
 .row[aria-current=true] .rn{font-weight:600}
-.rn{grid-column:2;font:500 var(--fs-m)/1.35 var(--ui);overflow-wrap:anywhere}
-.row.code .rn{font:500 var(--fs-c)/1.4 var(--mono)}
-.ep{display:inline-grid;grid-template-columns:4.6em minmax(0,1fr);gap:.5em;width:100%}
-.mt{display:inline-block;min-width:4.6em;font:600 var(--fs-xs)/1 var(--mono);color:var(--ink3);letter-spacing:.02em}
+.rn{grid-column:2;font:500 var(--fs-c)/1.4 var(--ui);overflow-wrap:break-word;min-width:0}
+.row.code .rn{font:500 var(--fs-s)/1.45 var(--mono)}
+.ep{display:inline-flex;align-items:baseline;gap:.6em;width:100%;min-width:0}
+.pth{min-width:0;overflow-wrap:break-word}
+/* a method is a small chip, coloured by what it does */
+.mt{display:inline-block;flex:0 0 auto;min-width:3.4em;padding:2px 5px;border-radius:4px;background:var(--sunk);font:600 .6875rem/1.2 var(--mono);color:var(--ink3);letter-spacing:.02em;text-align:center}
+.mt[data-m=GET],.mt[data-m=QUERY]{background:#e7f5ee;color:#11704f}
+.mt[data-m=POST],.mt[data-m=MUTATION]{background:#e9effd;color:#2f4fc4}
+.mt[data-m=PUT],.mt[data-m=PATCH]{background:#fdf3e4;color:#94560a}
+.mt[data-m=DELETE]{background:#fdecea;color:#b4261a}
+:root[data-theme=dark] .mt[data-m=GET],:root[data-theme=dark] .mt[data-m=QUERY]{background:#123326;color:#6fd3a5}
+:root[data-theme=dark] .mt[data-m=POST],:root[data-theme=dark] .mt[data-m=MUTATION]{background:#1c2a52;color:#a9bdff}
+:root[data-theme=dark] .mt[data-m=PUT],:root[data-theme=dark] .mt[data-m=PATCH]{background:#3a2a12;color:#f0b765}
+:root[data-theme=dark] .mt[data-m=DELETE]{background:#3a1a17;color:#f6a597}
 .ra{grid-column:3;grid-row:1;font-size:var(--fs-xs);color:var(--ink3);white-space:nowrap}
 .ra.num{font:500 var(--fs-xs) var(--mono);color:var(--ink2);font-variant-numeric:tabular-nums}
 .rl{grid-column:2/-1;font-size:var(--fs-s);line-height:1.45;color:var(--ink3);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -174,8 +176,8 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .row.gone{color:var(--bad)}
 .calm{display:flex;gap:var(--s2);align-items:flex-start;margin:0;padding:var(--s3) var(--s4);font-size:var(--fs-s);color:var(--ink2);border-bottom:1px solid var(--rule2)}
 .calm .ico{color:var(--ok);margin-top:2px}
-.bar{display:block;height:6px;border-radius:3px;background:var(--rule2);overflow:hidden}
-.bar i{display:block;height:100%;background:var(--ink2);border-radius:3px}
+.bar{display:block;height:6px;border-radius:3px;background:var(--sunk);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
 
 /* ------------------------------------------------ refs */
 .refs{list-style:none;margin:0;padding:0}
@@ -189,29 +191,42 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .more{margin-top:var(--s1);min-height:32px;padding:0;border:0;background:none;color:var(--link);font-size:var(--fs-s);cursor:pointer}
 .more:hover{text-decoration:underline}
 
-/* ------------------------------------------------ today */
-.today{max-width:1180px;padding:var(--s6) var(--s6) var(--s7)}
-.hero h1{font:650 var(--fs-2xl)/1.15 var(--display);letter-spacing:-.015em;overflow-wrap:anywhere}
-.gate{display:flex;gap:var(--s2);align-items:flex-start;margin:var(--s2) 0 0;font-size:var(--fs-m);color:var(--ink2)}
-.gate .ico{width:18px;height:18px;margin-top:2px}
-.gate.ok .ico{color:var(--ok)}
-.gate.bad{color:var(--bad)}
-.gate b{color:var(--ink)}
-.gate.bad b{color:var(--bad)}
-.cols{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:var(--s6);align-items:start;margin-top:var(--s4)}
-.blk+.blk{margin-top:var(--s6)}
-.blk h2,.health h2,.intro h2{font:600 var(--fs-l)/1.3 var(--display);margin:0 0 var(--s2)}
-.line{margin:0 0 var(--s2);font-size:var(--fs-m);color:var(--ink2);max-width:72ch}
-/* Proof is read with the strip, not discovered later in a side panel. */
-.proofrow{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s5);align-items:baseline;margin:0 0 var(--s5);padding:0 0 var(--s3);border-bottom:1px solid var(--rule);font-size:var(--fs-s);color:var(--ink2)}
-.proofrow b{font:600 var(--fs-m) var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
-.proofrow a{margin-left:auto}
-.line.brief{margin-top:var(--s4);color:var(--ink3)}
-.next{list-style:none;margin:var(--s2) 0 0;padding:0;border-top:1px solid var(--rule)}
-.next li{border-bottom:1px solid var(--rule)}
-.next a{display:grid;grid-template-columns:28px minmax(0,1fr) 116px;gap:var(--s3);align-items:center;min-height:56px;padding:var(--s3) var(--s2) var(--s3) 0;color:var(--ink)}
-.next a:hover{background:var(--surface);text-decoration:none}
-.nn{width:26px;height:26px;border-radius:50%;background:var(--shell);color:#fff;display:flex;align-items:center;justify-content:center;font:600 var(--fs-xs) var(--mono)}
+/* ------------------------------------------------ overview */
+.today{max-width:1180px;padding:var(--s5) var(--s6) var(--s7)}
+.hero h1{font:700 var(--fs-2xl)/1.15 var(--display);letter-spacing:-.02em;overflow-wrap:anywhere}
+.status{display:flex;align-items:center;gap:var(--s3);margin:var(--s4) 0 0;padding:var(--s3) var(--s4);border:1px solid var(--rule);border-radius:var(--r);background:var(--surface)}
+.status>.ico{width:22px;height:22px;padding:3px;border-radius:50%;stroke-width:2.2}
+.status.ok>.ico{color:#fff;background:var(--ok)}
+.status.bad{border-color:var(--bad);background:var(--bad-bg)}
+.status.bad>.ico{color:#fff;background:var(--bad)}
+.status p{display:grid;gap:1px;margin:0;flex:1 1 auto;font-size:var(--fs-s);color:var(--ink2)}
+.status b{font-size:var(--fs-m);color:var(--ink)}
+.status.bad b{color:var(--bad)}
+.btn{display:inline-flex;align-items:center;min-height:34px;padding:0 var(--s3);border-radius:var(--r);background:var(--bad);color:#fff;font:600 var(--fs-s) var(--ui);white-space:nowrap}
+.btn:hover{text-decoration:none;filter:brightness(1.08)}
+/* the four lines as cards, the verb that joins them between */
+.stats{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr);align-items:stretch;gap:var(--s2);margin:var(--s5) 0 0}
+.flow{align-self:center}
+.stat{position:relative;display:flex;flex-direction:column;gap:4px;padding:var(--s4);border:1px solid var(--rule);border-top:3px solid var(--ln);border-radius:var(--r);background:var(--surface);color:var(--ink2);box-shadow:var(--shadow);min-width:0}
+.stat:hover{text-decoration:none;border-color:var(--ln)}
+.sl{display:flex;align-items:center;gap:7px;font:600 var(--fs-s) var(--ui);color:var(--ink2)}
+.sl .dot{width:9px;height:9px;border-radius:50%;background:var(--ln)}
+.stat b{font:700 1.875rem/1.1 var(--display);letter-spacing:-.02em;color:var(--ink);font-variant-numeric:tabular-nums}
+.ss{font-size:var(--fs-xs);color:var(--ink3)}
+.stat .bar{margin-top:4px;height:4px}
+.stat .bar i{background:var(--ln)}
+.flow{display:flex;flex-direction:column;align-items:center;gap:2px;font:600 .6875rem var(--ui);letter-spacing:.05em;text-transform:uppercase;color:var(--ink3);white-space:nowrap}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:var(--s5);align-items:start;margin-top:var(--s5)}
+.work{display:grid;gap:var(--s5);min-width:0}
+.card{padding:var(--s4) var(--s5) var(--s5);border:1px solid var(--rule);border-radius:var(--r);background:var(--surface);box-shadow:var(--shadow);min-width:0}
+.card h2,.intro h2{font:600 var(--fs-m)/1.3 var(--display);margin:0 0 var(--s2)}
+.line{margin:0 0 var(--s2);font-size:var(--fs-c);color:var(--ink2);max-width:72ch}
+.line.brief{margin:0;color:var(--ink3);font-size:var(--fs-s)}
+.next{list-style:none;margin:var(--s2) calc(-1*var(--s3)) 0;padding:0}
+.next li+li{border-top:1px solid var(--rule2)}
+.next a{display:grid;grid-template-columns:28px minmax(0,1fr) 116px;gap:var(--s3);align-items:center;min-height:56px;padding:var(--s3);border-radius:6px;color:var(--ink)}
+.next a:hover{background:var(--hover);text-decoration:none}
+.nn{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font:600 var(--fs-xs) var(--mono)}
 .next .bad .nn{background:var(--bad)}
 .next .parked .nn{background:transparent;color:var(--ink3);border:2px solid var(--rule)}
 .nt{display:grid;gap:2px;min-width:0}
@@ -238,9 +253,10 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .read dd.bad{color:var(--bad)}
 .intro .read{margin:0 0 var(--s5);max-width:44ch}
 .df{grid-column:2;font:var(--fs-xs) var(--mono);color:var(--ink3);overflow-wrap:anywhere}
-.health{background:var(--surface);border:1px solid var(--rule);border-radius:var(--r);padding:var(--s5)}
 .health h2{font-size:var(--fs-m)}
-.health h2+*{margin-top:var(--s3)}
+.hsub{margin:0 0 var(--s3);font-size:var(--fs-xs);color:var(--ink3);line-height:1.45}
+.health .read div{flex-wrap:wrap;row-gap:6px}
+.health .read .bar{flex:1 0 100%;height:4px}
 .health * + h2{margin-top:var(--s5)}
 .meter+.meter{margin-top:var(--s4)}
 .ml{display:flex;justify-content:space-between;gap:var(--s3);font-size:var(--fs-s);color:var(--ink2);margin-bottom:6px}
@@ -248,14 +264,15 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .meter .bar{height:6px;border-radius:3px}
 .meter .bar i{background:var(--ln);border-radius:3px}
 .read{margin:0}
-.read div{display:flex;justify-content:space-between;gap:var(--s3);padding:6px 0;border-bottom:1px solid var(--rule2);font-size:var(--fs-s)}
+.read div{display:flex;justify-content:space-between;gap:var(--s3);padding:var(--s2) 0;border-bottom:1px solid var(--rule2);font-size:var(--fs-s)}
+.read div:last-child{border-bottom:0}
 .read dt{color:var(--ink2)}
 .read dd{margin:0;font:600 var(--fs-s) var(--mono);font-variant-numeric:tabular-nums}
 .hl{margin:var(--s3) 0 0;font-size:var(--fs-s);color:var(--ink3);line-height:1.5}
 .note{margin:var(--s3) 0 0;padding:var(--s3) var(--s4);border-radius:var(--r);background:var(--bad-bg);color:var(--bad);font-size:var(--fs-s);max-width:72ch}
 
 /* ------------------------------------------------ item */
-.item,.intro{max-width:1040px;padding:var(--s6) var(--s6) var(--s7)}
+.item,.intro{max-width:1040px;padding:var(--s5) var(--s6) var(--s7)}
 .ihead h1{display:flex;align-items:baseline;gap:var(--s3);font:650 var(--fs-xl)/1.3 var(--display);letter-spacing:-.01em;overflow-wrap:anywhere}
 .ihead h1 .ring{width:16px;height:16px;border-width:4px;align-self:center}
 .ihead h1 .code{font:600 var(--fs-xl)/1.3 var(--mono);letter-spacing:-.01em}
@@ -282,18 +299,19 @@ details.grpwrap[open]>summary.grp .gt::after{content:""}
 .progress .bar i{background:var(--ink)}
 
 /* the line: four stations, the item is the interchange */
-.trace>ol{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin:var(--s6) 0 0;padding:0;list-style:none}
+.trace{margin-top:var(--s5);padding:var(--s5) var(--s5) var(--s3);border:1px solid var(--rule);border-radius:var(--r);background:var(--surface)}
+.trace>ol{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin:var(--s2) 0 0;padding:0;list-style:none}
 .stop{position:relative;padding:34px var(--s4) var(--s3) 0;min-width:0}
 .stop .track{position:absolute;left:0;right:0;top:10px;height:6px;background:var(--ln)}
 .stop:last-child .track{right:auto;width:26px}
-.stop .stn{position:absolute;left:0;top:-10px;width:26px;height:26px;border-radius:50%;background:var(--ground);border:6px solid var(--ln)}
-.stop[data-here="1"] .stn{width:34px;height:34px;top:-14px;left:-4px;border-width:8px;border-color:var(--ink2);background:var(--ground)}
+.stop .stn{position:absolute;left:0;top:-10px;width:26px;height:26px;border-radius:50%;background:var(--surface);border:6px solid var(--ln)}
+.stop[data-here="1"] .stn{width:34px;height:34px;top:-14px;left:-4px;border-width:8px;border-color:var(--ink);background:var(--surface)}
 .stop h3{font:600 var(--fs-s)/1.35 var(--ui);color:var(--ink2);margin:0 0 var(--s2)}
 .stop h3.none{font-weight:400;color:var(--ink3)}
 .stop[data-here="1"] h3{color:var(--ink)}
 .here{margin:0;font:600 var(--fs-s)/1.45 var(--mono);overflow-wrap:anywhere}
 .here .mt{min-width:0;margin-right:.5em}
-.sec{margin-top:var(--s6);padding-top:var(--s4);border-top:1px solid var(--rule)}
+.sec{margin-top:var(--s5);padding:var(--s4) var(--s5);border:1px solid var(--rule);border-radius:var(--r);background:var(--surface)}
 .sec h2{display:flex;align-items:baseline;gap:var(--s2);font:600 var(--fs-m)/1.3 var(--display);margin:0 0 var(--s2)}
 details.sec>summary{cursor:pointer;list-style:none}
 details.sec>summary::-webkit-details-marker{display:none}
@@ -308,7 +326,7 @@ details.sec[open]>summary h2::after{content:"⌄"}
 .tasks .ring{align-self:start;margin-top:.45em}
 .tasks.parked li{color:var(--ink3)}
 .tasks.done li span:last-child{text-decoration:line-through;text-decoration-color:var(--ink3);color:var(--ink3)}
-.nexttask{border-top:0;margin-top:var(--s5);padding:var(--s4) var(--s5);background:var(--surface);border:1px solid var(--rule);border-radius:var(--r)}
+.nexttask{margin-top:var(--s5);padding:var(--s4) var(--s5);background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--r)}
 .nt1{margin:0;font-size:var(--fs-m);max-width:75ch}
 .nexttask .hint{margin-top:var(--s2)}
 
@@ -320,21 +338,26 @@ details.sec[open]>summary h2::after{content:"⌄"}
 /* ------------------------------------------------ narrow: one column, the page scrolls */
 @media (max-width:1100px){
   .cols{grid-template-columns:minmax(0,1fr)}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .flow{display:none}
   .trace>ol{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:var(--s5)}
   .stop:nth-child(2) .track{right:auto;width:26px}
 }
 @media (max-width:900px){
   body{display:block;height:auto}
-  .top{display:grid;grid-template-columns:auto minmax(0,1fr) auto;grid-template-areas:"brand find theme" "tabs tabs tabs";gap:var(--s2) var(--s3);padding:var(--s2) var(--s4) 0}
-  .brand{grid-area:brand}
-  #proj{grid-area:brand;margin-left:64px;max-width:120px}
-  .find{grid-area:find;width:auto;margin:0}
-  .themebtn{grid-area:theme;min-height:44px;min-width:44px;justify-content:center}
+  .top{gap:var(--s2);padding:var(--s2) var(--s4)}
+  .brand{width:auto}
+  #proj{max-width:120px}
+  .find{width:auto;margin:0;max-width:none}
+  .themebtn{min-height:44px;min-width:44px;justify-content:center;margin-left:0}
   #themelabel{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
   .key{display:none}
   #q{height:44px;padding-right:var(--s3);font-size:16px}
-  .tabs{grid-area:tabs;gap:0;justify-content:space-between}
-  .tabs a{flex:1 1 0;justify-content:center;padding:0 4px;min-height:48px;font-size:var(--fs-m)}
+  /* the sidebar becomes a strip that scrolls sideways under the header */
+  .frame,.content{display:block}
+  .tabs{flex-direction:row;gap:4px;padding:var(--s2) var(--s3);border-right:0;border-bottom:1px solid var(--rule);overflow-x:auto;scrollbar-width:none}
+  .tabs a{flex:0 0 auto;min-height:44px;white-space:nowrap}
+  .navh{display:none}
   .crumbs{padding:0 var(--s4)}
   .crumbs li:not(:nth-last-child(-n+2)){display:none}
   .crumbs li.up .sep{display:none}
@@ -348,7 +371,6 @@ details.sec[open]>summary h2::after{content:"⌄"}
   main:not(.has-sel):not(.solo) #detail{display:none}
   .lhead,.grp{position:static}
   .today,.item,.intro{padding:var(--s5) var(--s4) var(--s7)}
-  .net.big .sn,.net.big .sn b{font-size:var(--fs-m)}
   .next a{grid-template-columns:28px minmax(0,1fr);row-gap:var(--s2)}
   .np{grid-column:2}
   .np .bar{width:100%}
@@ -364,44 +386,44 @@ details.sec[open]>summary h2::after{content:"⌄"}
   .stop h3{padding-top:2px}
 }
 @media (max-width:420px){
-  .net{padding:var(--s3) var(--s3) var(--s2)}
-  .net .sn{font-size:var(--fs-xs)}
-  .net .sn b{display:block;font-size:var(--fs-s)}
-  .net.big .sn{font-size:var(--fs-xs)}
-  .net.big .sn b{font-size:var(--fs-l)}
-  .net.big .st{padding-top:32px}
-  .net.big .sv{display:none}
+  .stats{grid-template-columns:minmax(0,1fr)}
+  .brand{font-size:0;gap:0}
+  .status{flex-wrap:wrap}
   .ihead h1,.ihead h1 .code{font-size:var(--fs-l)}
   /* A phone gets the 44 px target the contract promises, not the desktop size. */
   .path,.more,.toggle,.moresum{min-height:44px}
   .path{display:flex;align-items:center;white-space:normal;overflow-wrap:anywhere}
 }
 @media (prefers-reduced-motion:no-preference){
-  .row,.ref,.tabs a,.toggle,.path,.themebtn,.next a,.st{transition:color .15s ease-out,background-color .15s ease-out,border-color .15s ease-out}
+  .row,.ref,.tabs a,.toggle,.path,.themebtn,.next a,.stat{transition:color .15s ease-out,background-color .15s ease-out,border-color .15s ease-out}
 }
 @media (forced-colors:active){
-  .ring,.st .stn,.stop .stn{forced-color-adjust:none}
+  .ring,.stop .stn{forced-color-adjust:none}
 }
 </style></head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top">
-  <a class="brand" href="#today">weave</a>
+  <a class="brand" href="#today"><svg class="logo" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h12"/><circle cx="4" cy="8" r="2"/><circle cx="12" cy="8" r="2"/></svg>weave</a>
   <select id="proj" aria-label="Project" hidden></select>
-  <nav class="tabs" id="tabs" aria-label="Places"></nav>
   <div class="find" role="search">
     <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>
     <label class="sr" for="q">Find a screen, endpoint, table or change</label>
-    <input id="q" type="search" placeholder="Search the map" autocomplete="off" spellcheck="false">
+    <input id="q" type="search" placeholder="Search screens, endpoints, tables, files" autocomplete="off" spellcheck="false">
     <kbd class="key" aria-hidden="true">/</kbd>
   </div>
   <button id="theme" class="themebtn" type="button"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M8 2.5v11a5.5 5.5 0 0 0 0-11z" class="fill"/></svg><span id="themelabel"></span></button>
 </header>
+<div class="frame">
+<nav class="tabs" id="tabs" aria-label="Places"></nav>
+<div class="content">
 <nav class="crumbs" id="crumbs" aria-label="You are here"></nav>
 <main id="main" tabindex="-1">
   <section id="list" aria-label="List"></section>
   <section id="detail" aria-label="Item"></section>
 </main>
+</div>
+</div>
 <p class="sr" id="live" aria-live="polite"></p>
 <script>const D={"projects":[{"name":"fixture","root":"__ROOT__","builtAt":"__ISO__","cov":{"gaps":0,"unmapped":0,"calls":{"resolved":2,"total":2},"routes":{"found":1,"files":1},"specs":{"parsed":1,"files":1}},"counts":{"pages":1,"endpoints":9,"modules":4,"tables":2,"tests":1,"changes":1,"reqs":1},"nodes":[{"i":"file:packages/backend/prisma/schema.prisma","k":"file","n":"packages/backend/prisma/schema.prisma","f":"packages/backend/prisma/schema.prisma"},{"i":"file:packages/backend/src/modules/orders/orders.routes.ts","k":"file","n":"packages/backend/src/modules/orders/orders.routes.ts","f":"packages/backend/src/modules/orders/orders.routes.ts"},{"i":"file:packages/web/src/pages/Orders.tsx","k":"file","n":"packages/web/src/pages/Orders.tsx","f":"packages/web/src/pages/Orders.tsx"},{"i":"module:orders","k":"module","n":"orders","f":"packages/backend/src/modules/orders"},{"i":"endpoint:GET /api/v1/orders","k":"endpoint","n":"GET /api/v1/orders","f":"packages/backend/src/modules/orders/orders.routes.ts","l":6},{"i":"endpoint:POST /api/v1/orders","k":"endpoint","n":"POST /api/v1/orders","f":"packages/backend/src/modules/orders/orders.routes.ts","l":9},{"i":"module:api","k":"module","n":"api","f":"packages/web/app/api/quotes/route.ts"},{"i":"endpoint:GET /api/quotes","k":"endpoint","n":"GET /api/quotes","f":"packages/web/app/api/quotes/route.ts"},{"i":"endpoint:POST /api/quotes","k":"endpoint","n":"POST /api/quotes","f":"packages/web/app/api/quotes/route.ts"},{"i":"module:trpc","k":"module","n":"trpc","f":"packages/backend/src/trpc/router.ts"},{"i":"endpoint:QUERY /api/trpc/quotes.list","k":"endpoint","n":"QUERY /api/trpc/quotes.list","f":"packages/backend/src/trpc/router.ts","d":"query quotes.list"},{"i":"endpoint:MUTATION /api/trpc/quotes.add","k":"endpoint","n":"MUTATION /api/trpc/quotes.add","f":"packages/backend/src/trpc/router.ts","d":"mutation quotes.add"},{"i":"endpoint:QUERY /api/trpc/ping","k":"endpoint","n":"QUERY /api/trpc/ping","f":"packages/backend/src/trpc/router.ts","d":"query ping"},{"i":"endpoint:GET /api/reports/:id","k":"endpoint","n":"GET /api/reports/:id","f":"api/openapi.json","d":"One report with its photos and events."},{"i":"module:reports","k":"module","n":"reports","f":"api/openapi.json"},{"i":"endpoint:DELETE /api/reports/:id","k":"endpoint","n":"DELETE /api/reports/:id","f":"api/openapi.json","d":"Delete a report and its media."},{"i":"table:orders","k":"table","n":"orders","f":"packages/backend/prisma/schema.prisma"},{"i":"table:order_parts","k":"table","n":"order_parts","f":"packages/backend/prisma/schema.prisma"},{"i":"page:/orders","k":"page","n":"/orders","f":"packages/web/src/pages/Orders.tsx","l":9},{"i":"test:packages/web/e2e/orders.spec.ts","k":"test","n":"packages/web/e2e/orders.spec.ts","f":"packages/web/e2e/orders.spec.ts"},{"i":"req:REQ-ORD-1","k":"req","n":"REQ-ORD-1","f":"specs/changes/2026-01-01-orders/spec-delta.md","l":3,"d":"WHEN a user opens the warehouse, THE system SHALL list orders newest first.","t":"list orders"},{"i":"change:2026-01-01-orders","k":"change","n":"2026-01-01-orders","f":"specs/changes/2026-01-01-orders/tasks.md","d":"WHEN a user opens the warehouse, THE system SHALL list orders newest first."},{"i":"task:2026-01-01-orders/T1","k":"task","n":"2026-01-01-orders T1","t":"API `/orders` list + create.","dn":1},{"i":"task:2026-01-01-orders/T2","k":"task","n":"2026-01-01-orders T2","t":"Web page."}],"edges":[["endpoint:GET /api/v1/orders","module:orders","in_module","exact"],["endpoint:POST /api/v1/orders","module:orders","in_module","exact"],["endpoint:GET /api/quotes","module:api","in_module","exact"],["endpoint:POST /api/quotes","module:api","in_module","exact"],["endpoint:QUERY /api/trpc/quotes.list","module:trpc","in_module","exact"],["endpoint:MUTATION /api/trpc/quotes.add","module:trpc","in_module","exact"],["endpoint:QUERY /api/trpc/ping","module:trpc","in_module","exact"],["endpoint:GET /api/reports/:id","module:reports","in_module","exact"],["endpoint:DELETE /api/reports/:id","module:reports","in_module","exact"],["page:/orders","endpoint:GET /api/v1/orders","calls","exact"],["page:/orders","endpoint:QUERY /api/trpc/quotes.list","calls","exact"],["file:packages/web/src/pages/Orders.tsx","endpoint:GET /api/v1/orders","calls","exact"],["file:packages/web/src/pages/Orders.tsx","endpoint:QUERY /api/trpc/quotes.list","calls","exact"],["file:packages/backend/src/modules/orders/orders.routes.ts","req:REQ-ORD-1","implements","exact"],["test:packages/web/e2e/orders.spec.ts","req:REQ-ORD-1","asserts","exact"],["test:packages/web/e2e/orders.spec.ts","req:REQ-ORD-1","verifies","exact"],["test:packages/web/e2e/orders.spec.ts","page:/orders","exercises","exact"],["change:2026-01-01-orders","task:2026-01-01-orders/T1","has_task","exact"],["change:2026-01-01-orders","task:2026-01-01-orders/T2","has_task","exact"],["task:2026-01-01-orders/T1","file:packages/backend/src/modules/orders/orders.routes.ts","touches","exact"],["task:2026-01-01-orders/T1","file:packages/backend/prisma/schema.prisma","touches","exact"],["task:2026-01-01-orders/T2","file:packages/web/src/pages/Orders.tsx","touches","exact"],["module:orders","table:orders","uses","exact"]],"flows":[{"p":"page:/orders","e":["endpoint:GET /api/v1/orders","endpoint:QUERY /api/trpc/quotes.list"],"t":["table:orders"]}],"modules":[{"m":"module:orders","e":["endpoint:GET /api/v1/orders","endpoint:POST /api/v1/orders"],"t":["table:orders"]},{"m":"module:api","e":["endpoint:GET /api/quotes","endpoint:POST /api/quotes"],"t":[]},{"m":"module:trpc","e":["endpoint:QUERY /api/trpc/quotes.list","endpoint:MUTATION /api/trpc/quotes.add","endpoint:QUERY /api/trpc/ping"],"t":[]},{"m":"module:reports","e":["endpoint:GET /api/reports/:id","endpoint:DELETE /api/reports/:id"],"t":[]}],"changes":[{"c":"change:2026-01-01-orders","done":1,"total":2,"open":["Web page."],"sum":"WHEN a user opens the warehouse, THE system SHALL list orders newest first.","r":[],"s":"3 endpoint(s), 1 page(s), 2 table(s), 1 test(s)"}],"issues":[{"key":"untested_endpoints","kind":"warn","title":"9 endpoints with no direct test","items":["endpoint:GET /api/v1/orders","endpoint:POST /api/v1/orders","endpoint:GET /api/quotes","endpoint:POST /api/quotes","endpoint:QUERY /api/trpc/quotes.list","endpoint:MUTATION /api/trpc/quotes.add","endpoint:QUERY /api/trpc/ping","endpoint:GET /api/reports/:id","endpoint:DELETE /api/reports/:id"]}]}]};
 const $=s=>document.querySelector(s);
@@ -414,7 +436,7 @@ const LANES=[
  {key:'tables',k:'table',lane:'data',name:'Tables',one:'table',verb:''}
 ];
 const LANE_OF={page:'screen',endpoint:'api',module:'module',table:'data'};
-const PLACES=[['today','Today'],['map','Map'],['changes','Changes'],['checks','Checks']];
+const PLACES=[['today','Overview'],['map','Map'],['changes','Changes'],['checks','Checks']];
 const SAY={
  calls:['Calls these endpoints','Called from these screens'],
  in_module:['Handled in module','Endpoints in this module'],
@@ -449,7 +471,10 @@ const ICON={
  cross:'<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
  chev:'<svg class="ico sep" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>',
  back:'<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>',
- next:'<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9.5M9 4.5 12.5 8 9 11.5"/></svg>'
+ next:'<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9.5M9 4.5 12.5 8 9 11.5"/></svg>',
+ home:'<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 7.5 8 3l5.5 4.5V13a.5.5 0 0 1-.5.5H9.5v-3h-3v3H3a.5.5 0 0 1-.5-.5z"/></svg>',
+ shield:'<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2 3 4v4c0 3 2.2 5.2 5 6 2.8-.8 5-3 5-6V4z"/><path d="M5.8 8.2 7.4 9.8 10.4 6.6"/></svg>',
+ list:'<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4.5h7.5M6 8h7.5M6 11.5h7.5"/><path d="M2.5 4.5h.5M2.5 8h.5M2.5 11.5h.5"/></svg>'
 };
 
 function repoName(){return S.name||String(S.root).replace(/\\/g,'/').split('/').filter(Boolean).pop()||S.root}
@@ -514,18 +539,24 @@ function render(){
     if(target)target.focus();
   }
 }
+// The sidebar: Overview, the four lines of the map with their counts, then the work.
+// The hosted panel appends Specs and Wiki after the last link.
 function renderTabs(){
-  const broken=brokenCount(),open=S.changes.filter(c=>c.done<c.total).length,gaps=gapCount();
-  const badge={changes:open?'<span class="tc">'+open+'</span>':'',checks:broken?'<span class="tc bad">'+broken+'</span>':gaps?'<span class="tc">'+gaps+'</span>':''};
-  $('#tabs').innerHTML=PLACES.map(p=>{
-    const href=p[0]==='map'?'#map/'+lane:'#'+p[0];
-    return '<a href="'+href+'"'+(!q&&place===p[0]?' aria-current="page"':'')+'>'+p[1]+(badge[p[0]]||'')+'</a>';
-  }).join('');
+  const broken=brokenCount(),open=S.changes.filter(c=>c.done<c.total).length,gaps=gapCount(),c=S.counts;
+  const n={screens:c.pages,endpoints:c.endpoints,modules:c.modules,tables:c.tables};
+  const cur=(p,l)=>!q&&place===p&&(!l||lane===l)?' aria-current="page"':'';
+  let h='<a href="#today"'+cur('today')+'>'+ICON.home+'<span class="tl">Overview</span></a>';
+  h+='<p class="navh" aria-hidden="true">Map</p>';
+  h+=LANES.map(l=>'<a href="#map/'+l.key+'" data-lane="'+l.lane+'"'+cur('map',l.key)+'><span class="dot" aria-hidden="true"></span><span class="tl">'+l.name+'</span><span class="tn">'+n[l.key]+'</span></a>').join('');
+  h+='<p class="navh" aria-hidden="true">Work</p>';
+  h+='<a href="#checks"'+cur('checks')+'>'+ICON.shield+'<span class="tl">Checks</span>'+(broken?'<span class="tc bad" title="'+cnt(broken,'broken call')+'">'+broken+'</span>':gaps?'<span class="tc" title="'+cnt(gaps,'gap')+' in proof">'+gaps+'</span>':'')+'</a>';
+  h+='<a href="#changes"'+cur('changes')+'>'+ICON.list+'<span class="tl">Changes</span>'+(open?'<span class="tc" title="'+open+' in progress">'+open+'</span>':'')+'</a>';
+  $('#tabs').innerHTML=h;
 }
 function renderCrumbs(){
   const c=[['#today',repoName()]];
   if(q)c.push(['#search','Search “'+q+'”']);
-  else if(place==='today'){c.push([null,'Today'])}
+  else if(place==='today'){c.push([null,'Overview'])}
   else if(place==='map'){c.push(['#map/'+lane,'Map']);c.push(['#map/'+lane,laneBy(lane).name])}
   else if(place==='changes')c.push(['#changes','Changes']);
   else if(place==='checks')c.push(['#checks','Checks']);
@@ -600,12 +631,14 @@ function nextTask(c){
 function ring(k,on){return '<span class="ring" data-k="'+esc(k)+'"'+(on?' data-on="1"':'')+' aria-hidden="true"></span>'}
 function nm(id){
   const n=ix.get(id),k=kindOf(id);
-  if(k==='endpoint'){const p=splitEp(n.n);return '<span class="ep"><span class="mt">'+esc(p[0])+'</span><span>'+esc(p[1]).replace(/\//g,'/<wbr>')+'</span></span>'}
+  if(k==='endpoint'){const p=splitEp(n.n);return '<span class="ep"><span class="mt" data-m="'+esc(p[0])+'">'+esc(p[0])+'</span><span class="pth">'+brk(p[1])+'</span></span>'}
   if(k==='change')return esc(changeTitle(id).title);
   if(k==='task'&&n.t)return esc(taskTitle(n.t));
   if(k==='req'&&n.t)return '<span class="mt">'+esc(n.n)+'</span> '+esc(plain(n.t));
   return esc(nameOf(id));
 }
+// A path breaks after / . - and _, never inside a word.
+function brk(s){return esc(s).replace(/([\/.\-_])/g,'$1<wbr>')}
 function ref(id){
   const k=kindOf(id);
   return '<a class="ref'+(LANE_OF[k]||k==='call'||k==='file'||k==='test'?' code':'')+'" data-go="'+esc(id)+'" href="'+enc(id)+'">'+ring(k)+'<span>'+nm(id)+'</span></a>';
@@ -629,15 +662,6 @@ function bar(done,total,label){
   const pct=Math.round(done/Math.max(1,total)*100);
   return '<span class="bar" role="img" aria-label="'+esc(label||done+' of '+total)+'"><i style="width:'+pct+'%"></i></span>';
 }
-// The network strip: four lines, a station per kind, each a door into the map.
-function network(big){
-  const c=S.counts,n={screens:c.pages,endpoints:c.endpoints,modules:c.modules,tables:c.tables};
-  return '<nav class="net'+(big?' big':'')+'" aria-label="The map">'+LANES.map(l=>
-    '<a class="st" data-lane="'+l.lane+'" href="#map/'+l.key+'"'+(!big&&place==='map'&&lane===l.key&&!q?' aria-current="page"':'')+'>'+
-    '<span class="stn" aria-hidden="true"></span><span class="sn"><b>'+n[l.key]+'</b> '+esc(l.name.toLowerCase())+'</span>'+
-    (big&&l.verb?'<span class="sv">'+esc(l.verb)+'</span>':'')+'</a>').join('')+'</nav>';
-}
-
 /* ---------------------------------------------------------------- lists */
 function renderList(){
   const live=$('#live');
@@ -648,7 +672,7 @@ function renderList(){
   listKey=key;
   let h='';
   if(q)h=findList();
-  else if(place==='map')h=network(false)+laneList();
+  else if(place==='map')h=laneList();
   else if(place==='changes')h=changesList();
   else if(place==='checks')h=checksList();
   box.innerHTML=h;
@@ -786,16 +810,31 @@ function today(){
   const nb=broken.length+gone.length;
   let h='<div class="today"><header class="hero"><h1 tabindex="-1">'+esc(repoName())+'</h1>';
   h+=nb
-    ?'<p class="gate bad">'+ICON.cross+'<span><b>'+cnt(nb,'broken contract')+'.</b> <code>weave check</code> fails until '+(nb===1?'it is':'they are')+' fixed.</span></p>'
-    :'<p class="gate ok">'+ICON.check+'<span><b>The contract gate passes.</b> Every frontend call matches an endpoint.</span></p>';
-  h+='</header>'+network(true)+proofRow();
+    ?'<div class="status bad">'+ICON.cross+'<p><b>'+cnt(nb,'broken contract')+'</b><span>A frontend call no longer matches an endpoint. <code>weave check</code> fails until '+(nb===1?'it is':'they are')+' fixed.</span></p><a class="btn" href="#checks">See what broke</a></div>'
+    :'<div class="status ok">'+ICON.check+'<p><b>The contract gate passes</b><span>Every frontend call matches an endpoint.</span></p></div>';
+  h+='</header><div id="reviewslot"></div>'+statCards();
   h+='<div class="cols"><div class="work">';
-  h+='<section class="blk"><h2>Next up</h2>'+worklist(broken,gone,open)+'</section>';
+  h+='<section class="card"><h2>Next up</h2>'+worklist(broken,gone,open)+'</section>';
   h+=sinceBlock();
   h+=quietDelta();
   h+='</div>'+health()+'</div>';
-  if(!S.counts.pages&&!S.counts.endpoints)h+='<p class="note">No routes were found. weave reads Express, Next.js route handlers, tRPC routers and OpenAPI specs; <code>weave doctor</code> names the files it could not parse.</p>';
+  if(!S.counts.pages&&!S.counts.endpoints)h+='<p class="note">No routes were found. weave reads Express, Next.js, Remix and React Router file routes, tRPC routers and OpenAPI specs; <code>weave doctor</code> names the files it could not parse.</p>';
   return h+'</div>';
+}
+// The four lines as cards, in the order a request travels, with the proof under each.
+function statCards(){
+  const c=S.counts,te=testedCount('endpoint','hits','covers'),tp=testedCount('page','exercises');
+  const usedTables=S.nodes.filter(n=>n.k==='table'&&relIn(n.i,'uses').length).length;
+  const busyMods=S.modules.filter(m=>m.e.length).length;
+  const cards=[
+    ['screens','screen',c.pages,'Screens',tp+' of '+c.pages+' with an end-to-end test',tp,c.pages],
+    ['endpoints','api',c.endpoints,'Endpoints',te+' of '+c.endpoints+' with a direct test',te,c.endpoints],
+    ['modules','module',c.modules,'Modules',busyMods+' handle endpoints',null,0],
+    ['tables','data',c.tables,'Tables',usedTables+' used by a module',null,0]
+  ];
+  return '<nav class="stats" aria-label="The map">'+cards.map((x,i)=>
+    '<a class="stat" data-lane="'+x[1]+'" href="#map/'+x[0]+'"><span class="sl"><span class="dot" aria-hidden="true"></span>'+x[3]+'</span><b>'+x[2]+'</b><span class="ss">'+esc(x[4])+'</span>'+(x[5]!=null?bar(x[5],x[6],x[4]):'')+'</a>'+
+    (i<3?'<span class="flow" aria-hidden="true">'+esc(LANES[i].verb)+ICON.next+'</span>':'')).join('')+'</nav>';
 }
 // No news is one quiet line after the work, not a heading that pushes it down.
 function quietDelta(){
@@ -804,19 +843,12 @@ function quietDelta(){
   if(d.added.length+d.removed.length+d.moved.length)return '';
   return '<p class="line brief">No change on the map since <code>'+esc(d.ref)+'</code>.</p>';
 }
-// Proof is stated where the counts are read, not only in the side panel.
-function proofRow(){
-  const te=testedCount('endpoint','hits','covers'),tp=testedCount('page','exercises'),c=S.counts;
-  return '<p class="proofrow"><span><b>'+te+'</b> of '+c.endpoints+' endpoints have a direct test</span>'+
-    '<span><b>'+tp+'</b> of '+c.pages+' screens have an end-to-end test</span>'+
-    '<a href="#checks">Gaps in proof</a></p>';
-}
 function sinceBlock(){
   const d=S.delta;
-  if(!d)return '<section class="blk"><h2>Since the last commit</h2><p class="line">No baseline: this repo has no git history weave could read, or the page was written with <code>--no-delta</code>.</p></section>';
+  if(!d)return '<section class="card"><h2>Since the last commit</h2><p class="line">No baseline: this repo has no git history weave could read, or the page was written with <code>--no-delta</code>.</p></section>';
   const total=d.added.length+d.removed.length+d.moved.length;
   if(!total)return '';
-  let h='<section class="blk"><h2>Since the last commit</h2>';
+  let h='<section class="card"><h2>Since the last commit</h2>';
   // What changed, counted by kind, then the few rows that explain it.
   const kindWord=(list,verb)=>{
     const by=new Map();
@@ -870,13 +902,14 @@ function health(){
   const c=S.counts,cov=S.cov,calls=cov.calls;
   const sus=issue('suspect_reqs').length;
   // The two proof meters now sit in the row under the strip; this panel is the read-out.
-  let h='<aside class="health" aria-label="What weave could read"><h2>What weave could read</h2>';
+  let h='<aside class="health card" aria-label="Coverage"><h2>Coverage</h2><p class="hsub">How much of the repository weave could read. A number below 100% means some answers may be incomplete.</p>';
   if(sus)h+='<p class="hl">'+cnt(sus,'requirement')+' changed after the code was written. <a href="#checks">Review</a></p>';
   h+='<dl class="read">';
   const ratio=(a,b)=>b?a+' / '+b:'none found';
-  h+='<div><dt>Route files</dt><dd>'+ratio(cov.routes.found,cov.routes.files)+'</dd></div>';
-  h+='<div><dt>Frontend calls matched</dt><dd>'+ratio(calls.resolved,calls.total)+'</dd></div>';
-  h+='<div><dt>Task files</dt><dd>'+ratio(cov.specs.parsed,cov.specs.files)+'</dd></div></dl>';
+  const meter=(label,a,b)=>'<div><dt>'+label+'</dt><dd>'+ratio(a,b)+'</dd>'+(b?bar(a,b,label+': '+a+' of '+b):'')+'</div>';
+  h+=meter('Frontend calls matched',calls.resolved,calls.total);
+  h+=meter('Route files read',cov.routes.found,cov.routes.files);
+  h+=meter('Task files parsed',cov.specs.parsed,cov.specs.files)+'</dl>';
   const notes=[];
   if(cov.gaps)notes.push(cnt(cov.gaps,'file')+' looked like a contract but produced nothing.');
   if(cov.unmapped)notes.push(cnt(cov.unmapped,'file')+' call an API weave could not map: an external service, or a pattern it misses.');

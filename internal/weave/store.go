@@ -106,7 +106,9 @@ func IsFresh(root, codeDir string) bool {
 	if pst, err := os.Stat(filepath.Join(root, ".weave", "patterns.json")); err == nil && mtimeMs(pst) > stamp {
 		return false
 	}
-	return NewestMtime(root) <= stamp
+	// Strictly older: a file written in the same millisecond as the index may have
+	// been written after it, and a needless rebuild is cheaper than a stale answer.
+	return NewestMtime(root) < stamp
 }
 
 // MarkSuspect flags every requirement whose text hash changed since prev, so the

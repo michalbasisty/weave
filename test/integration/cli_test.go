@@ -21,6 +21,9 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	defer os.RemoveAll(dir)
+	// Every command registers the project it ran in; keep that out of the real
+	// ~/.weave so a test run never adds fixture-7 to someone's project list.
+	_ = os.Setenv("WEAVE_HOME", filepath.Join(dir, "home"))
 	bin = filepath.Join(dir, "weave.exe")
 	if os.PathSeparator != '\\' {
 		bin = filepath.Join(dir, "weave")

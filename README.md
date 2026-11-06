@@ -19,6 +19,16 @@ requirements hang off that map. One static binary, nothing to run beside it.
 - **An agent interface.** `weave mcp` answers "what is this file, what does it touch, what
   proves it" in a few hundred tokens instead of a few thousand.
 
+**Works with** Express, Fastify, NestJS, Next.js (app and pages router), Remix and React
+Router v7 file routes, React Router `<Route>` tables, tRPC and OpenAPI JSON, with tables from
+Prisma, Drizzle or TypeORM, across monorepo packages and tsconfig path aliases. Anything else
+(GraphQL, your own fetch wrapper) takes a one-line regex in
+[`.weave/patterns.json`](docs/REFERENCE.md#your-own-patterns), and `weave doctor` names every
+file it could not read, so you know where the map ends.
+
+Download a binary for macOS, Linux or Windows from
+[Releases](https://github.com/michalbasisty/weave/releases), or build it:
+
 ```bash
 go install github.com/michalbasisty/weave/cmd/weave@latest   # Go 1.22+ to build, nothing to run
 cd /path/to/your/project
@@ -33,8 +43,8 @@ weave check           # what a change breaks (exit 1)
 |---|---|---|
 | **Handing work to an agent and wondering if "done" is true** | `weave check`, or let the Stop hook run it | exit 1 and `file:line` when a call no longer matches an endpoint; exit 0 and silence otherwise |
 | **About to edit a file** (or an agent is) | `context(files)` / `weave context <file>` | the screen, endpoints, tables, owning change, open tasks and the tests with the command to run them |
-| **Planning what to build next** | the Today page, `plan(slug)` | the next unfinished task, its files and its command; Changes shows done / total per record |
-| **Reviewing what an agent changed** | Today, "since the last commit" | what was added, removed or moved on the map, and which removed endpoints are still called |
+| **Planning what to build next** | the Overview page, `plan(slug)` | the next unfinished task, its files and its command; Changes shows done / total per record |
+| **Reviewing what an agent changed** | Overview, "since the last commit" | what was added, removed or moved on the map, and which removed endpoints are still called |
 | **Looking for gaps in proof** | Checks | every endpoint no test reaches, ranked by how many screens call it, kept apart from what is actually broken |
 | **Keeping specs honest** | Specs, then Views | every screen with the endpoints and tables it reaches and the capability spec that owns its file |
 | **Onboarding someone** | `weave wiki` | a browsable site, one page per thing, stamped with the commit it describes |
@@ -55,12 +65,12 @@ Everything else is a warning, because a gate that cries wolf gets switched off i
 
 ### Reading the repository in ten seconds
 
-<img src="docs/img/screens/today.png" alt="The Today page: the gate verdict, the four-line strip with counts, how many endpoints have a direct test, and a numbered list of what to do next." width="100%">
+<img src="docs/img/screens/today.png" alt="The Overview page: the gate verdict, a card per line with its count and how much a test reaches, a numbered list of what to do next, and the coverage of what weave could read." width="100%">
 
-*Today* is the page to open first. The gate sentence says whether the contract holds, the strip
-says how big the repository is, the proof row says how much of it a test reaches, and "Next up"
-orders the work: broken calls first, then the change in progress, then the biggest gaps.
-"What weave could read" prints what the extractors found, so a zero is never a guess.
+*Overview* is the page to open first. The status line says whether the contract holds, the four
+cards say how big the repository is and how much of it a test reaches, and "Next up" orders the
+work: broken calls first, then the change in progress, then the biggest gaps. "Coverage" prints
+what the extractors could read, so a zero is never a guess.
 
 ### Following one thing across the stack
 
@@ -141,12 +151,12 @@ would; until it runs, other tools' reported savings are context, not a promise:
 ## The panel
 
 `weave serve` binds `127.0.0.1` and keeps its write token in `.weave/serve.token`, so a restart
-keeps the URLs people have open (`--new-token` rotates it). It serves one page:
+keeps the URLs people have open (`--new-token` rotates it). It serves one page with a sidebar:
 
 | Place | Holds |
 |---|---|
-| **Today** | gate verdict, strip, proof, next up, what changed since the last commit |
-| **Map** | every screen, endpoint, module and table, each drawn on its line |
+| **Overview** | gate verdict, a card per line, next up, coverage, what changed since the last commit |
+| **Screens, Endpoints, Modules, Tables** | the map: every item, each drawn on its line |
 | **Changes** | change records with their tasks |
 | **Checks** | broken calls and gaps in proof |
 | **Specs** | Views, change records, capability specs, spec editor |
@@ -159,7 +169,8 @@ not a team server: loopback only, one origin, no uploads.
 
 ## Agents
 
-`weave init` writes MCP configs for Claude Code, Cursor, VS Code and opencode. The server is
+`weave init` writes MCP configs for Claude Code, Cursor, VS Code and opencode (`--only claude`
+to pick). The server is
 stdio, answers from one JSON index, writes only change records and their task checkboxes, and
 every answer ends with the tokens it cost:
 
@@ -198,6 +209,10 @@ weave doctor
 - [`docs/PLAN.md`](docs/PLAN.md): where this is going, and the replay that says what not to build.
 - [`docs/DESIGN.md`](docs/DESIGN.md): the research the product rests on.
 - [`docs/explorer/DESIGN.md`](docs/explorer/DESIGN.md): the visual contract of the map.
+
+## License
+
+[MIT](LICENSE)
 - [`test/ui/README.md`](test/ui/README.md): the browser smoke test, which also regenerates the
   screenshots here: `node test/ui/panel.mjs --out docs/img/screens`.
 

@@ -30,6 +30,7 @@ func BuildGraph(root string) *Graph {
 	files := Walk(root)
 	tm.Lap("walk")
 	known := knownSet(files)
+	aliases := LoadAliases(files)
 	t := Classify(files)
 	b := NewBuilder()
 
@@ -38,7 +39,8 @@ func BuildGraph(root string) *Graph {
 	}
 
 	// file -> file imports: the only way a change to a shared util can be traced back.
-	for _, e := range BuildImportMap(files, known).List {
+	allImports := BuildImportMap(files, known, aliases)
+	for _, e := range allImports.List {
 		for _, to := range e.Targets {
 			b.Edge(FileID(e.From), FileID(to), "imports")
 		}
@@ -47,8 +49,13 @@ func BuildGraph(root string) *Graph {
 	endpoints := ExtractEndpoints(files, b)
 	nextStats := ExtractNextRoutes(files, b)
 	nextPageStats := ExtractNextPages(files, b, isNextRepo(files))
-	trpcStats := ExtractTRPC(files, b)
+	// Remix / React Router v7 file routes count with Next's: both are file routes.
+	rrRoutes, rrPages := ExtractRemixRoutes(files, b)
+	nextStats = mergeStats(nextStats, rrRoutes)
+	nextPageStats = mergeStats(nextPageStats, rrPages)
+	trpcStats := ExtractTRPC(files, b, aliases)
 	apiStats := ExtractOpenAPI(files, b)
+	nestEndpoints := ExtractNestAndFastify(files, b)
 
 	// Patterns from .weave/patterns.json: the escape hatch for a team's own wrapper.
 	pat := CompilePatterns(LoadPatterns(root))
@@ -63,12 +70,23 @@ func BuildGraph(root string) *Graph {
 	}
 
 	var allEndpoints []Endpoint
-	for _, list := range [][]Endpoint{endpoints, nextStats.Endpoints, trpcStats.Endpoints, apiStats.Endpoints, customEndpoints} {
+	for _, list := range [][]Endpoint{endpoints, nestEndpoints, nextStats.Endpoints, trpcStats.Endpoints, apiStats.Endpoints, customEndpoints} {
 		allEndpoints = append(allEndpoints, list...)
 	}
 	ExtractModels(t.Prisma, b, files)
-	pageInfo := ExtractPages(t.Web, b, files)
-	pages := pageInfo.Pages
+	ExtractORMModels(files, b)
+	// Any module that declares a <Route> can hold the route table: App.js, router.jsx,
+	// src/main.tsx. Reading only the web folders missed every one outside them.
+	var routeFiles []SourceFile
+	for i := range files {
+		if isCode(files[i].Rel) && !reTestOrSpec.MatchString(files[i].Rel) && strings.Contains(files[i].Text, "<Route") {
+			routeFiles = append(routeFiles, files[i])
+		}
+	}
+	pageInfo := ExtractPages(routeFiles, b, files, aliases)
+	// Screens from <Route> tables and from file routing (Next, Remix, React Router)
+	// all reach their calls the same way: through the files they import.
+	pages := append(append([]Page{}, pageInfo.Pages...), nextPageStats.Pages...)
 	var callFiles []SourceFile
 	for i := range files {
 		if isCode(files[i].Rel) && !reTestOrSpec.MatchString(files[i].Rel) {
@@ -87,13 +105,14 @@ func BuildGraph(root string) *Graph {
 		matched[i] = MatchEndpoint(calls[i], allEndpoints)
 	}
 
-	// page -> endpoint, through the component import graph
-	imp := BuildImportMap(t.Web, known)
+	// page -> endpoint, through the component import graph. Every source file takes
+	// part: a screen's data hook often lives in another package, reached by alias.
+	imp := allImports
 	for _, p := range pages {
 		if p.File == "" {
 			continue
 		}
-		scope := Reachable(p.File, imp, 80)
+		scope := Reachable(p.File, imp, 200)
 		for i, c := range calls {
 			if !scope[c.File] {
 				continue
@@ -461,4 +480,14 @@ func matchPage(path string, pages []Page) *Page {
 		}
 	}
 	return best
+}
+
+func mergeStats(a, b ExtractStats) ExtractStats {
+	a.Files += b.Files
+	a.Found += b.Found
+	a.Silent = append(a.Silent, b.Silent...)
+	a.Ignored = append(a.Ignored, b.Ignored...)
+	a.Endpoints = append(a.Endpoints, b.Endpoints...)
+	a.Pages = append(a.Pages, b.Pages...)
+	return a
 }

@@ -84,10 +84,14 @@
   background: var(--ink); color: var(--surface); font: 600 var(--fs-s) var(--ui); cursor: pointer;
 }
 
-/* since you last reviewed: the first thing on Today that is about the agent's work */
+/* since you last reviewed: under the Overview status line */
 .wreviewslot { padding: var(--s5) var(--s5) 0; }
+#reviewslot .wreviewslot { padding: 0; margin-top: var(--s3); }
+#reviewslot .wreviewwrap { margin: 0; }
+.wreview.quiet { margin: 0; padding: 0 2px; border: 0; background: none; font: var(--fs-s) var(--ui); color: var(--ink3); }
+.wreview.quiet b { font-weight: 600; color: var(--ink2); }
 .wreviewwrap { margin: 0 0 var(--s5); }
-.wreview { padding: 16px 18px; border: 1px solid var(--rule); border-left: 3px solid var(--link); border-radius: 6px; background: var(--surface); }
+.wreview { padding: 16px 18px; border: 1px solid var(--rule); border-left: 3px solid var(--accent, var(--link)); border-radius: 8px; background: var(--surface); }
 .wreview h2 { margin: 0 0 6px; font: 600 var(--fs-m) var(--ui); letter-spacing: 0; border: 0; padding: 0; }
 .wverdict { margin: 0 0 10px; color: var(--ink2); font: 400 var(--fs-s) var(--ui); }
 .wverdict b { color: var(--ink); font-weight: 600; }
@@ -105,7 +109,14 @@
 .wmark:disabled { opacity: .55; cursor: default; }
 
 /* change specs: the panel's write surface beside notes */
-.wspec { margin: 0 0 16px; }
+.wempty { margin: 16px 0; padding: 18px 20px; border: 1px dashed var(--rule); border-radius: 8px; background: var(--surface); max-width: 80ch; }
+.wempty b { display: block; margin-bottom: 6px; font: 600 var(--fs-m) var(--ui); color: var(--ink); }
+.wempty p { margin: 0 0 6px; font-size: var(--fs-s); color: var(--ink2); line-height: 1.55; }
+.wviews { margin: 16px 0; }
+.wviews > summary { cursor: pointer; padding: 8px 0; font: 600 var(--fs-s) var(--ui); color: var(--ink2); }
+.wviews[open] > summary { margin-bottom: 8px; }
+.wspecspage .whint + .wspec, .wspecspage .whint + .wempty { margin-top: 18px; }
+.wspec { margin: 0 0 20px; padding: 14px 16px; border: 1px solid var(--rule); border-radius: 8px; background: var(--surface); }
 .wspechead {
   display: flex; align-items: baseline; gap: 8px; padding-bottom: 5px;
   border-bottom: 1px solid var(--rule2);
@@ -190,7 +201,7 @@ main.wfull > #list, main.wfull > #detail { display: none; }
 main.wfull #wfullview { display: block; }
 .wfullpage { display: none; height: 100%; overflow: auto; }
 .wfullpage[data-on="1"] { display: block; }
-.wspecspage { padding: 22px 26px 40px; }
+.wspecspage { padding: var(--s5) var(--s6) var(--s7); }
 .wfullhead { margin: 0 0 6px; font: 600 var(--fs-2xl) var(--ui); color: var(--ink); }
 .wwikipage { display: none; flex-direction: column; }
 .wwikipage[data-on="1"] { display: flex; }

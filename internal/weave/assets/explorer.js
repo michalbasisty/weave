@@ -9,7 +9,7 @@ const LANES=[
  {key:'tables',k:'table',lane:'data',name:'Tables',one:'table',verb:''}
 ];
 const LANE_OF={page:'screen',endpoint:'api',module:'module',table:'data'};
-const PLACES=[['today','Today'],['map','Map'],['changes','Changes'],['checks','Checks']];
+const PLACES=[['today','Overview'],['map','Map'],['changes','Changes'],['checks','Checks']];
 const SAY={
  calls:['Calls these endpoints','Called from these screens'],
  in_module:['Handled in module','Endpoints in this module'],
@@ -44,7 +44,10 @@ const ICON={
  cross:'<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
  chev:'<svg class="ico sep" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>',
  back:'<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>',
- next:'<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9.5M9 4.5 12.5 8 9 11.5"/></svg>'
+ next:'<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h9.5M9 4.5 12.5 8 9 11.5"/></svg>',
+ home:'<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 7.5 8 3l5.5 4.5V13a.5.5 0 0 1-.5.5H9.5v-3h-3v3H3a.5.5 0 0 1-.5-.5z"/></svg>',
+ shield:'<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2 3 4v4c0 3 2.2 5.2 5 6 2.8-.8 5-3 5-6V4z"/><path d="M5.8 8.2 7.4 9.8 10.4 6.6"/></svg>',
+ list:'<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4.5h7.5M6 8h7.5M6 11.5h7.5"/><path d="M2.5 4.5h.5M2.5 8h.5M2.5 11.5h.5"/></svg>'
 };
 
 function repoName(){return S.name||String(S.root).replace(/\\/g,'/').split('/').filter(Boolean).pop()||S.root}
@@ -109,18 +112,24 @@ function render(){
     if(target)target.focus();
   }
 }
+// The sidebar: Overview, the four lines of the map with their counts, then the work.
+// The hosted panel appends Specs and Wiki after the last link.
 function renderTabs(){
-  const broken=brokenCount(),open=S.changes.filter(c=>c.done<c.total).length,gaps=gapCount();
-  const badge={changes:open?'<span class="tc">'+open+'</span>':'',checks:broken?'<span class="tc bad">'+broken+'</span>':gaps?'<span class="tc">'+gaps+'</span>':''};
-  $('#tabs').innerHTML=PLACES.map(p=>{
-    const href=p[0]==='map'?'#map/'+lane:'#'+p[0];
-    return '<a href="'+href+'"'+(!q&&place===p[0]?' aria-current="page"':'')+'>'+p[1]+(badge[p[0]]||'')+'</a>';
-  }).join('');
+  const broken=brokenCount(),open=S.changes.filter(c=>c.done<c.total).length,gaps=gapCount(),c=S.counts;
+  const n={screens:c.pages,endpoints:c.endpoints,modules:c.modules,tables:c.tables};
+  const cur=(p,l)=>!q&&place===p&&(!l||lane===l)?' aria-current="page"':'';
+  let h='<a href="#today"'+cur('today')+'>'+ICON.home+'<span class="tl">Overview</span></a>';
+  h+='<p class="navh" aria-hidden="true">Map</p>';
+  h+=LANES.map(l=>'<a href="#map/'+l.key+'" data-lane="'+l.lane+'"'+cur('map',l.key)+'><span class="dot" aria-hidden="true"></span><span class="tl">'+l.name+'</span><span class="tn">'+n[l.key]+'</span></a>').join('');
+  h+='<p class="navh" aria-hidden="true">Work</p>';
+  h+='<a href="#checks"'+cur('checks')+'>'+ICON.shield+'<span class="tl">Checks</span>'+(broken?'<span class="tc bad" title="'+cnt(broken,'broken call')+'">'+broken+'</span>':gaps?'<span class="tc" title="'+cnt(gaps,'gap')+' in proof">'+gaps+'</span>':'')+'</a>';
+  h+='<a href="#changes"'+cur('changes')+'>'+ICON.list+'<span class="tl">Changes</span>'+(open?'<span class="tc" title="'+open+' in progress">'+open+'</span>':'')+'</a>';
+  $('#tabs').innerHTML=h;
 }
 function renderCrumbs(){
   const c=[['#today',repoName()]];
   if(q)c.push(['#search','Search “'+q+'”']);
-  else if(place==='today'){c.push([null,'Today'])}
+  else if(place==='today'){c.push([null,'Overview'])}
   else if(place==='map'){c.push(['#map/'+lane,'Map']);c.push(['#map/'+lane,laneBy(lane).name])}
   else if(place==='changes')c.push(['#changes','Changes']);
   else if(place==='checks')c.push(['#checks','Checks']);
@@ -195,12 +204,14 @@ function nextTask(c){
 function ring(k,on){return '<span class="ring" data-k="'+esc(k)+'"'+(on?' data-on="1"':'')+' aria-hidden="true"></span>'}
 function nm(id){
   const n=ix.get(id),k=kindOf(id);
-  if(k==='endpoint'){const p=splitEp(n.n);return '<span class="ep"><span class="mt">'+esc(p[0])+'</span><span>'+esc(p[1]).replace(/\//g,'/<wbr>')+'</span></span>'}
+  if(k==='endpoint'){const p=splitEp(n.n);return '<span class="ep"><span class="mt" data-m="'+esc(p[0])+'">'+esc(p[0])+'</span><span class="pth">'+brk(p[1])+'</span></span>'}
   if(k==='change')return esc(changeTitle(id).title);
   if(k==='task'&&n.t)return esc(taskTitle(n.t));
   if(k==='req'&&n.t)return '<span class="mt">'+esc(n.n)+'</span> '+esc(plain(n.t));
   return esc(nameOf(id));
 }
+// A path breaks after / . - and _, never inside a word.
+function brk(s){return esc(s).replace(/([\/.\-_])/g,'$1<wbr>')}
 function ref(id){
   const k=kindOf(id);
   return '<a class="ref'+(LANE_OF[k]||k==='call'||k==='file'||k==='test'?' code':'')+'" data-go="'+esc(id)+'" href="'+enc(id)+'">'+ring(k)+'<span>'+nm(id)+'</span></a>';
@@ -224,15 +235,6 @@ function bar(done,total,label){
   const pct=Math.round(done/Math.max(1,total)*100);
   return '<span class="bar" role="img" aria-label="'+esc(label||done+' of '+total)+'"><i style="width:'+pct+'%"></i></span>';
 }
-// The network strip: four lines, a station per kind, each a door into the map.
-function network(big){
-  const c=S.counts,n={screens:c.pages,endpoints:c.endpoints,modules:c.modules,tables:c.tables};
-  return '<nav class="net'+(big?' big':'')+'" aria-label="The map">'+LANES.map(l=>
-    '<a class="st" data-lane="'+l.lane+'" href="#map/'+l.key+'"'+(!big&&place==='map'&&lane===l.key&&!q?' aria-current="page"':'')+'>'+
-    '<span class="stn" aria-hidden="true"></span><span class="sn"><b>'+n[l.key]+'</b> '+esc(l.name.toLowerCase())+'</span>'+
-    (big&&l.verb?'<span class="sv">'+esc(l.verb)+'</span>':'')+'</a>').join('')+'</nav>';
-}
-
 /* ---------------------------------------------------------------- lists */
 function renderList(){
   const live=$('#live');
@@ -243,7 +245,7 @@ function renderList(){
   listKey=key;
   let h='';
   if(q)h=findList();
-  else if(place==='map')h=network(false)+laneList();
+  else if(place==='map')h=laneList();
   else if(place==='changes')h=changesList();
   else if(place==='checks')h=checksList();
   box.innerHTML=h;
@@ -381,16 +383,31 @@ function today(){
   const nb=broken.length+gone.length;
   let h='<div class="today"><header class="hero"><h1 tabindex="-1">'+esc(repoName())+'</h1>';
   h+=nb
-    ?'<p class="gate bad">'+ICON.cross+'<span><b>'+cnt(nb,'broken contract')+'.</b> <code>weave check</code> fails until '+(nb===1?'it is':'they are')+' fixed.</span></p>'
-    :'<p class="gate ok">'+ICON.check+'<span><b>The contract gate passes.</b> Every frontend call matches an endpoint.</span></p>';
-  h+='</header>'+network(true)+proofRow();
+    ?'<div class="status bad">'+ICON.cross+'<p><b>'+cnt(nb,'broken contract')+'</b><span>A frontend call no longer matches an endpoint. <code>weave check</code> fails until '+(nb===1?'it is':'they are')+' fixed.</span></p><a class="btn" href="#checks">See what broke</a></div>'
+    :'<div class="status ok">'+ICON.check+'<p><b>The contract gate passes</b><span>Every frontend call matches an endpoint.</span></p></div>';
+  h+='</header><div id="reviewslot"></div>'+statCards();
   h+='<div class="cols"><div class="work">';
-  h+='<section class="blk"><h2>Next up</h2>'+worklist(broken,gone,open)+'</section>';
+  h+='<section class="card"><h2>Next up</h2>'+worklist(broken,gone,open)+'</section>';
   h+=sinceBlock();
   h+=quietDelta();
   h+='</div>'+health()+'</div>';
-  if(!S.counts.pages&&!S.counts.endpoints)h+='<p class="note">No routes were found. weave reads Express, Next.js route handlers, tRPC routers and OpenAPI specs; <code>weave doctor</code> names the files it could not parse.</p>';
+  if(!S.counts.pages&&!S.counts.endpoints)h+='<p class="note">No routes were found. weave reads Express, Next.js, Remix and React Router file routes, tRPC routers and OpenAPI specs; <code>weave doctor</code> names the files it could not parse.</p>';
   return h+'</div>';
+}
+// The four lines as cards, in the order a request travels, with the proof under each.
+function statCards(){
+  const c=S.counts,te=testedCount('endpoint','hits','covers'),tp=testedCount('page','exercises');
+  const usedTables=S.nodes.filter(n=>n.k==='table'&&relIn(n.i,'uses').length).length;
+  const busyMods=S.modules.filter(m=>m.e.length).length;
+  const cards=[
+    ['screens','screen',c.pages,'Screens',tp+' of '+c.pages+' with an end-to-end test',tp,c.pages],
+    ['endpoints','api',c.endpoints,'Endpoints',te+' of '+c.endpoints+' with a direct test',te,c.endpoints],
+    ['modules','module',c.modules,'Modules',busyMods+' handle endpoints',null,0],
+    ['tables','data',c.tables,'Tables',usedTables+' used by a module',null,0]
+  ];
+  return '<nav class="stats" aria-label="The map">'+cards.map((x,i)=>
+    '<a class="stat" data-lane="'+x[1]+'" href="#map/'+x[0]+'"><span class="sl"><span class="dot" aria-hidden="true"></span>'+x[3]+'</span><b>'+x[2]+'</b><span class="ss">'+esc(x[4])+'</span>'+(x[5]!=null?bar(x[5],x[6],x[4]):'')+'</a>'+
+    (i<3?'<span class="flow" aria-hidden="true">'+esc(LANES[i].verb)+ICON.next+'</span>':'')).join('')+'</nav>';
 }
 // No news is one quiet line after the work, not a heading that pushes it down.
 function quietDelta(){
@@ -399,19 +416,12 @@ function quietDelta(){
   if(d.added.length+d.removed.length+d.moved.length)return '';
   return '<p class="line brief">No change on the map since <code>'+esc(d.ref)+'</code>.</p>';
 }
-// Proof is stated where the counts are read, not only in the side panel.
-function proofRow(){
-  const te=testedCount('endpoint','hits','covers'),tp=testedCount('page','exercises'),c=S.counts;
-  return '<p class="proofrow"><span><b>'+te+'</b> of '+c.endpoints+' endpoints have a direct test</span>'+
-    '<span><b>'+tp+'</b> of '+c.pages+' screens have an end-to-end test</span>'+
-    '<a href="#checks">Gaps in proof</a></p>';
-}
 function sinceBlock(){
   const d=S.delta;
-  if(!d)return '<section class="blk"><h2>Since the last commit</h2><p class="line">No baseline: this repo has no git history weave could read, or the page was written with <code>--no-delta</code>.</p></section>';
+  if(!d)return '<section class="card"><h2>Since the last commit</h2><p class="line">No baseline: this repo has no git history weave could read, or the page was written with <code>--no-delta</code>.</p></section>';
   const total=d.added.length+d.removed.length+d.moved.length;
   if(!total)return '';
-  let h='<section class="blk"><h2>Since the last commit</h2>';
+  let h='<section class="card"><h2>Since the last commit</h2>';
   // What changed, counted by kind, then the few rows that explain it.
   const kindWord=(list,verb)=>{
     const by=new Map();
@@ -465,13 +475,14 @@ function health(){
   const c=S.counts,cov=S.cov,calls=cov.calls;
   const sus=issue('suspect_reqs').length;
   // The two proof meters now sit in the row under the strip; this panel is the read-out.
-  let h='<aside class="health" aria-label="What weave could read"><h2>What weave could read</h2>';
+  let h='<aside class="health card" aria-label="Coverage"><h2>Coverage</h2><p class="hsub">How much of the repository weave could read. A number below 100% means some answers may be incomplete.</p>';
   if(sus)h+='<p class="hl">'+cnt(sus,'requirement')+' changed after the code was written. <a href="#checks">Review</a></p>';
   h+='<dl class="read">';
   const ratio=(a,b)=>b?a+' / '+b:'none found';
-  h+='<div><dt>Route files</dt><dd>'+ratio(cov.routes.found,cov.routes.files)+'</dd></div>';
-  h+='<div><dt>Frontend calls matched</dt><dd>'+ratio(calls.resolved,calls.total)+'</dd></div>';
-  h+='<div><dt>Task files</dt><dd>'+ratio(cov.specs.parsed,cov.specs.files)+'</dd></div></dl>';
+  const meter=(label,a,b)=>'<div><dt>'+label+'</dt><dd>'+ratio(a,b)+'</dd>'+(b?bar(a,b,label+': '+a+' of '+b):'')+'</div>';
+  h+=meter('Frontend calls matched',calls.resolved,calls.total);
+  h+=meter('Route files read',cov.routes.found,cov.routes.files);
+  h+=meter('Task files parsed',cov.specs.parsed,cov.specs.files)+'</dl>';
   const notes=[];
   if(cov.gaps)notes.push(cnt(cov.gaps,'file')+' looked like a contract but produced nothing.');
   if(cov.unmapped)notes.push(cnt(cov.unmapped,'file')+' call an API weave could not map: an external service, or a pattern it misses.');

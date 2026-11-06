@@ -228,6 +228,7 @@
         }),
       ];
       const views = r.views || [];
+      let viewsSection = null;
       if (views.length) {
         const body = el('tbody', {});
         for (const v of views) {
@@ -251,7 +252,7 @@
             el('td', { class: 'wvspec' }, [spec]),
           ]));
         }
-        nodes.push(el('section', { class: 'wspec' }, [
+        viewsSection = el('section', { class: 'wspec' }, [
           el('div', { class: 'wspechead' }, [
             el('b', { text: 'Views' }),
             el('span', { class: 'wkind', text: String(views.length) }),
@@ -267,9 +268,17 @@
               body,
             ]),
           ]),
-        ]));
+        ]);
       }
-      if (!changes.length) {
+      // A repository with no specs gets one card that says what they are and how to
+      // start, not a table of every screen marked unowned.
+      if (!changes.length && !caps.length) {
+        nodes.push(el('section', { class: 'wempty' }, [
+          el('b', { text: 'No specs in this repository yet' }),
+          el('p', { text: 'A change record is specs/changes/<slug>/tasks.md with checkbox tasks; weave links each task to the files it names, and agents read the next one with plan(). A capability spec is specs/capabilities/<area>/spec.md with a Parts table that names its files.' }),
+          el('p', { html: 'Start one below, or run <code>weave spec new &lt;name&gt;</code>.' }),
+        ]));
+      } else if (!changes.length) {
         nodes.push(el('p', { class: 'whint', text: 'No change record yet. One is specs/changes/<slug>/tasks.md with checkbox tasks.' }));
       }
       for (const c of changes) {
@@ -303,6 +312,15 @@
             el('span', { class: 'wkind', text: String(caps.length) }),
           ]),
           ul,
+        ]));
+      }
+
+      // Views read best once a capability owns screens; until then they fold away.
+      if (viewsSection) {
+        if (caps.length) nodes.push(viewsSection);
+        else nodes.push(el('details', { class: 'wviews' }, [
+          el('summary', { text: 'Views: ' + views.length + ' screen' + (views.length === 1 ? '' : 's') + ', none owned by a capability spec yet' }),
+          viewsSection,
         ]));
       }
 
@@ -458,8 +476,9 @@
     const nav = document.getElementById('tabs');
     if (!nav) return;
     if (!nav.querySelector('[data-wtab]')) {
-      nav.append(el('a', { href: '#specs', 'data-wtab': 'specs', text: 'Specs' }));
-      nav.append(el('a', { href: '#wiki', 'data-wtab': 'wiki', text: 'Wiki' }));
+      const icon = d => '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="' + d + '"/></svg>';
+      nav.append(el('a', { href: '#specs', 'data-wtab': 'specs', html: icon('M4 2.5h5.5L12 5v8.5H4zM9.5 2.5V5H12M6 8h4M6 10.5h4') + '<span class="tl">Specs</span>' }));
+      nav.append(el('a', { href: '#wiki', 'data-wtab': 'wiki', html: icon('M2.5 3.5h4a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 0-1.5-1.5h-4zM13.5 3.5h-4A1.5 1.5 0 0 0 8 5v8a1.5 1.5 0 0 1 1.5-1.5h4z') + '<span class="tl">Wiki</span>' }));
     }
     for (const a of nav.querySelectorAll('a')) {
       if (a.dataset.wtab) {
@@ -502,8 +521,11 @@
     wrap.append(el('h2', { text: 'Since you last reviewed' }));
     if (!data || data.error) { wrap.append(el('p', { class: 'whint', text: 'No git history to compare.' })); return wrap; }
     if (!data.files && !data.commits) {
-      wrap.append(el('p', { class: 'whint', text: data.mark ? 'Nothing new since ' + data.mark.slice(0, 7) + '.' : 'Nothing new yet. Mark the page reviewed to start a baseline.' }));
-      return wrap;
+      // Nothing to review is one quiet line, not a box that pushes the work down.
+      const quiet = el('p', { class: 'wreview quiet' });
+      quiet.append(el('b', { text: 'Since you last reviewed: ' }));
+      quiet.append(document.createTextNode(data.mark ? 'nothing new since ' + data.mark.slice(0, 7) + '.' : 'nothing yet. Mark the page reviewed to start a baseline.'));
+      return quiet;
     }
     const counts = {};
     (data.nodes || []).forEach(n => { counts[n.kind] = (counts[n.kind] || 0) + 1; });
@@ -543,16 +565,19 @@
   };
 
   let review = null;
-  // The sheet goes at the top of the detail pane, before the hero. Injecting it from
+  // The sheet goes under the Overview status line. Injecting it from
   // inside the mutation observer is what froze the page before; renderReview is now
   // called only from navigation and from the review fetch.
   const isToday = () => location.hash === '' || location.hash === '#today';
   const renderReview = () => {
     const detail = document.getElementById('detail');
     if (!detail) return;
-    for (const old of detail.querySelectorAll(':scope > .wreviewslot')) old.remove();
+    for (const old of detail.querySelectorAll('.wreviewslot')) old.remove();
     if (!isToday() || !review) return;
-    detail.prepend(el('div', { class: 'wreviewslot' }, [reviewSection(review)]));
+    // under the status line when Overview has a slot for it, else at the top
+    const node = el('div', { class: 'wreviewslot' }, [reviewSection(review)]);
+    const slot = document.getElementById('reviewslot');
+    if (slot) slot.append(node); else detail.prepend(node);
   };
   const loadReview = () => api('/api/review').then(r => { review = r; renderReview(); }).catch(() => {});
 

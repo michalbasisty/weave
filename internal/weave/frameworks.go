@@ -2,6 +2,7 @@ package weave
 
 import (
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -16,6 +17,7 @@ type ExtractStats struct {
 	Silent    []string
 	Ignored   []string
 	Endpoints []Endpoint
+	Pages     []Page // screens a file-routing framework declared
 }
 
 // ---------------------------------------------------------------- Next.js
@@ -158,6 +160,7 @@ func ExtractNextPages(files []SourceFile, b *Builder, nextRepo bool) ExtractStat
 
 		pid := PageID(route)
 		b.Node(&GNode{ID: pid, Kind: KindPage, Name: route, File: Ptr(f.Rel), Meta: strMeta("desc", TopComment(f.Lines, 220), "framework", "next")})
+		st.Pages = append(st.Pages, Page{route, "", f.Rel})
 		b.Edge(pid, FileID(f.Rel), "renders")
 		st.Found++
 	}
@@ -321,40 +324,58 @@ func isIdentChar(c byte) bool {
 	return c == '_' || c == '$' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
 
-// ExtractTRPC reads tRPC router files.
-func ExtractTRPC(files []SourceFile, b *Builder) ExtractStats {
+// ExtractTRPC reads tRPC routers, following aliases and imported procedures across
+// files so `team: teamRouter` and `find: findTeamsRoute` produce `team.find`.
+func ExtractTRPC(files []SourceFile, b *Builder, al *Aliases) ExtractStats {
 	st := ExtractStats{Silent: []string{}}
+	procs := ResolveTRPC(files, al)
+	byRouter := map[string]bool{}
+	for _, p := range procs {
+		byRouter[p.router] = true
+	}
+	mod := "trpc"
 	for i := range files {
 		f := &files[i]
-		// A router file declares procedures; a provider/client file does not.
-		if !hasProcedure(f.Text) || !hasRouterCall(f.Text) {
+		// A router file declares a router; a provider/client file does not.
+		if !hasRouterCall(f.Text) || !(hasProcedure(f.Text) || byRouter[f.Rel]) {
 			continue
 		}
 		st.Files++
-
-		procs := ScanProcedures(f.Text)
-		if len(procs) == 0 {
+		if !byRouter[f.Rel] {
 			st.Silent = append(st.Silent, f.Rel)
 			continue
 		}
-		mod := "trpc"
-		b.Node(&GNode{ID: ModuleID(mod), Kind: KindModule, Name: mod, File: Ptr(f.Rel)})
-		for _, p := range procs {
-			path := NormalizePath("/api/trpc/" + p.Name)
-			eid := EndpointID(p.Kind, path)
-			b.Node(&GNode{
-				ID:   eid,
-				Kind: KindEndpoint,
-				Name: p.Kind + " " + path,
-				File: Ptr(f.Rel),
-				Meta: strMeta("module", mod, "framework", "trpc", "desc", strings.ToLower(p.Kind)+" "+p.Name),
-			})
-			b.Edge(eid, FileID(f.Rel), "defined_in")
-			b.Edge(eid, ModuleID(mod), "in_module")
-			st.Endpoints = append(st.Endpoints, Endpoint{p.Kind, path, f.Rel, 0, mod, eid})
-		}
-		b.Edge(ModuleID(mod), FileID(f.Rel), "contains")
 		st.Found++
+	}
+	if len(procs) == 0 {
+		return st
+	}
+	first := procs[0].router
+	b.Node(&GNode{ID: ModuleID(mod), Kind: KindModule, Name: mod, File: Ptr(first)})
+	files2 := map[string]bool{}
+	for _, p := range procs {
+		path := NormalizePath("/api/trpc/" + p.name)
+		eid := EndpointID(p.kind, path)
+		b.Node(&GNode{
+			ID:   eid,
+			Kind: KindEndpoint,
+			Name: p.kind + " " + path,
+			File: Ptr(p.file),
+			Meta: strMeta("module", mod, "framework", "trpc", "desc", strings.ToLower(p.kind)+" "+p.name),
+		})
+		b.Edge(eid, FileID(p.file), "defined_in")
+		b.Edge(eid, ModuleID(mod), "in_module")
+		st.Endpoints = append(st.Endpoints, Endpoint{p.kind, path, p.file, p.line, mod, eid})
+		files2[p.file] = true
+		files2[p.router] = true
+	}
+	keys := make([]string, 0, len(files2))
+	for k := range files2 {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		b.Edge(ModuleID(mod), FileID(k), "contains")
 	}
 	return st
 }

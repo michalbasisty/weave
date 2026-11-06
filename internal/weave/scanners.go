@@ -64,6 +64,21 @@ func importSpecs(t string) []string {
 
 var callClients = map[string]bool{"api": true, "http": true, "httpClient": true, "axios": true, "client": true, "fetcher": true}
 
+// clientLike reports whether a receiver reads as an HTTP wrapper: `requests`,
+// `apiClient`, `httpService`, `fetcher`, `agent`. Router receivers are servers.
+func clientLike(name string) bool {
+	n := strings.ToLower(name)
+	if n == "" || strings.Contains(n, "router") || strings.Contains(n, "server") || n == "app" || n == "routes" {
+		return false
+	}
+	for _, w := range []string{"api", "http", "client", "request", "fetch", "agent", "axios"} {
+		if strings.Contains(n, w) {
+			return true
+		}
+	}
+	return false
+}
+
 // verbAt is the HTTP verb of (get|post|put|patch|delete) at s[k], or "".
 func verbAt(s string, k int, verbs []string) string {
 	for _, v := range verbs {
@@ -118,11 +133,16 @@ func callMatch(line string) (verb, path string, ok bool) {
 		for s > 0 && isWord(line[s-1]) {
 			s--
 		}
-		if !callClients[line[s:e]] {
+		name := line[s:e]
+		if !callClients[name] && !clientLike(name) {
 			continue
 		}
 		p, _, ok := quotedAt(line, skipSpace(line, k+1))
 		if !ok {
+			continue
+		}
+		// A wrapper weave only guesses at must at least name an absolute path.
+		if !callClients[name] && !strings.HasPrefix(p, "/") {
 			continue
 		}
 		return v, p, true
