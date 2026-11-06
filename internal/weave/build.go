@@ -101,10 +101,34 @@ func BuildGraph(root string) *Graph {
 	}
 	tm.Lap("extract")
 
-	// MatchEndpoint is pure: resolve each call once for both passes below.
-	matched := make([]*Endpoint, len(calls))
-	for i := range calls {
-		matched[i] = MatchEndpoint(calls[i], allEndpoints)
+	// MatchEndpoint is pure: resolve each call once for both passes below. A call
+	// whose template segment is typed as a literal union is one call per value: each
+	// value that matches is linked, each that does not is a broken call.
+	matched := make([][]*Endpoint, len(calls))
+	unmatched := make([][]string, len(calls))
+	unions := unionAliases(files)
+	textOf := make(map[string]string, len(files))
+	for i := range files {
+		textOf[files[i].Rel] = files[i].Text
+	}
+	for i, c := range calls {
+		if paths := expandUnion(c, textOf[c.File], unions); paths != nil {
+			for _, p := range paths {
+				v := c
+				v.Path = p
+				if e := MatchEndpoint(v, allEndpoints); e != nil {
+					matched[i] = append(matched[i], e)
+				} else {
+					unmatched[i] = append(unmatched[i], p)
+				}
+			}
+			continue
+		}
+		if e := MatchEndpoint(c, allEndpoints); e != nil {
+			matched[i] = []*Endpoint{e}
+		} else {
+			matched[i] = variableLeafChoices(c, allEndpoints)
+		}
 	}
 
 	// page -> endpoint, through the component import graph. Every source file takes
@@ -119,15 +143,13 @@ func BuildGraph(root string) *Graph {
 			if !scope[c.File] {
 				continue
 			}
-			e := matched[i]
-			if e == nil {
-				continue
-			}
 			conf := ConfInferred
 			if c.File == p.File && !c.Dynamic {
 				conf = ConfExact
 			}
-			b.EdgeConf(PageID(p.Route), e.ID, "calls", conf)
+			for _, e := range matched[i] {
+				b.EdgeConf(PageID(p.Route), e.ID, "calls", conf)
+			}
 		}
 	}
 
@@ -158,17 +180,25 @@ func BuildGraph(root string) *Graph {
 		if c.Dynamic {
 			conf = ConfInferred
 		}
-		if e := matched[i]; e != nil {
+		for _, e := range matched[i] {
 			b.EdgeConf(FileID(c.File), e.ID, "calls", conf)
+		}
+		missing := unmatched[i]
+		if len(matched[i]) == 0 && missing == nil {
+			missing = []string{c.Path}
+		}
+		if len(missing) == 0 {
 			continue
 		}
 		// A call site may be marked as known-broken debt instead of blocking a merge.
 		if lines, ok := lineCache[c.File]; ok && c.Line-1 >= 0 && c.Line-1 < len(lines) && strings.Contains(lines[c.Line-1], "weave-ignore") {
 			continue
 		}
-		callID := CallID(c.Method, c.Path)
-		b.Node(&GNode{ID: callID, Kind: KindCall, Name: c.Method + " " + c.Path, File: Ptr(c.File), Line: Ptr(c.Line)})
-		b.EdgeConf(FileID(c.File), callID, "calls_missing", conf)
+		for _, p := range missing {
+			callID := CallID(c.Method, p)
+			b.Node(&GNode{ID: callID, Kind: KindCall, Name: c.Method + " " + p, File: Ptr(c.File), Line: Ptr(c.Line)})
+			b.EdgeConf(FileID(c.File), callID, "calls_missing", conf)
+		}
 	}
 
 	// A requirement named in the code is an exact edge — the one traceability

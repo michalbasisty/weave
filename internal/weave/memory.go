@@ -84,6 +84,15 @@ func Remember(root string, files []string, note, now string) (*Note, error) {
 	if list.size() == 0 || text == "" {
 		return nil, nil
 	}
+	// The same note on the same files again is noise, not news: an agent that
+	// remembers on every turn would otherwise fill recall with copies.
+	if old, err := ReadNotes(root); err == nil {
+		for _, n := range old {
+			if sameNote(n.Note, text) && sameFiles(n.Files, list.items()) {
+				return nil, nil
+			}
+		}
+	}
 	if now == "" {
 		now = isoNow()
 	}
@@ -114,7 +123,18 @@ func matching(notes []Note, files []string, n int) []Note {
 		want[normNote(f)] = true
 	}
 	hits := []Note{}
-	for _, note := range notes {
+	// newest wins: walk back to front, keep the first copy of each text
+	seen := map[string]bool{}
+	keep := make([]bool, len(notes))
+	for i := len(notes) - 1; i >= 0; i-- {
+		k := strings.Join(strings.Fields(strings.ToLower(notes[i].Note)), " ")
+		keep[i] = !seen[k]
+		seen[k] = true
+	}
+	for i, note := range notes {
+		if !keep[i] {
+			continue
+		}
 		ok := len(want) == 0
 		for i := 0; i < len(note.Files) && !ok; i++ {
 			ok = want[normNote(note.Files[i])]
@@ -174,4 +194,20 @@ func ClearMemory(root string) (int, error) {
 		return 0, err
 	}
 	return len(notes), os.WriteFile(MemoryPath(root), nil, 0o644)
+}
+
+func sameNote(a, b string) bool {
+	return strings.Join(strings.Fields(strings.ToLower(a)), " ") == strings.Join(strings.Fields(strings.ToLower(b)), " ")
+}
+
+func sameFiles(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if normNote(a[i]) != normNote(b[i]) {
+			return false
+		}
+	}
+	return true
 }

@@ -103,3 +103,16 @@ func TestGrepSkipsLongLinesAndCapsHits(t *testing.T) {
 		t.Errorf("hit cap:\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
 }
+
+// Source comes before prose, and archived prose comes last.
+func TestSourceOutranksArchivedDocs(t *testing.T) {
+	order := []string{"packages/api/tasks.ts", "packages/api/tasks.json", "docs/plan.md", "docs/archive/19-offline-plan.md"}
+	for i := 1; i < len(order); i++ {
+		if rankOf(order[i-1], false) >= rankOf(order[i], false) {
+			t.Fatalf("%s should rank above %s", order[i-1], order[i])
+		}
+	}
+	if rankOf("src/app.ts", true) >= rankOf("src/app.ts", false) {
+		t.Fatal("a file on the map ranks first")
+	}
+}

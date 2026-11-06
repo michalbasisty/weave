@@ -53,6 +53,7 @@ func readDir(dir string) []os.DirEntry {
 // dot names and files over MaxBytes.
 func Walk(root string) []SourceFile {
 	var out []SourceFile
+	ign := gitIgnored(root)
 	var visit func(dir, rel string)
 	visit = func(dir, rel string) {
 		for _, e := range readDir(dir) {
@@ -68,6 +69,9 @@ func Walk(root string) []SourceFile {
 			r := ToPosix(name)
 			if rel != "" {
 				r = rel + "/" + r
+			}
+			if ign.has(r, st.IsDir()) {
+				continue
 			}
 			if st.IsDir() {
 				visit(abs, r)
@@ -97,6 +101,7 @@ type FileInfo struct {
 // no contents. Long-lived callers use it to re-read only what changed.
 func WalkInfo(root string) []FileInfo {
 	var out []FileInfo
+	ign := gitIgnored(root)
 	var visit func(dir, rel string)
 	visit = func(dir, rel string) {
 		for _, e := range readDir(dir) {
@@ -113,6 +118,9 @@ func WalkInfo(root string) []FileInfo {
 			if rel != "" {
 				r = rel + "/" + r
 			}
+			if ign.has(r, st.IsDir()) {
+				continue
+			}
 			if st.IsDir() {
 				visit(abs, r)
 			} else if (st.Size() <= MaxBytes && code[Ext(name)]) || (specFile(r) && st.Size() <= SpecMaxBytes) {
@@ -128,8 +136,9 @@ func WalkInfo(root string) []FileInfo {
 // without reading any file. Directories do not count.
 func NewestMtime(root string) float64 {
 	var max float64
-	var visit func(dir string)
-	visit = func(dir string) {
+	ign := gitIgnored(root)
+	var visit func(dir, rel string)
+	visit = func(dir, rel string) {
 		for _, e := range readDir(dir) {
 			if skipped(e.Name()) {
 				continue
@@ -139,14 +148,21 @@ func NewestMtime(root string) float64 {
 			if err != nil {
 				continue
 			}
+			r := ToPosix(e.Name())
+			if rel != "" {
+				r = rel + "/" + r
+			}
+			if ign.has(r, st.IsDir()) {
+				continue
+			}
 			if st.IsDir() {
-				visit(abs)
+				visit(abs, r)
 			} else if m := mtimeMs(st); m > max {
 				max = m
 			}
 		}
 	}
-	visit(root)
+	visit(root, "")
 	return max
 }
 

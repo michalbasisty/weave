@@ -104,6 +104,10 @@ claude mcp add weave -- /abs/path/weave mcp --root .
 
 ## What it extracts, and how exact it is
 
+weave reads every JavaScript, TypeScript, GraphQL, Prisma, JSON and Markdown file
+except what git ignores (`.gitignore` at any depth, `.git/info/exclude`, global
+excludes), so generated clients and build output never show up as modules.
+
 | edge | source | confidence |
 |---|---|---|
 | `app.use('/api/v1/x', router)` + `router.get('/y')`, `app.get('/y')`, `usersRouter.post('/y')` → endpoint | Express mount table + router files | exact |
@@ -115,6 +119,7 @@ claude mcp add weave -- /abs/path/weave mcp --root .
 | `openapi.json` / `swagger.json` / any `.json` with `openapi`+`paths` | any language's spec | exact |
 | your own wrapper, via `.weave/patterns.json` | one regex per rule | exact |
 | `api.get('/orders')`, ``api.get(`/orders/${id}`)``, `requests.post('/users')`, `apiClient.get('/x')` → endpoint | client call sites; any receiver named like an HTTP client (`api`, `http`, `client`, `request`, `fetch`, `agent`) | exact / inferred |
+| ``api.put(`/tasks/${id}/${action}`)`` with `action: 'start' \| 'stop'` (inline or a `type` alias) → `PUT /tasks/:id/start` and `/stop` | a literal-union segment is one call per value; a value no route serves is a broken call. Untyped, a variable last segment over two or more fixed routes is a choice between them | exact / inferred |
 | `fetch('https://api.github.com/…')` | a call to another host is not a contract with this repo and is never counted as broken | — |
 | page → endpoint | `<Route>` + lazy imports + the component import graph | exact / inferred |
 | `model` → `@@map` table, relations | `schema.prisma` | exact |

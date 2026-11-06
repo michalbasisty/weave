@@ -95,7 +95,7 @@ also      /login, /register, /editor/:slug, /editor share these endpoints
 
 It is quick enough to run on every agent turn:
 
-<img src="docs/img/chart-speed.svg" alt="weave check wall time: documenso 2,458 files about 1.1 seconds, RealWorld Express + React 53 ms, RealWorld NestJS 35 ms." width="100%">
+<img src="docs/img/chart-speed.svg" alt="weave check wall time: documenso 2,458 files about 1.2 seconds, RealWorld Express + React 63 ms, RealWorld NestJS 35 ms." width="100%">
 
 ## Measured on real repositories
 
@@ -107,7 +107,7 @@ It is quick enough to run on every agent turn:
 | screens linked to their endpoints | 87 of 119 | 8 of 8 | — |
 | tables with a module that uses them | 55 of 55 | 4 of 4 | 5 of 5 |
 | false failures on the unchanged repo | **0** | **0** | **0** |
-| `weave check` | ~1.1 s | 53 ms | 35 ms |
+| `weave check` | ~1.2 s | 63 ms | 35 ms |
 
 No configuration on any of them. Every number comes from [`bench/run.mjs`](bench/run.mjs),
 which fetches these repositories at fixed commits ([`bench/fetch.sh`](bench/fetch.sh)) and
@@ -143,9 +143,9 @@ and a generated wiki. A dropdown switches between every repo weave has indexed. 
 **The agent interface.** `weave mcp` gives Claude Code, Cursor, VS Code or opencode 14 tools.
 The one that matters is `context(files)`: the screen, endpoints, tables, owning spec, open
 tasks and the command that tests it, in a few hundred tokens. The whole schema costs every
-session 1,430 tokens:
+session 1,440 tokens:
 
-<img src="docs/img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 1,430 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
+<img src="docs/img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 1,440 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
 
 **The wiki.** `weave wiki` writes a page per screen, endpoint, module and table, stamped with
 the commit it describes; `weave wiki --check` fails when the pages are stale.

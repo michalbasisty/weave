@@ -71,14 +71,14 @@ written. It now compares with the last commit too.
 
 ## 4. Speed
 
-<img src="img/chart-speed.svg" alt="weave check wall time: documenso about 1.1 seconds, RealWorld Express + React 53 ms, RealWorld NestJS 35 ms." width="100%">
+<img src="img/chart-speed.svg" alt="weave check wall time: documenso about 1.2 seconds, RealWorld Express + React 63 ms, RealWorld NestJS 35 ms." width="100%">
 
 **Method.** `weave check` on a clean tree, which re-indexes and runs the gate; median of
 three runs after five fresh `weave index` runs. Linux, one process, no daemon.
 
 ## 5. Schema cost
 
-<img src="img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 1,430 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
+<img src="img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 1,440 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
 
 **Method.** weave's `tools/list` response, serialised, bytes ÷ 4. The other servers' figures
 are as published by their maintainers and not re-measured here. This is the one row where

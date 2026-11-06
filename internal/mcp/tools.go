@@ -81,7 +81,7 @@ var toolDefs = []tool{
 	},
 	{
 		Name:        "remember",
-		Description: "Keep a short note next to files for the next session: a decision, a gotcha, why a shape is odd. context() returns it, labelled as a note rather than evidence.",
+		Description: "Keep a short note next to files for the next session: a decision, a gotcha, why a shape is odd. Not what the map shows (owner, module, endpoints): context() has that. Returned as a note, not evidence.",
 		InputSchema: schema{Type: "object", Properties: props{
 			{"files", propDef{Type: "array", Items: &propDef{Type: "string"}, Description: "repo-relative paths"}},
 			{"note", propDef{Type: "string", Description: "at most a few sentences"}},
