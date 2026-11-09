@@ -1,6 +1,6 @@
 # Eval: does `context` change what an agent does?
 
-DESIGN.md names this as the unproven claim. `weave gain` counts the tokens weave
+This is weave's unproven claim. `weave gain` counts the tokens weave
 serves, not the tokens it saves, so it cannot answer it. This is the protocol that can.
 
 ## Question

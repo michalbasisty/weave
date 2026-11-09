@@ -61,11 +61,11 @@ weave           25 files ·   5 ep ·  1 changes    ~/code/weave
 Then work on any of them from anywhere — no `cd`, no paths:
 
 ```bash
-weave --project qrgent plan 2026-10-19-ui-restyle
+weave --project shopfront plan 2026-10-19-ui-restyle
 weave --project weave explore
 ```
 
-Names match loosely (`qrgent`, `QR-gent` and `qr-gent` are the same), a unique fragment is
+Names match loosely (`shopfront`, `Shop-Front` and `shop-front` are the same), a unique fragment is
 enough (`print`), and an ambiguous one is refused with the candidates listed.
 `weave forget <name>` drops one.
 
