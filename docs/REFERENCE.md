@@ -31,7 +31,7 @@ weave evidence [REQ...]    # which requirements a JUnit report proves
 weave doctor               # graph health and what it could not read
 weave perf    [--runs N]   # index timings over time
 weave projects             # every registered repo
-weave init    [--upgrade] [--hooks] [--only claude,cursor,vscode,opencode]
+weave init    [--upgrade] [--hooks] [--no-instructions] [--only claude,cursor,vscode,opencode]
 weave forget  <name>
 weave mcp     [--all]      # MCP server on stdio
 weave --version
@@ -91,9 +91,18 @@ and the server answers for the repo it was started in.
 
 `--only claude` (or `--only cursor,vscode`) writes just the ones you name.
 
-It also appends `.weave/` to `.gitignore` and prints the `claude mcp add` line plus an
-`AGENTS.md` snippet. `--upgrade` replaces only a stale `weave` entry; `--hooks` adds the
-Claude Code `Stop` hook that runs the gate at the end of a turn.
+It also appends `.weave/` to `.gitignore`, prints the `claude mcp add` line, and adds a short
+"Repo map (weave)" section to `CLAUDE.md` and `AGENTS.md` (created if missing, between
+`<!-- weave:start -->` and `<!-- weave:end -->`). The section says when to use which tool in
+the terms a task arrives in: `search` for a screen or behaviour, `impact` before a rename,
+`verify` before done, grep for a name you already know. The agent eval found that the server
+instructions alone did not change what agents reach for. `--no-instructions` skips it.
+
+`--upgrade` replaces only a stale `weave` entry or section. `--hooks` adds the gate at the end
+of a turn: the Claude Code `Stop` hook in `.claude/settings.json`, and for opencode (and front
+ends on it, such as OpenChamber) a plugin at `.opencode/plugins/weave.js`. On `session.idle`
+the plugin runs `weave check`; when it fails with something new it shows a toast and sends the
+failure back into the session, once per distinct failure.
 
 The server lists five tools: `context`, `impact`, `search`, `changed` and `verify`. In a
 repo with `specs/changes/` it adds `plan`, `changes`, `task_done`, `task_reopen`,

@@ -24,7 +24,7 @@ go install github.com/michalbasisty/weave/cmd/weave@latest   # or grab a binary 
 cd your-app
 weave check          # what the uncommitted change breaks; exit 1 if anything
 weave serve          # the map in your browser, every project you use in one dropdown
-weave init --hooks   # wire it into Claude Code, Cursor, VS Code, opencode
+weave init --hooks   # wire it into Claude Code, Cursor, VS Code, opencode, OpenChamber
 ```
 
 Binaries for macOS, Linux and Windows are on
@@ -119,8 +119,9 @@ anyone can rerun. Methods and the raw results are in
 
 ## Four ways in, one index
 
-**The gate.** `weave check` in a [Claude Code Stop hook](docs/REFERENCE.md#connecting-an-agent)
-(`weave init --hooks`), a pre-commit hook, or CI:
+**The gate.** `weave check` when the agent stops (`weave init --hooks` writes the
+[Claude Code Stop hook](docs/REFERENCE.md#connecting-an-agent) and an opencode plugin that
+OpenChamber runs too), in a pre-commit hook, or in CI:
 
 ```yaml
 # .github/workflows/weave.yml
@@ -144,7 +145,8 @@ and a generated wiki. A dropdown switches between every repo weave has indexed. 
 <img src="docs/img/screens/documenso-overview.png" alt="The panel's overview on documenso: the contract gate passes, 119 screens, 327 endpoints, 103 modules and 55 tables, all 312 frontend calls matched, and the next tests worth writing." width="100%">
 
 **The agent interface.** `weave mcp` gives Claude Code, Cursor, VS Code or opencode five tools,
-plus the spec tools in a repo that keeps change records.
+plus the spec tools in a repo that keeps change records. `weave init` also adds a short
+section to `CLAUDE.md` and `AGENTS.md` that says when to reach for them instead of grep.
 The one that matters is `context(files)`: the screen, endpoints, tables, owning spec, open
 tasks and the command that tests it, in a few hundred tokens. The whole schema costs every
 session 624 tokens:
@@ -162,6 +164,7 @@ the commit it describes; `weave wiki --check` fails when the pages are stale.
 | **Python and Go back ends** | FastAPI, Flask, Django and Django REST framework; gin, echo, chi, gorilla and net/http. The RealWorld React front end matches 18 of 18 calls against the Gin, Flask and Django back ends |
 | **Front ends** | React Router `<Route>` tables (lazy imports too), Next.js and Remix file routes; `fetch`, axios and any HTTP-like client, tRPC hooks, `gql` documents |
 | **Data** | Prisma, Drizzle, TypeORM |
+| **Agents** | Claude Code, Cursor, VS Code / Copilot, opencode and OpenChamber (MCP config, instructions, gate hook) |
 | **Monorepos** | workspace package names (`@acme/lib/…`) and tsconfig `paths` (`~/…`) |
 | **Anything else** | a one-line regex in [`.weave/patterns.json`](docs/REFERENCE.md#your-own-patterns) |
 

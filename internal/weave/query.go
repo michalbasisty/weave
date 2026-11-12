@@ -1381,6 +1381,7 @@ var searchWeight = map[string]int{
 // Search ranks named nodes against q, at most three per kind.
 func Search(g *Graph, q string, limit int) string {
 	needle := strings.ToLower(q)
+	words := searchWords(needle)
 	type hit struct {
 		n *GNode
 		s int
@@ -1403,6 +1404,8 @@ func Search(g *Graph, q string, limit int) string {
 			s = 3
 		case strings.Contains(strings.ToLower(metaText(n, "title")), needle):
 			s = 4
+		case len(words) > 0 && (len(words) > 1 || words[0] != needle):
+			s = wordScore(words, name, strings.ToLower(fileOf(n)+" "+metaText(n, "title")))
 		}
 		if s == 0 {
 			continue
@@ -1435,6 +1438,53 @@ func Search(g *Graph, q string, limit int) string {
 		}
 	}
 	return strings.Join(out, "\n")
+}
+
+// searchWords splits a plain-language query ("the inbox count") into the words
+// worth matching: three letters or more, no filler, a plural folded to its stem.
+func searchWords(q string) []string {
+	out := []string{}
+	for _, w := range strings.FieldsFunc(q, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9')
+	}) {
+		if len(w) < 3 || searchFiller[w] {
+			continue
+		}
+		if len(w) > 3 && strings.HasSuffix(w, "s") && !strings.HasSuffix(w, "ss") {
+			w = w[:len(w)-1]
+		}
+		out = append(out, w)
+	}
+	return out
+}
+
+var searchFiller = map[string]bool{
+	"the": true, "and": true, "for": true, "that": true, "this": true, "with": true, "which": true,
+	"what": true, "where": true, "who": true, "from": true, "into": true, "shows": true, "show": true,
+	"returns": true, "return": true, "endpoint": true, "screen": true, "procedure": true, "route": true,
+	"all": true, "every": true, "list": true, "lists": true, "get": true, "gets": true, "fetch": true, "call": true, "calls": true,
+}
+
+// wordScore matches the words of a multi-word query against a node: in its name
+// counts more than in its file or title, and at least one must be in the name.
+// Up to half the words may miss when two or more hit: people describe more
+// than a name holds.
+func wordScore(words []string, name, rest string) int {
+	s, miss := 0, 0
+	for _, w := range words {
+		switch {
+		case strings.Contains(name, w):
+			s += 3
+		case strings.Contains(rest, w):
+			s++
+		default:
+			miss++
+		}
+	}
+	if s < 3 || miss > 0 && (miss > len(words)/2 || len(words)-miss < 2) {
+		return 0
+	}
+	return s - 2*miss
 }
 
 // ---------------------------------------------------------------- doctor

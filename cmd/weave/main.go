@@ -157,7 +157,8 @@ func helpText() string {
   weave perf    [--runs N]      index timings over time, or N fresh runs
   weave init    [--upgrade]     connect Claude, Cursor, VS Code, opencode
   weave init    --only claude   write only the configs you name (claude,cursor,vscode,opencode)
-  weave init    --hooks         also install the Stop hook that runs the gate
+  weave init    --hooks         also run the gate when the agent stops (Claude Code, opencode)
+  weave init    --no-instructions  leave CLAUDE.md and AGENTS.md alone
   weave forget  <name>          drop a project from the list
   weave mcp                     MCP server on stdio (--all: serve every project)
   weave --version               the release version

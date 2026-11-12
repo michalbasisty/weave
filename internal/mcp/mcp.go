@@ -32,11 +32,11 @@ var supported = []string{"2024-11-05", "2025-03-26", "2025-06-18"}
 // spec tools join when the repo keeps change records; notes and status are CLI and
 // panel features unless the server runs with --all-tools.
 const instructions = "weave maps a repo: UI pages -> HTTP endpoints -> modules -> database tables, plus tests. " +
-	"Before editing a file, call context(files) once: page, endpoints, tables, owning change, open tasks, requirements, " +
-	"tests to run and the command to run them, in a few hundred tokens. Call impact(files) only when you need the complete list. " +
-	"Use search() instead of grepping directories; search(text: true) scans source lines when you need a literal string. " +
+	"When a task describes a screen, a URL or a behaviour rather than a file, call search(\"plain words\") first: it finds routes grep cannot, because their URL is joined from pieces. " +
+	"Then call context(files) on what you are about to open or edit: page, endpoints, tables, owning change, open tasks, tests to run and the command to run them, in a few hundred tokens. " +
+	"Before renaming or removing a route or procedure, call impact(files) for every caller instead of grepping for each. " +
+	"Grep is still the right tool for a symbol whose exact name you already know. " +
 	"changed() tells you what the graph gained or lost since a branch point. " +
-	"context(depth: \"code\") adds a short window at each anchor when you need the exact lines. " +
 	"Before saying a task is done, call verify(): it runs the gate on the diff, names the closest route for any broken call, and returns the commands that prove it. " +
 	"No tool returns whole files; text search returns matching lines only, and every output is capped."
 
