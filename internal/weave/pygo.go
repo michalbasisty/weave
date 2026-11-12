@@ -66,6 +66,9 @@ func isGo(rel string) bool     { return strings.HasSuffix(rel, ".go") }
 
 func isPyOrGoTest(rel string) bool {
 	base := path.Base(rel)
+	if strings.HasPrefix(rel, "tests/") || strings.Contains(rel, "/tests/") {
+		return true
+	}
 	return strings.HasSuffix(base, "_test.go") || strings.HasPrefix(base, "test_") || strings.HasSuffix(base, "_test.py") || base == "conftest.py"
 }
 
@@ -148,7 +151,9 @@ func stem(rel string) string { return strings.TrimSuffix(path.Base(rel), path.Ex
 func pyModule(rel string) string {
 	s := stem(rel)
 	switch s {
-	case "__init__", "routes", "views", "urls", "api", "endpoints", "main", "app":
+	case "__init__", "routes", "views", "urls", "api", "endpoints", "main", "app",
+		// the files a Django or Flask app splits itself into belong to the app
+		"models", "serializers", "relations", "signals", "backends", "admin", "forms", "managers", "renderers":
 		if d := path.Base(path.Dir(rel)); d != "." && d != "/" {
 			return d
 		}

@@ -20,6 +20,8 @@ node bench/charts.mjs               # redraws docs/img/chart-*.svg
 | RealWorld Gin + React: [back end](https://github.com/gothinkster/golang-gin-realworld-example-app) + the same front end | `a41289b` + `53b0b4c` | Go + Gin, React + Redux | 84 |
 | RealWorld Flask + React: [back end](https://github.com/gothinkster/flask-realworld-example-app) + the same front end | `4b95fb2` + `53b0b4c` | Python + Flask, React + Redux | 88 |
 | RealWorld Django + React: [back end](https://github.com/gothinkster/django-realworld-example-app) + the same front end | `29c9d42` + `53b0b4c` | Django REST framework, React + Redux | 103 |
+| RealWorld Rails + React: [back end](https://github.com/gothinkster/rails-realworld-example-app) + the same front end | `a2ae4ff` + `53b0b4c` | Ruby on Rails, React + Redux | 110 |
+| RealWorld Laravel + React: [back end](https://github.com/gothinkster/laravel-realworld-example-app) + the same front end | `e45c37c` + `53b0b4c` | Laravel, React + Redux | 173 |
 
 None of them is configured for weave: no `.weave/patterns.json`, no hints. The RealWorld
 halves are two upstream repositories copied side by side, the way a team that owns both
@@ -74,33 +76,37 @@ written. It now compares with the last commit too.
 
 ## 4. Speed
 
-<img src="img/chart-speed.svg" alt="weave check wall time: documenso about 1.3 seconds, RealWorld Express + React 55 ms, RealWorld NestJS 34 ms." width="100%">
+<img src="img/chart-speed.svg" alt="weave check wall time: documenso about 1.2 seconds, RealWorld Express + React 47 ms, RealWorld NestJS 37 ms." width="100%">
 
 **Method.** `weave check` on a clean tree, which re-indexes and runs the gate; median of
 three runs after five fresh `weave index` runs. Linux, one process, no daemon.
 
 ## 5. Schema cost
 
-<img src="img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 624 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
+<img src="img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 708 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
 
 **Method.** weave's `tools/list` response, serialised, bytes ÷ 4. The other servers' figures
 are as published by their maintainers and not re-measured here. This is the one row where
 every server is measured in the same unit: JSON schema that sits in context on every turn.
 
-## 6. Python and Go back ends
+## 6. Python, Go, Ruby and PHP back ends
 
-The three extra RealWorld pairs put the same React front end in front of a Gin, a Flask and
-a Django back end, so the only thing that changes is the server language.
+Five more RealWorld pairs put the same React front end in front of a Gin, a Flask, a Django, a
+Rails and a Laravel back end, so the only thing that changes is the server.
 
-| back end | endpoints | front-end calls matched | broken on the unchanged repo | grep finds the path |
-|---|---|---|---|---|
-| Gin (`router.Group("/api")`, groups passed into handler files) | 21 | 18 of 18 | 0 | 0 of 21 |
-| Flask (`Blueprint(url_prefix=…)`, `register_blueprint`) | 19 | 18 of 18 | 0 | 0 of 19 |
-| Django REST framework (`include()` chains, `router.register`) | 13 | 18 of 18 | 0 | 0 of 13 |
+| back end | endpoints | front-end calls matched | broken on the unchanged repo | grep finds the path | tables used by a module |
+|---|---|---|---|---|---|
+| Gin (`router.Group("/api")`, groups passed into handler files) | 21 | 18 of 18 | 0 | 0 of 21 | 7 of 7 (GORM) |
+| Flask (`Blueprint(url_prefix=…)`, `register_blueprint`) | 19 | 18 of 18 | 0 | 0 of 19 | 3 of 5 (SQLAlchemy) |
+| Django REST framework (`include()` chains, `router.register`) | 13 | 18 of 18 | 0 | 0 of 13 | 5 of 5 (Django ORM) |
+| Rails (`scope :api`, `resources … param: :slug`, nested `resource`) | 24 | 18 of 18 | 0 | 0 of 24 | — |
+| Laravel (`Route::group`, `Route::resource`, `routes/api.php` under `/api`) | 22 | 18 of 18 | 0 | 1 of 22 | — |
 
-Grep finds none of the paths because every one of them is joined from a prefix in one file
-and a route in another. Django's count is lower because one DRF `router.register` serves a
-whole viewset (list, detail and its actions) and is counted as two routes.
+Grep finds almost none of the paths because each is joined from a prefix and a route.
+Django's count is lower because one DRF `router.register` serves a whole viewset and is
+counted as two routes. In Flask, `comment` and `userprofile`
+are reached through relationships (`article.comments`), never queried by class name, so no module
+is linked to them. ActiveRecord and Eloquent models are not read yet, hence the dashes.
 
 ## Before and after the launch fixes
 

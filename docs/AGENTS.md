@@ -83,3 +83,18 @@ The log's own lesson, applied: `context` took 62% of calls and nothing outside
 - **`status` left too**: it repeated the panel's overview at 416 tokens a call.
 - Hidden tools still answer if an agent calls one by name, and `weave mcp --all-tools`
   shows every tool.
+
+## 2026-11-12: what 72 eval sessions changed
+
+[`EVAL.md`](EVAL.md#second-round-72-sessions) ran twelve behaviour-described tasks with and
+without weave. Success was equal (36 of 36); the weave arm used more tokens on rule changes
+(+75%) and renames (+61%), because each weave call is a turn and the agent read the same
+files afterwards. It saved 43% on an impact question that took the baseline a dozen searches.
+
+- **`weave init` writes a "when to use weave" section** into `CLAUDE.md` and `AGENTS.md`,
+  scoped to where it pays: who calls an endpoint, where a described thing lives, every caller
+  before a rename. It says to skip weave for a one-file edit. `--no-instructions` skips it.
+- **`context` and the server instructions stopped saying "before every edit"**, and stopped
+  asking for `verify` before done: the Stop hook (Claude Code) and `.opencode/plugins/weave.js`
+  (opencode, OpenChamber) run the gate without spending a turn.
+- **`search` takes plain words**: "inbox count" finds `document.inbox.getCount`.

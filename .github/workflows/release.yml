@@ -31,6 +31,8 @@ jobs:
               -ldflags "-s -w -X github.com/michalbasisty/weave/internal/version.Version=${GITHUB_REF_NAME#v}" \
               -o "dist/weave-$os-$arch$ext" ./cmd/weave
           done
+          # the OpenChamber extension, installable from its release URL (Settings → Extensions)
+          (cd extensions && zip -qr ../dist/weave-openchamber.zip openchamber)
           cd dist
           sha256sum * > checksums.txt
           cat checksums.txt

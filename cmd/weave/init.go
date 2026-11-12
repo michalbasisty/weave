@@ -216,6 +216,44 @@ func cmdInit() int {
 		}
 	}
 
+	// Agents reach for grep unless the repo tells them when weave is the better
+	// tool; the eval showed the server instructions alone are not enough.
+	if !hasFlag("no-instructions") {
+		files := []string{}
+		if want["claude"] {
+			files = append(files, "CLAUDE.md")
+		}
+		if want["opencode"] || want["cursor"] || want["vscode"] || pathExists(filepath.Join(root, "AGENTS.md")) {
+			files = append(files, "AGENTS.md")
+		}
+		for _, rel := range files {
+			switch r := writeAgentBlock(filepath.Join(root, rel), upgrade); r {
+			case "":
+			case "kept":
+				skipped = append(skipped, rel+" (weave section already there)")
+			case "unwritable":
+				skipped = append(skipped, rel+" (unwritable)")
+			default:
+				did = append(did, rel+" "+r)
+			}
+		}
+	}
+
+	// The opencode plugin is the Stop hook for opencode and everything built on it
+	// (OpenChamber included): it runs the gate when the agent goes idle.
+	if hasFlag("hooks") && want["opencode"] {
+		rel := filepath.Join(".opencode", "plugins", "weave.js")
+		p := filepath.Join(root, rel)
+		switch {
+		case pathExists(p) && !upgrade:
+			skipped = append(skipped, rel+" (exists)")
+		case os.MkdirAll(filepath.Dir(p), 0o755) != nil || os.WriteFile(p, []byte(openCodePlugin(exe)), 0o644) != nil:
+			skipped = append(skipped, rel+" (unwritable)")
+		default:
+			did = append(did, rel+" (gate when the agent stops)")
+		}
+	}
+
 	gi := filepath.Join(root, ".gitignore")
 	if pathExists(gi) {
 		text, err := os.ReadFile(gi)
@@ -244,14 +282,11 @@ serve every registered project from one MCP entry (no per-repo config):
   claude mcp add weave -- "%s" mcp --all
   then: context/plan/impact take an optional "project" argument (names from `+"`weave projects`"+`).
 
-agents that read AGENTS.md, paste this:
-  ## Repo map
-  Before editing any file, call weave's context(files) once. It returns the page,
-  endpoints, tables, owning spec change, open tasks, the tests to run and the
-  command to run them. Use impact(files) for the full blast radius.
+CLAUDE.md and AGENTS.md get a short "when to use weave" section (skip with --no-instructions).
 
 enforce it without the agent's cooperation (any of these, same command):
   claude code      : weave init --hooks   (writes a Stop hook that runs the gate)
+  opencode         : weave init --hooks   (.opencode/plugins/weave.js; OpenChamber too)
   git pre-commit   : "%s" check --root .
   kiro hook        : .kiro/hooks/weave.json  -> trigger PostFileSave, same command
   ci               : "%s" index --root . && "%s" check --root .

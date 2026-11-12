@@ -4,6 +4,7 @@
 #
 #   bench/eval/run.sh <repo> <out-dir> [runs] [model]
 #   TASKS=bench/eval/tasks-documenso.jsonl bench/eval/run.sh bench/repos/documenso …
+#   NO_INIT=1 …   the weave arm without the CLAUDE.md section init writes (the first pilot)
 #
 # Needs the `claude` CLI signed in, `weave` on PATH (or WEAVE=/path), jq and git.
 # Every run costs real tokens: runs=1 over the four tasks is eight sessions.
@@ -28,6 +29,12 @@ while IFS= read -r task; do
       allowed=$tools
       if [ "$arm" = weave ]; then
         "$weave" index --root . >/dev/null
+        # what `weave init` installs is part of the arm: the CLAUDE.md section that
+        # says when to use which tool. Committed, so it is not counted as a change.
+        if [ -z "${NO_INIT:-}" ]; then
+          "$weave" init --only claude --root . >/dev/null
+          git add -A && git -c user.name=eval -c user.email=eval@localhost commit --quiet -m "weave init"
+        fi
         printf '{"mcpServers":{"weave":{"command":"%s","args":["mcp","--root","."]}}}' "$weave" > "$work/mcp.json"
         allowed="$allowed,mcp__weave"
       else
