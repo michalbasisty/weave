@@ -315,7 +315,8 @@ func TestMCPAndGain(t *testing.T) {
 	for _, tl := range list.Result.Tools {
 		names = append(names, tl.Name)
 	}
-	if strings.Join(names, ",") != "context,impact,search,remember,recall,plan,changes,task_done,task_reopen,change_new,change_delete,changed,verify,status" {
+	// the fixture keeps change records, so the spec tools join the five core ones
+	if strings.Join(names, ",") != "context,impact,search,plan,changes,task_done,task_reopen,change_new,change_delete,changed,verify" {
 		t.Fatalf("tools: %v", names)
 	}
 	if !strings.Contains(lines[2], "GET /api/v1/orders") || !strings.Contains(lines[2], "tokens") {
