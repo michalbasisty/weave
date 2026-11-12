@@ -95,6 +95,11 @@ It also appends `.weave/` to `.gitignore` and prints the `claude mcp add` line p
 `AGENTS.md` snippet. `--upgrade` replaces only a stale `weave` entry; `--hooks` adds the
 Claude Code `Stop` hook that runs the gate at the end of a turn.
 
+The server lists five tools: `context`, `impact`, `search`, `changed` and `verify`. In a
+repo with `specs/changes/` it adds `plan`, `changes`, `task_done`, `task_reopen`,
+`change_new` and `change_delete`. `remember`, `recall` and `status` are CLI and panel
+features; they still answer if an agent calls them, and `weave mcp --all-tools` lists them.
+
 Manual, if you prefer the absolute path (an MCP client spawns the server with its own
 `PATH`):
 
@@ -104,7 +109,7 @@ claude mcp add weave -- /abs/path/weave mcp --root .
 
 ## What it extracts, and how exact it is
 
-weave reads every JavaScript, TypeScript, GraphQL, Prisma, JSON and Markdown file
+weave reads every JavaScript, TypeScript, Python, Go, GraphQL, Prisma, JSON and Markdown file
 except what git ignores (`.gitignore` at any depth, `.git/info/exclude`, global
 excludes), so generated clients and build output never show up as modules.
 
@@ -117,6 +122,11 @@ excludes), so generated clients and build output never show up as modules.
 | `quotes: { list: procedure.query(…) }`, `list: publicProcedure.input(z…).query(…)` → `QUERY /api/trpc/quotes.list` | tRPC routers, across lines | exact |
 | `team: teamRouter` + `find: findTeamsRoute` in other files → `QUERY /api/trpc/team.find` | tRPC routers split across files: aliases, nested objects, imported procedures | exact |
 | `openapi.json` / `swagger.json` / any `.json` with `openapi`+`paths` | any language's spec | exact |
+| `@router.get("/items/{id}")` with `APIRouter(prefix=…)` and `include_router(…, prefix=…)` → `GET /items/:id` | FastAPI | exact |
+| `@bp.route("/users/<int:id>", methods=[…])` with `Blueprint(url_prefix=…)` | Flask | exact |
+| `path("api/", include("shop.urls"))`, `re_path(r'^tags/?$', …)`, `router.register(r'orders', …)` → `ANY /api/orders/` and `/api/orders/:pk/` | Django and Django REST framework URLconfs, following `include()` | exact |
+| `v1 := r.Group("/api")`, `v1.GET("/users/:id")`, a group passed to `func Register(r *gin.RouterGroup)` | gin, echo, gorilla `PathPrefix` | exact |
+| `r.Route("/orders", func(r chi.Router) { r.Get("/{id}", …) })`, `mux.HandleFunc("GET /reports/{id}", …)` | chi, net/http (Go 1.22 patterns) | exact |
 | your own wrapper, via `.weave/patterns.json` | one regex per rule | exact |
 | `api.get('/orders')`, ``api.get(`/orders/${id}`)``, `requests.post('/users')`, `apiClient.get('/x')` → endpoint | client call sites; any receiver named like an HTTP client (`api`, `http`, `client`, `request`, `fetch`, `agent`) | exact / inferred |
 | ``api.put(`/tasks/${id}/${action}`)`` with `action: 'start' \| 'stop'` (inline or a `type` alias) → `PUT /tasks/:id/start` and `/stop` | a literal-union segment is one call per value; a value no route serves is a broken call. Untyped, a variable last segment over two or more fixed routes is a choice between them | exact / inferred |
@@ -309,8 +319,10 @@ renamed route, the Stop hook, explore, wiki, MCP, gain and init.
 ## Known limits
 
 - Express, Fastify, NestJS, Next.js, Remix / React Router v7 file routes, React Router
-  `<Route>` tables, tRPC routers, GraphQL and OpenAPI JSON specs; Prisma, Drizzle and TypeORM
-  tables. SvelteKit needs a `.weave/patterns.json` rule (see [Your own patterns](#your-own-patterns)); the coverage block
+  `<Route>` tables, tRPC routers, GraphQL and OpenAPI JSON specs; FastAPI, Flask, Django and
+  Django REST framework; gin, echo, chi, gorilla and net/http; Prisma, Drizzle and TypeORM
+  tables. Python and Go models (SQLAlchemy, Django ORM, GORM) are not read yet, and a Go
+  router mounted through a variable (`r.Mount("/api", api())`) loses its prefix. SvelteKit needs a `.weave/patterns.json` rule (see [Your own patterns](#your-own-patterns)); the coverage block
   names what was skipped.
 - An OpenAPI spec is read in JSON only, up to 4 MB. A YAML spec is named in the coverage
   block, never guessed at.

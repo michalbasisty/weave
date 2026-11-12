@@ -52,6 +52,18 @@ Set before the first run, so the result cannot be reinterpreted afterwards:
 
 ## Running it
 
-The harness is a shell script, not part of the binary: it drives `claude -p` or
-`opencode run`, writes one JSONL line per run, and a `weave eval report` sums it.
-Keeping it out of the Go binary keeps the zero-runtime-dependency rule intact.
+The harness is a shell script, not part of the binary, so the zero-runtime-dependency
+rule holds:
+
+```bash
+bench/fetch.sh                                   # the RealWorld repo, among others
+WEAVE=./weave bench/eval/run.sh bench/repos/realworld /tmp/eval 3 sonnet
+node bench/eval/report.mjs /tmp/eval
+```
+
+`run.sh` takes each task in [`bench/eval/tasks.jsonl`](../bench/eval/tasks.jsonl), clones
+the repo fresh for every run, and drives `claude -p` twice: once with no MCP server, once
+with `weave mcp`. The agent gets file tools and a short command list (`git diff`, `npx
+jest`, `npm test`), never a blanket permission bypass. Each run leaves its transcript,
+the `weave check` result on the tree it left, the files it changed and its diff.
+`report.mjs` reads those and applies the decision rule above.

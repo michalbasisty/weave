@@ -23,22 +23,50 @@ func Closest(g *Graph, call string) string {
 		if !ok {
 			continue
 		}
-		d := levenshtein(want, shapeOf(p))
+		shape := shapeOf(p)
+		d := levenshtein(want, shape)
 		if m != method && m != "ANY" && method != "ANY" {
 			d += 3
 		}
-		if d < bestD || (d == bestD && n.Name < best) {
+		// close enough to be a guess: a small edit, or a rename that kept the stem
+		// (`/tags` → `/tag-list`)
+		limit := len(want) * 2 / 5
+		if limit < 3 {
+			limit = 3
+		}
+		if d > limit && !sameStem(want, shape) {
+			continue
+		}
+		if best == "" || d < bestD || (d == bestD && n.Name < best) {
 			best, bestD = n.Name, d
 		}
 	}
-	limit := len(want) * 2 / 5
-	if limit < 3 {
-		limit = 3
-	}
-	if best == "" || bestD > limit || bestD == 0 && best == call {
+	if best == call {
 		return ""
 	}
 	return best
+}
+
+// sameStem: the last fixed segments share a prefix of three letters or more, and
+// everything before them is the same shape.
+func sameStem(a, b string) bool {
+	as, bs := strings.Split(a, "/"), strings.Split(b, "/")
+	if len(as) != len(bs) {
+		return false
+	}
+	last := len(as) - 1
+	for last >= 0 && as[last] == ":" && bs[last] == ":" {
+		last--
+	}
+	if last < 0 || strings.Join(as[:last], "/") != strings.Join(bs[:last], "/") {
+		return false
+	}
+	x, y := as[last], bs[last]
+	n := 0
+	for n < len(x) && n < len(y) && x[n] == y[n] {
+		n++
+	}
+	return n >= 3 && x != y
 }
 
 // shapeOf writes every variable segment the same way, so `/tasks/${id}` and

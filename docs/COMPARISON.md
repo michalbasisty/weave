@@ -78,7 +78,7 @@ three runs after five fresh `weave index` runs. Linux, one process, no daemon.
 
 ## 5. Schema cost
 
-<img src="img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 1,440 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
+<img src="img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 624 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
 
 **Method.** weave's `tools/list` response, serialised, bytes ÷ 4. The other servers' figures
 are as published by their maintainers and not re-measured here. This is the one row where

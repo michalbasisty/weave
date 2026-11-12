@@ -32,18 +32,18 @@ Binaries for macOS, Linux and Windows are on
 
 ## What it catches
 
-Rename `GET /tags` in the RealWorld Express back end, leave the React front end alone:
+Rename `GET /tags` to `/tag-list` in the RealWorld Express back end, leave the React front end alone:
 
 ```console
 $ weave check
 check: 1 file(s) → 1 endpoint(s), 0 page(s), 1 test(s), 1 endpoint(s) removed
-  FAIL removed endpoint still called: GET /tags from frontend/src/agent.js:218
+  FAIL removed endpoint still called: GET /tags from frontend/src/agent.js:218 (closest now: GET /tag-list)
   warn no spec change record names these files
   warn 1 touched endpoint(s) have no direct test
   run  cd backend && npx jest src/tests/services/tag.service.test.ts
 ```
 
-Exit code 1, the caller's line, and the tests to run. Nothing in the type system sees this:
+Exit code 1, the caller's line, the route it most likely meant, and the tests to run. Nothing in the type system sees this:
 the route and its caller only share a string. In a pull request, the bundled GitHub Action
 posts the same report, with the screens that lose their data:
 
@@ -140,12 +140,13 @@ and a generated wiki. A dropdown switches between every repo weave has indexed. 
 
 <img src="docs/img/screens/documenso-overview.png" alt="The panel's overview on documenso: the contract gate passes, 119 screens, 327 endpoints, 103 modules and 55 tables, all 312 frontend calls matched, and the next tests worth writing." width="100%">
 
-**The agent interface.** `weave mcp` gives Claude Code, Cursor, VS Code or opencode 14 tools.
+**The agent interface.** `weave mcp` gives Claude Code, Cursor, VS Code or opencode five tools,
+plus the spec tools in a repo that keeps change records.
 The one that matters is `context(files)`: the screen, endpoints, tables, owning spec, open
 tasks and the command that tests it, in a few hundred tokens. The whole schema costs every
-session 1,440 tokens:
+session 624 tokens:
 
-<img src="docs/img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 1,440 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
+<img src="docs/img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 624 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
 
 **The wiki.** `weave wiki` writes a page per screen, endpoint, module and table, stamped with
 the commit it describes; `weave wiki --check` fails when the pages are stale.
@@ -155,6 +156,7 @@ the commit it describes; `weave wiki --check` fails when the pages are stale.
 | | |
 |---|---|
 | **Back ends** | Express, Fastify, NestJS, Next.js route handlers (app and pages), Remix / React Router v7 resource routes, tRPC (routers across files), GraphQL (SDL, NestJS resolvers, Pothos, Nexus), OpenAPI JSON |
+| **Python and Go back ends** | FastAPI, Flask, Django and Django REST framework; gin, echo, chi, gorilla and net/http. The RealWorld React front end matches 18 of 18 calls against the Gin, Flask and Django back ends |
 | **Front ends** | React Router `<Route>` tables (lazy imports too), Next.js and Remix file routes; `fetch`, axios and any HTTP-like client, tRPC hooks, `gql` documents |
 | **Data** | Prisma, Drizzle, TypeORM |
 | **Monorepos** | workspace package names (`@acme/lib/…`) and tsconfig `paths` (`~/…`) |
@@ -168,7 +170,9 @@ of trusting a confident wrong answer.
 
 - It reads source, it does not run it. A URL assembled at runtime from configuration is
   reported as unknowable, not guessed.
-- JavaScript and TypeScript only. Python, Go, Ruby and PHP back ends are not read yet.
+- Front ends are JavaScript and TypeScript; back ends are JavaScript, TypeScript, Python and Go.
+  Ruby, PHP, Java and .NET back ends are not read yet, and neither are SQLAlchemy, Django or
+  GORM models.
 - Whether `context` changes what an agent does over a whole task is not measured yet; the
   protocol is in [`docs/EVAL.md`](docs/EVAL.md). The numbers above are about weave's answers,
   not agent outcomes.
