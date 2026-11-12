@@ -1,8 +1,9 @@
 // weave for OpenChamber: the local service behind the "weave gate" Work Status
-// section. OpenChamber starts it on 127.0.0.1 and draws what GET /status answers.
+// section (GET /status, drawn by the app) and the weave panel (/overview, /search,
+// /context, /impact). OpenChamber starts it on 127.0.0.1.
 // It runs the weave binary already on this machine; it has no dependencies.
 import { execFile } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -96,6 +97,62 @@ const check = async (dir, force) => {
   return result;
 };
 
+// ---------------------------------------------------------------- the panel
+
+// The map is rebuilt only when the tree moves, like the gate.
+const indexed = new Map(); // dir -> print
+const ensureIndex = async (weave, dir) => {
+  const print = await fingerprint(dir);
+  if (indexed.get(dir) === print && existsSync(path.join(dir, '.weave', 'graph.json'))) return;
+  await run(weave, ['index', '--root', dir], dir, 120_000);
+  indexed.set(dir, print);
+};
+
+const readGraph = (dir) => JSON.parse(readFileSync(path.join(dir, '.weave', 'graph.json'), 'utf8'));
+
+export const overview = (g) => {
+  const count = (k) => g.nodes.filter((n) => n.kind === k).length;
+  const calls = new Map();
+  for (const e of g.edges) if (e.kind === 'calls') calls.set(e.from, (calls.get(e.from) ?? 0) + 1);
+  const pages = g.nodes.filter((n) => n.kind === 'page')
+    .map((n) => ({ name: n.name, file: n.file ?? '', endpoints: calls.get(n.id) ?? 0 }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { screens: count('page'), endpoints: count('endpoint'), modules: count('module'), tables: count('table'), pages };
+};
+
+// "endpoint  GET /tags  backend/src/app/routes/tag/tag.controller.ts"
+export const parseSearch = (out) => out.split('\n').filter((l) => l.trim() && !l.startsWith('nothing matched')).map((l) => {
+  const kind = l.slice(0, l.indexOf(' '));
+  const [name = '', file = ''] = l.slice(kind.length).trim().split(/\s{2,}/);
+  return { kind, name, file };
+});
+
+const safeFile = (dir, file) => !!file && !file.startsWith('-') && !path.isAbsolute(file) && !file.split(/[\\/]/).includes('..') && existsSync(path.join(dir, file));
+
+const panel = async (url, dir) => {
+  const weave = findWeave();
+  if (!weave) return [200, { error: 'weave is not installed on this machine.' }];
+  await ensureIndex(weave, dir);
+  switch (url.pathname) {
+    case '/overview':
+      try { return [200, overview(readGraph(dir))]; } catch { return [200, { error: 'weave could not index this project.' }]; }
+    case '/search': {
+      const q = (url.searchParams.get('q') ?? '').slice(0, 200).replace(/^-+/, ''); // never a flag
+      if (!q.trim()) return [200, { hits: [] }];
+      const r = await run(weave, ['search', q, '--root', dir], dir, 30_000);
+      return [200, { hits: parseSearch(r.out).slice(0, 40) }];
+    }
+    case '/context':
+    case '/impact': {
+      const file = url.searchParams.get('file') ?? '';
+      if (!safeFile(dir, file)) return [400, { message: 'no such file in this project' }];
+      const r = await run(weave, [url.pathname.slice(1), file, '--root', dir], dir, 30_000);
+      return [200, { text: r.out.trim() }];
+    }
+  }
+  return [404, { message: 'not found' }];
+};
+
 const json = (res, status, body) => {
   res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(body));
@@ -105,8 +162,14 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.authorization !== `Bearer ${token}`) return json(res, 401, { message: 'unauthorized' });
   const url = new URL(req.url ?? '/', 'http://127.0.0.1');
   if (url.pathname === '/health') return json(res, 200, { ok: true });
-  if (url.pathname !== '/status') return json(res, 404, { message: 'not found' });
   const dir = url.searchParams.get('directory') ?? '';
+  if (['/overview', '/search', '/context', '/impact'].includes(url.pathname)) {
+    if (req.method !== 'GET') return json(res, 405, { message: 'method not allowed' });
+    if (!path.isAbsolute(dir) || !existsSync(dir)) return json(res, 400, { message: 'open a project first' });
+    const [status, body] = await panel(url, dir);
+    return json(res, status, body);
+  }
+  if (url.pathname !== '/status') return json(res, 404, { message: 'not found' });
   if (!path.isAbsolute(dir) || !existsSync(dir)) {
     return json(res, 200, { rows: [{ kind: 'note', id: 'no-project', text: 'Open a project to run the gate on it.', tone: 'muted' }] });
   }
