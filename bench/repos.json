@@ -20,5 +20,26 @@
     "url": "https://github.com/lujakob/nestjs-realworld-example-app",
     "commit": "c1c2cc4",
     "stack": "NestJS + TypeORM API"
+  },
+  {
+    "name": "RealWorld (Gin + React)",
+    "dir": "realworld-gin",
+    "url": "https://github.com/gothinkster/golang-gin-realworld-example-app + https://github.com/khaledosman/react-redux-realworld-example-app",
+    "commit": "a41289b + 53b0b4c",
+    "stack": "Go + Gin backend, React + Redux front end"
+  },
+  {
+    "name": "RealWorld (Flask + React)",
+    "dir": "realworld-flask",
+    "url": "https://github.com/gothinkster/flask-realworld-example-app + https://github.com/khaledosman/react-redux-realworld-example-app",
+    "commit": "4b95fb2 + 53b0b4c",
+    "stack": "Python + Flask backend, React + Redux front end"
+  },
+  {
+    "name": "RealWorld (Django + React)",
+    "dir": "realworld-django",
+    "url": "https://github.com/gothinkster/django-realworld-example-app + https://github.com/khaledosman/react-redux-realworld-example-app",
+    "commit": "29c9d42 + 53b0b4c",
+    "stack": "Python + Django REST framework backend, React + Redux front end"
   }
 ]
