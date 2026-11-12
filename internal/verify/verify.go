@@ -163,7 +163,11 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 			if i == 4 {
 				break
 			}
-			parts = append(parts, fmt.Sprintf("%s from %s", b.gone, locNode(b.call)))
+			part := fmt.Sprintf("%s from %s", b.gone, locNode(b.call))
+			if c := weave.Closest(g, b.gone); c != "" {
+				part += " (closest now: " + c + ")"
+			}
+			parts = append(parts, part)
 		}
 		errors = append(errors, "removed endpoint still called: "+strings.Join(parts, "; "))
 	}
@@ -177,7 +181,14 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 
 	if f != nil {
 		if len(f.Orphans) > 0 {
-			errors = append(errors, fmt.Sprintf("call site(s) in changed files match no endpoint: %s", strings.Join(head(f.Orphans, 4), ", ")))
+			var shown []string
+			for _, o := range head(f.Orphans, 4) {
+				if c := weave.Closest(g, o); c != "" {
+					o += " (closest: " + c + ")"
+				}
+				shown = append(shown, o)
+			}
+			errors = append(errors, fmt.Sprintf("call site(s) in changed files match no endpoint: %s", strings.Join(shown, ", ")))
 		}
 		if len(f.Suspect) > 0 {
 			warnings = append(warnings, fmt.Sprintf("requirement text changed, code not re-checked: %s", strings.Join(head(f.Suspect, 4), ", ")))
