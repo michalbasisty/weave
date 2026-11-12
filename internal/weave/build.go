@@ -57,6 +57,7 @@ func BuildGraph(root string) *Graph {
 	apiStats := ExtractOpenAPI(files, b)
 	nestEndpoints := ExtractNestAndFastify(files, b)
 	gqlEndpoints, gqlCalls := ExtractGraphQL(files, b)
+	pyGoEndpoints := ExtractPythonGo(files, b)
 
 	// Patterns from .weave/patterns.json: the escape hatch for a team's own wrapper.
 	pat := CompilePatterns(LoadPatterns(root))
@@ -71,7 +72,7 @@ func BuildGraph(root string) *Graph {
 	}
 
 	var allEndpoints []Endpoint
-	for _, list := range [][]Endpoint{endpoints, nestEndpoints, gqlEndpoints, nextStats.Endpoints, trpcStats.Endpoints, apiStats.Endpoints, customEndpoints} {
+	for _, list := range [][]Endpoint{endpoints, nestEndpoints, gqlEndpoints, pyGoEndpoints, nextStats.Endpoints, trpcStats.Endpoints, apiStats.Endpoints, customEndpoints} {
 		allEndpoints = append(allEndpoints, list...)
 	}
 	ExtractModels(t.Prisma, b, files)

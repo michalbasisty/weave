@@ -68,3 +68,18 @@ The log above still describes the ten-tool server that month was measured on. Si
 - **`verify` joined the surface.** One call returns what `weave check` prints on the diff
   plus the commands that prove it, so a self-check costs one call instead of none.
 - The surface is now 14 tools and 1,440 tokens.
+
+## 2026-11-12: five tools by default
+
+The log's own lesson, applied: `context` took 62% of calls and nothing outside
+`context`, `impact`, `search`, `changed` and `verify` reached three.
+
+- **`tools/list` shows those five** (624 tokens). The six spec tools (`plan`, `changes`,
+  `task_done`, `task_reopen`, `change_new`, `change_delete`) join when the repo has
+  `specs/changes/`, because that is the only place they mean anything.
+- **Notes are for people.** `remember` and `recall` left the schema: in a real repo 18 of
+  20 notes were agent-written `Owner:` lines. People write notes with `weave remember` or
+  the panel; `context` still returns them.
+- **`status` left too**: it repeated the panel's overview at 416 tokens a call.
+- Hidden tools still answer if an agent calls one by name, and `weave mcp --all-tools`
+  shows every tool.

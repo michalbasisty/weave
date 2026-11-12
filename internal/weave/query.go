@@ -862,7 +862,14 @@ func Context(g *Graph, inputs []string, budgetTokens float64, depth string) stri
 		push("reqs      " + strings.Join(head(f.Reqs, 5), ", "))
 	}
 	if len(f.Orphans) > 0 {
-		s := "BROKEN    " + strings.Join(head(f.Orphans, 3), "; ")
+		var shown []string
+		for _, o := range head(f.Orphans, 3) {
+			if c := Closest(g, o); c != "" {
+				o += " (closest: " + c + ")"
+			}
+			shown = append(shown, o)
+		}
+		s := "BROKEN    " + strings.Join(shown, "; ")
 		if len(f.Orphans) > 3 {
 			s += " +" + strconv.Itoa(len(f.Orphans)-3)
 		}

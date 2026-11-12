@@ -174,16 +174,32 @@ var toolDefs = []tool{
 	},
 }
 
-func visibleTools(multi, manager bool) []tool {
+// coreTools are in every session. The usage log: context took 62% of calls, and
+// no tool outside these five reached three.
+var coreTools = map[string]bool{"context": true, "impact": true, "search": true, "changed": true, "verify": true}
+
+var specTools = map[string]bool{"plan": true, "changes": true, "task_done": true, "task_reopen": true, "change_new": true, "change_delete": true}
+
+func visibleTools(multi, manager, specs, full bool) []tool {
 	base := make([]tool, 0, len(toolDefs))
 	for _, t := range toolDefs {
-		if manager {
+		switch {
+		case manager:
 			if t.Name != "ask" && t.Name != "plan" && t.Name != "status" {
 				continue
 			}
-		} else if t.Name == "ask" {
+		case t.Name == "ask":
 			// ask stays a CLI command: the usage log never called it, and a tool that
 			// costs a model call should not sit in every session's schema.
+			continue
+		case full, coreTools[t.Name]:
+		case specTools[t.Name]:
+			if !specs {
+				continue
+			}
+		default:
+			// remember, recall, status: notes are for people (weave remember, the
+			// panel), and status repeats the panel's overview
 			continue
 		}
 		base = append(base, t)

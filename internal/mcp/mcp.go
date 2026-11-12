@@ -28,18 +28,37 @@ const protocol = "2024-11-05"
 
 var supported = []string{"2024-11-05", "2025-03-26", "2025-06-18"}
 
-const instructions = "weave maps a repo: UI pages -> HTTP endpoints -> modules -> database tables, plus spec change records and tests. " +
-	"If the work comes from a spec change, call plan(slug) first: it returns the next task with its files, endpoints and the command to run. " +
-	"When that task is finished, call task_done(change, task) instead of editing tasks.md; task_reopen(change, task) undoes a tick. " +
-	"Start a change with change_new(name); change_delete(change, confirm: true) removes one and cannot be undone. " +
-	"Before editing any other file, call context(files) once: page, endpoints, tables, owning change, open tasks, requirements, " +
+// The instructions name only the tools a session sees. Five are always there; the
+// spec tools join when the repo keeps change records; notes and status are CLI and
+// panel features unless the server runs with --all-tools.
+const instructions = "weave maps a repo: UI pages -> HTTP endpoints -> modules -> database tables, plus tests. " +
+	"Before editing a file, call context(files) once: page, endpoints, tables, owning change, open tasks, requirements, " +
 	"tests to run and the command to run them, in a few hundred tokens. Call impact(files) only when you need the complete list. " +
 	"Use search() instead of grepping directories; search(text: true) scans source lines when you need a literal string. " +
 	"changed() tells you what the graph gained or lost since a branch point. " +
-	"Call remember(files, note) after you learn something the next session needs; context() returns those notes, labelled as claims, not evidence. " +
 	"context(depth: \"code\") adds a short window at each anchor when you need the exact lines. " +
-	"Before saying a task is done, call verify(): it runs the gate on the diff and returns the commands that prove it. " +
+	"Before saying a task is done, call verify(): it runs the gate on the diff, names the closest route for any broken call, and returns the commands that prove it. " +
 	"No tool returns whole files; text search returns matching lines only, and every output is capped."
+
+const specInstructions = " This repo keeps spec change records. If the work comes from one, call plan(slug) first: it returns the next task with its files, endpoints and the command to run. " +
+	"When that task is finished, call task_done(change, task) instead of editing tasks.md; task_reopen(change, task) undoes a tick. " +
+	"Start a change with change_new(name); change_delete(change, confirm: true) removes one and cannot be undone."
+
+const noteInstructions = " Call remember(files, note) only for a decision or gotcha the code cannot show; context() returns those notes, labelled as claims, not evidence."
+
+// FullToolset shows every tool, notes and status included (`weave mcp --all-tools`).
+var FullToolset bool
+
+// hasSpecs reports whether the session's repo keeps change records, which is when
+// the spec tools are worth their schema.
+func hasSpecs(src GraphSource) bool {
+	g, err := src("")
+	if err != nil || g == nil || g.Root == "" {
+		return false
+	}
+	st, err := os.Stat(filepath.Join(g.Root, "specs", "changes"))
+	return err == nil && st.IsDir()
+}
 
 type GraphSource func(project string) (*weave.Graph, error)
 
@@ -160,7 +179,14 @@ func handle(line string, src GraphSource, multi, manager bool, invalidate func()
 				break
 			}
 		}
+		specs := multi || FullToolset || hasSpecs(src)
 		ins := instructions
+		if specs {
+			ins += specInstructions
+		}
+		if FullToolset {
+			ins += noteInstructions
+		}
 		if manager {
 			ins = "This is a repo manager, not a repo. Call ask(question) for anything that needs reasoning over the codebase: a cheap model answers in a few lines and names the facts it used. Call plan(slug) for the next task and status() for health. No tool returns file contents — if you need code, read the file yourself with your own tools."
 		} else if multi {
@@ -170,7 +196,7 @@ func handle(line string, src GraphSource, multi, manager bool, invalidate func()
 	case "tools/list":
 		reply(struct {
 			Tools []tool `json:"tools"`
-		}{visibleTools(multi, manager)})
+		}{visibleTools(multi, manager, multi || FullToolset || hasSpecs(src), FullToolset)})
 	case "resources/list", "resources/templates/list":
 		reply(struct {
 			Resources         []any `json:"resources"`

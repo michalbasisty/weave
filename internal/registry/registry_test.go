@@ -10,7 +10,7 @@ import (
 // Produced by running src/registry.ts table() via node (Node 24.16.0).
 const goldenTable = "name     size                                path\n" +
 	"weave     120 files ·   0 ep · 26 changes    C:/work/weave\n" +
-	"QR-gent    12 files ·   3 ep ·  1 changes    C:/work/QR-gent\n" +
+	"Web-app    12 files ·   3 ep ·  1 changes    C:/work/Web-app\n" +
 	"aaa      not indexed                         /tmp/aaa"
 
 func useHome(t *testing.T) string {
@@ -142,13 +142,13 @@ func TestNoteIndex(t *testing.T) {
 
 func TestCandidatesResolveAndForget(t *testing.T) {
 	useHome(t)
-	for _, root := range []string{"C:/work/QR-gent", "C:/work/QR-gent-print", "C:/work/alpha-one", "C:/work/alpha-two"} {
+	for _, root := range []string{"C:/work/Web-app", "C:/work/Web-app-print", "C:/work/alpha-one", "C:/work/alpha-two"} {
 		Touch(root)
 	}
-	if got := Candidates("qr"); len(got) != 2 {
-		t.Errorf("Candidates(qr) = %d, want 2", len(got))
+	if got := Candidates("web"); len(got) != 2 {
+		t.Errorf("Candidates(web) = %d, want 2", len(got))
 	}
-	if got := Candidates("print"); len(got) != 1 || got[0].Name != "QR-gent-print" {
+	if got := Candidates("print"); len(got) != 1 || got[0].Name != "Web-app-print" {
 		t.Errorf("Candidates(print) = %+v", got)
 	}
 	if got := Candidates(""); len(got) != 0 {
@@ -158,10 +158,10 @@ func TestCandidatesResolveAndForget(t *testing.T) {
 		in   string
 		want string
 	}{
-		{"qrgent", "QR-gent"},
-		{"print", "QR-gent-print"},
+		{"webapp", "Web-app"},
+		{"print", "Web-app-print"},
 		{"alphaone", "alpha-one"},
-		{"qr", ""},
+		{"web", ""},
 		{"alpha", ""},
 		{"nope", ""},
 	}
@@ -177,10 +177,10 @@ func TestCandidatesResolveAndForget(t *testing.T) {
 			t.Errorf("Resolve(%q) = %+v, want %q", c.in, got, c.want)
 		}
 	}
-	if !Forget("QR-gent") {
+	if !Forget("Web-app") {
 		t.Error("Forget known name returned false")
 	}
-	if Forget("QR-gent") {
+	if Forget("Web-app") {
 		t.Error("Forget twice returned true")
 	}
 	if got := Load(); len(got) != 3 {
@@ -192,7 +192,7 @@ func TestTableMatchesTypeScript(t *testing.T) {
 	zero, three, one, twentySix := 0, 3, 1, 26
 	twelve, oneTwenty := 12, 120
 	entries := []Entry{
-		{Name: "QR-gent", Root: "C:/work/QR-gent", LastUsed: "2026-01-02T00:00:00.000Z", Files: &twelve, Endpoints: &three, Changes: &one},
+		{Name: "Web-app", Root: "C:/work/Web-app", LastUsed: "2026-01-02T00:00:00.000Z", Files: &twelve, Endpoints: &three, Changes: &one},
 		{Name: "weave", Root: "C:/work/weave", LastUsed: "2026-01-03T00:00:00.000Z", Files: &oneTwenty, Endpoints: &zero, Changes: &twentySix},
 		{Name: "aaa", Root: "/tmp/aaa", LastUsed: "2025-12-31T00:00:00.000Z"},
 	}
@@ -202,7 +202,7 @@ func TestTableMatchesTypeScript(t *testing.T) {
 	if got, want := Table(nil), "no projects yet — run `weave` inside a repo"; got != want {
 		t.Errorf("empty table: got %q, want %q", got, want)
 	}
-	if entries[0].Name != "QR-gent" || entries[2].Name != "aaa" {
+	if entries[0].Name != "Web-app" || entries[2].Name != "aaa" {
 		t.Error("Table reordered its argument")
 	}
 }

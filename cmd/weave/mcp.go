@@ -16,6 +16,7 @@ import (
 func cmdMcp() int {
 	multi := hasFlag("all")
 	manager := hasFlag("manager")
+	mcp.FullToolset = hasFlag("all-tools")
 	graphs := map[string]*weave.Graph{}
 	checked := map[string]time.Time{}
 

@@ -18,7 +18,7 @@ var skip = map[string]bool{
 
 var code = map[string]bool{
 	".ts": true, ".tsx": true, ".js": true, ".jsx": true, ".mjs": true, ".cjs": true, ".vue": true, ".svelte": true,
-	".prisma": true, ".md": true, ".json": true, ".graphql": true, ".gql": true,
+	".prisma": true, ".md": true, ".json": true, ".graphql": true, ".gql": true, ".py": true, ".go": true,
 }
 
 // MaxBytes is the largest file the walk reads.
@@ -36,8 +36,7 @@ type SourceFile struct {
 func skipped(name string) bool { return skip[name] || strings.HasPrefix(name, ".") }
 
 // readDir is readdirSync(dir).sort(): names in UTF-16 code unit order, the same
-// on every OS (raw readdirSync returns NTFS order on Windows, docs/GO-MIGRATION.md
-// finding 1).
+// on every OS (raw readdirSync returns NTFS order on Windows).
 func readDir(dir string) []os.DirEntry {
 	entries, err := os.ReadDir(dir)
 	if err != nil {

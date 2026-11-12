@@ -25,4 +25,19 @@ if [ ! -d realworld ]; then
   git -C realworld add -A
   git -C realworld -c user.name=bench -c user.email=bench@localhost commit --quiet -m "RealWorld: Express back end + React front end"
 fi
+# The same React front end against Go, Python (Flask) and Django back ends.
+get https://github.com/gothinkster/golang-gin-realworld-example-app a41289b .rw-gin
+get https://github.com/gothinkster/flask-realworld-example-app 4b95fb2 .rw-flask
+get https://github.com/gothinkster/django-realworld-example-app 29c9d42 .rw-django
+for be in gin flask django; do
+  if [ ! -d "realworld-$be" ]; then
+    mkdir "realworld-$be"
+    git -C ".rw-$be" archive HEAD | (mkdir -p "realworld-$be/backend" && tar -x -C "realworld-$be/backend")
+    git -C .rw-frontend archive HEAD | (mkdir -p "realworld-$be/frontend" && tar -x -C "realworld-$be/frontend")
+    printf '.weave/\nnode_modules/\n' > "realworld-$be/.gitignore"
+    git -C "realworld-$be" init --quiet
+    git -C "realworld-$be" add -A
+    git -C "realworld-$be" -c user.name=bench -c user.email=bench@localhost commit --quiet -m "RealWorld: $be back end + React front end"
+  fi
+done
 echo "repositories in $dir"
