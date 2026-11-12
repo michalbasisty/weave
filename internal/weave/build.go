@@ -57,7 +57,7 @@ func BuildGraph(root string) *Graph {
 	apiStats := ExtractOpenAPI(files, b)
 	nestEndpoints := ExtractNestAndFastify(files, b)
 	gqlEndpoints, gqlCalls := ExtractGraphQL(files, b)
-	pyGoEndpoints := ExtractPythonGo(files, b)
+	pyGoEndpoints := append(ExtractPythonGo(files, b), ExtractRubyPHP(files, b)...)
 
 	// Patterns from .weave/patterns.json: the escape hatch for a team's own wrapper.
 	pat := CompilePatterns(LoadPatterns(root))
