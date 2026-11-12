@@ -33,7 +33,7 @@ var supported = []string{"2024-11-05", "2025-03-26", "2025-06-18"}
 // panel features unless the server runs with --all-tools.
 const instructions = "weave maps a repo: UI pages -> HTTP endpoints -> modules -> database tables, plus tests. " +
 	"When a task describes a screen, a URL or a behaviour rather than a file, call search(\"plain words\") first: it finds routes grep cannot, because their URL is joined from pieces. " +
-	"Then call context(files) on what you are about to open or edit: page, endpoints, tables, owning change, open tasks, tests to run and the command to run them, in a few hundred tokens. " +
+	"context(files) says what a file is in the app (page, endpoints, tables, owning change, tests and the command to run them); skip it for an edit inside one file you already found. " +
 	"Before renaming or removing a route or procedure, call impact(files) for every caller instead of grepping for each. " +
 	"Grep is still the right tool for a symbol whose exact name you already know. " +
 	"changed() tells you what the graph gained or lost since a branch point. " +

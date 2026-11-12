@@ -95,7 +95,7 @@ also      /login, /register, /editor/:slug, /editor share these endpoints
 
 It is quick enough to run on every agent turn:
 
-<img src="docs/img/chart-speed.svg" alt="weave check wall time: documenso 2,458 files about 1.3 seconds, RealWorld Express + React 55 ms, RealWorld NestJS 34 ms." width="100%">
+<img src="docs/img/chart-speed.svg" alt="weave check wall time: documenso 2,458 files about 1.2 seconds, RealWorld Express + React 47 ms, RealWorld NestJS 37 ms." width="100%">
 
 ## Measured on real repositories
 
@@ -107,10 +107,10 @@ It is quick enough to run on every agent turn:
 | screens linked to their endpoints | 87 of 119 | 8 of 8 | — |
 | tables with a module that uses them | 55 of 55 | 4 of 4 | 5 of 5 |
 | false failures on the unchanged repo | **0** | **0** | **0** |
-| `weave check` | ~1.3 s | 55 ms | 34 ms |
+| `weave check` | ~1.2 s | 47 ms | 37 ms |
 
-The same React front end in front of Gin, Flask and Django back ends matches 18 of 18 calls
-with 0 false failures on each ([details](docs/COMPARISON.md#6-python-and-go-back-ends)).
+The same React front end in front of Gin, Flask, Django, Rails and Laravel back ends matches
+18 of 18 calls with 0 false failures on each ([details](docs/COMPARISON.md#6-python-go-ruby-and-php-back-ends)).
 
 No configuration on any of them. Every number comes from [`bench/run.mjs`](bench/run.mjs),
 which fetches these repositories at fixed commits ([`bench/fetch.sh`](bench/fetch.sh)) and
@@ -145,13 +145,14 @@ and a generated wiki. A dropdown switches between every repo weave has indexed. 
 <img src="docs/img/screens/documenso-overview.png" alt="The panel's overview on documenso: the contract gate passes, 119 screens, 327 endpoints, 103 modules and 55 tables, all 312 frontend calls matched, and the next tests worth writing." width="100%">
 
 **The agent interface.** `weave mcp` gives Claude Code, Cursor, VS Code or opencode five tools,
-plus the spec tools in a repo that keeps change records. `weave init` also adds a short
-section to `CLAUDE.md` and `AGENTS.md` that says when to reach for them instead of grep.
-The one that matters is `context(files)`: the screen, endpoints, tables, owning spec, open
-tasks and the command that tests it, in a few hundred tokens. The whole schema costs every
-session 624 tokens:
+plus the spec tools in a repo that keeps change records. The one that pays for itself is
+`impact`: which screens and callers reach an endpoint, in one call instead of a chain of
+searches. On "which screens show the inbox count?" in documenso it cut the agent's tokens by
+43% and its cost in half. For a one-file edit the agent finds with one grep, any extra call
+costs more than it saves ([the eval](docs/EVAL.md)), so `weave init` tells agents exactly
+that in `CLAUDE.md` and `AGENTS.md`. The whole schema costs every session 708 tokens:
 
-<img src="docs/img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 624 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
+<img src="docs/img/chart-schema.svg" alt="MCP tool schema before the first prompt: weave 708 tokens, filesystem 3,500, Notion 9,000, GitHub 18,000." width="100%">
 
 **The wiki.** `weave wiki` writes a page per screen, endpoint, module and table, stamped with
 the commit it describes; `weave wiki --check` fails when the pages are stale.
@@ -161,10 +162,10 @@ the commit it describes; `weave wiki --check` fails when the pages are stale.
 | | |
 |---|---|
 | **Back ends** | Express, Fastify, NestJS, Next.js route handlers (app and pages), Remix / React Router v7 resource routes, tRPC (routers across files), GraphQL (SDL, NestJS resolvers, Pothos, Nexus), OpenAPI JSON |
-| **Python and Go back ends** | FastAPI, Flask, Django and Django REST framework; gin, echo, chi, gorilla and net/http. The RealWorld React front end matches 18 of 18 calls against the Gin, Flask and Django back ends |
+| **Python, Go, Ruby and PHP back ends** | FastAPI, Flask, Django and Django REST framework; gin, echo, chi, gorilla and net/http; Rails and Laravel routes. The RealWorld React front end matches 18 of 18 calls against each of the Gin, Flask, Django, Rails and Laravel back ends |
 | **Front ends** | React Router `<Route>` tables (lazy imports too), Next.js and Remix file routes; `fetch`, axios and any HTTP-like client, tRPC hooks, `gql` documents |
-| **Data** | Prisma, Drizzle, TypeORM |
-| **Agents** | Claude Code, Cursor, VS Code / Copilot, opencode and OpenChamber (MCP config, instructions, gate hook) |
+| **Data** | Prisma, Drizzle, TypeORM, SQLAlchemy, Django models, GORM |
+| **Agents** | Claude Code, Cursor, VS Code / Copilot, opencode (MCP config, instructions, gate hook), and OpenChamber, which also gets a [Work Status extension](extensions/openchamber/) that shows the gate's verdict |
 | **Monorepos** | workspace package names (`@acme/lib/…`) and tsconfig `paths` (`~/…`) |
 | **Anything else** | a one-line regex in [`.weave/patterns.json`](docs/REFERENCE.md#your-own-patterns) |
 
@@ -176,13 +177,14 @@ of trusting a confident wrong answer.
 
 - It reads source, it does not run it. A URL assembled at runtime from configuration is
   reported as unknowable, not guessed.
-- Front ends are JavaScript and TypeScript; back ends are JavaScript, TypeScript, Python and Go.
-  Ruby, PHP, Java and .NET back ends are not read yet, and neither are SQLAlchemy, Django or
-  GORM models.
-- It does not yet save an agent tokens over a whole task. A first pilot (14 runs, two repos,
-  [`docs/EVAL.md`](docs/EVAL.md#first-pilot)) found the same success with and without weave
-  and a token change between +8% and -5%, short of the 30% the protocol asks for. The numbers
-  above are about weave's answers, not agent outcomes.
+- Front ends are JavaScript and TypeScript; back ends are JavaScript, TypeScript, Python, Go,
+  Rails and Laravel. Java and .NET back ends are not read yet, and neither are ActiveRecord or
+  Eloquent models.
+- It does not save an agent tokens on ordinary edits. Over 72 measured sessions on two repos
+  ([`docs/EVAL.md`](docs/EVAL.md#second-round-72-sessions)), success was the same with and
+  without weave (36 of 36 each), and the weave arm used more tokens on rule changes and renames:
+  the agent called weave and then read the same files anyway. It saved on one impact question
+  and lost on another. The gate is the part that does not depend on the agent at all.
 
 ## More
 

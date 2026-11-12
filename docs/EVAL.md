@@ -98,3 +98,52 @@ Next: tasks that describe behaviour rather than name the code ("the page that sh
 inbox count"), and a weave arm that is told the tool exists in the prompt, not only in the
 server instructions. Both change what is measured, so they go in as new arms, not edits to
 these.
+
+## Second round: 72 sessions
+
+2026-11-12, after the pilot. Twelve tasks that describe behaviour instead of naming code
+([`tasks-behaviour.jsonl`](../bench/eval/tasks-behaviour.jsonl) on RealWorld,
+[`tasks-documenso-behaviour.jsonl`](../bench/eval/tasks-documenso-behaviour.jsonl) on
+documenso), two arms, three runs each, sonnet. The weave arm also got what `weave init` writes:
+a "when to use weave" section in `CLAUDE.md` that told the agent to `search` first, `context`
+before editing, `impact` before renames and `verify` before done.
+
+| | baseline | weave |
+|---|---|---|
+| success (finished, gate passes, expected answer) | 36 / 36 | 36 / 36 |
+| median tokens in, RealWorld | 165,323 | 293,631 (+78%) |
+| median tokens in, documenso | 216,350 | 298,259 (+38%) |
+| median turns | 7 | 10 |
+| median cost, RealWorld / documenso | $0.07 / $0.09 | $0.10 / $0.10 |
+
+By task kind, median tokens in:
+
+| kind | runs per arm | baseline | weave | change |
+|---|---|---|---|---|
+| change a rule | 18 | 168,487 | 294,429 | +75% |
+| rename | 9 | 213,211 | 342,460 | +61% |
+| test gap | 3 | 248,579 | 262,010 | +5% |
+| impact question | 6 | 203,435 | 207,027 | +2% |
+
+The two impact questions split: "which screens show the inbox count" went from 364k to 206k
+tokens (−43%, $0.14 to $0.07), because `impact` answered what took the baseline a dozen
+searches. "Which screen sends a test webhook" was a one-grep question, and weave added 63%.
+
+Decision rule: **rethink it**. Success held; tokens rose.
+
+Why, from the transcripts:
+
+- **Tokens in follow turns, not output size.** weave's answers were small (150 to 250
+  characters for `search` and `context`), but every turn re-sends the whole conversation.
+  The weave arm took three more turns, and that is the whole difference.
+- **Every weave run paid a turn to load the tools.** Claude Code defers MCP tool schemas, so
+  all 36 weave runs started with a `ToolSearch` call before the first weave call.
+- **The calls were added, not substituted.** On a rule change the agent ran `search`,
+  `context`, then the same `Grep` and `Read` the baseline ran, then `verify`. weave can only
+  save where it removes searches, and a one-file edit has none to remove.
+
+What changed because of it: the `CLAUDE.md` section and the tool descriptions no longer tell
+the agent to call `context` before every edit or `verify` before done (the Stop hook runs the
+gate without a turn). They point it at questions that span the app, renames and removals, and
+say plainly to skip weave for an edit inside one file. That narrower wording is not measured
+yet; the next round should run it against these same tasks.

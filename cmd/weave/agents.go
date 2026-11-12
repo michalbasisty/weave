@@ -20,12 +20,14 @@ This repo has a weave MCP server. It knows which screen calls which endpoint, wh
 module serves it and which tables it touches, including URLs that are joined from a
 router prefix and a route and so never appear whole in the source.
 
-- A task names a screen, a URL or a behaviour, not a file: ` + "`search(\"plain words\")`" + ` first.
-- About to open or edit files: ` + "`context(files)`" + ` once; it lists the endpoints, tables and tests.
-- Renaming or removing a route, procedure or API call: ` + "`impact(files)`" + ` for every caller.
-- Before saying done: ` + "`verify()`" + `; it names any call left without an endpoint.
+Use it for questions that span the app, where it replaces several searches:
 
-Grep is still right for a symbol whose exact name you already know.
+- Which screens or callers reach an endpoint, procedure or table: ` + "`impact(files)`" + `.
+- Where a screen, URL or behaviour lives when grep finds nothing: ` + "`search(\"plain words\")`" + `.
+- Before renaming or removing a route: ` + "`impact`" + ` on its file, for every caller at once.
+
+For a change inside one file you can find with one grep, skip it: each extra call costs
+more than it saves. The gate runs on its own when you stop.
 ` + agentEnd + "\n"
 
 // writeAgentBlock adds the weave section to an agent instructions file, creating

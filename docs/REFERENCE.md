@@ -104,6 +104,11 @@ ends on it, such as OpenChamber) a plugin at `.opencode/plugins/weave.js`. On `s
 the plugin runs `weave check`; when it fails with something new it shows a toast and sends the
 failure back into the session, once per distinct failure.
 
+For OpenChamber there is also an extension, [`extensions/openchamber/`](../extensions/openchamber/):
+a Work Status section that runs `weave check` on the open project whenever the tree changes and
+lists each broken call with its closest route. Add the folder, its git URL, or the
+`weave-openchamber.zip` attached to each release in Settings → Extensions.
+
 The server lists five tools: `context`, `impact`, `search`, `changed` and `verify`. In a
 repo with `specs/changes/` it adds `plan`, `changes`, `task_done`, `task_reopen`,
 `change_new` and `change_delete`. `remember`, `recall` and `status` are CLI and panel
@@ -118,7 +123,7 @@ claude mcp add weave -- /abs/path/weave mcp --root .
 
 ## What it extracts, and how exact it is
 
-weave reads every JavaScript, TypeScript, Python, Go, GraphQL, Prisma, JSON and Markdown file
+weave reads every JavaScript, TypeScript, Python, Go, Ruby, PHP, GraphQL, Prisma, JSON and Markdown file
 except what git ignores (`.gitignore` at any depth, `.git/info/exclude`, global
 excludes), so generated clients and build output never show up as modules.
 
@@ -136,6 +141,8 @@ excludes), so generated clients and build output never show up as modules.
 | `path("api/", include("shop.urls"))`, `re_path(r'^tags/?$', …)`, `router.register(r'orders', …)` → `ANY /api/orders/` and `/api/orders/:pk/` | Django and Django REST framework URLconfs, following `include()` | exact |
 | `v1 := r.Group("/api")`, `v1.GET("/users/:id")`, a group passed to `func Register(r *gin.RouterGroup)` | gin, echo, gorilla `PathPrefix` | exact |
 | `r.Route("/orders", func(r chi.Router) { r.Get("/{id}", …) })`, `mux.HandleFunc("GET /reports/{id}", …)` | chi, net/http (Go 1.22 patterns) | exact |
+| `scope :api`, `resources :articles, param: :slug, only: […]`, nested `resource :favorite`, `member`/`collection`, `get :feed, on: :collection`, `match … via:`, `devise_for` → endpoints at the controller's `def action` | Rails `config/routes.rb` | exact |
+| `Route::get('users/{id}', 'UserController@show')`, `[X::class, 'm']`, `Route::resource`/`apiResource` with `only`/`except`, `Route::group(['prefix' => …])`, `Route::prefix(…)->group(…)`; `routes/api.php` under `/api` → endpoints at the controller method | Laravel `routes/*.php` | exact |
 | your own wrapper, via `.weave/patterns.json` | one regex per rule | exact |
 | `api.get('/orders')`, ``api.get(`/orders/${id}`)``, `requests.post('/users')`, `apiClient.get('/x')` → endpoint | client call sites; any receiver named like an HTTP client (`api`, `http`, `client`, `request`, `fetch`, `agent`) | exact / inferred |
 | ``api.put(`/tasks/${id}/${action}`)`` with `action: 'start' \| 'stop'` (inline or a `type` alias) → `PUT /tasks/:id/start` and `/stop` | a literal-union segment is one call per value; a value no route serves is a broken call. Untyped, a variable last segment over two or more fixed routes is a choice between them | exact / inferred |
@@ -144,11 +151,13 @@ excludes), so generated clients and build output never show up as modules.
 | `model` → `@@map` table, relations | `schema.prisma` | exact |
 | `pgTable('users', …)` / `mysqlTable` / `sqliteTable` → table | Drizzle schema files | exact |
 | `@Entity('users') class User` → table (default: snake_case class name) | TypeORM entities | exact |
+| `class Article(db.Model): __tablename__ = 'article'` (default: snake_case), `class Order(models.Model)` with `Meta.db_table` (default: `app_model`), abstract bases skipped | SQLAlchemy, Flask-SQLAlchemy, Django models | exact |
+| `type UserModel struct { gorm.Model … }`, `TableName()` (default: GORM's snake_case plural) | GORM structs | exact |
 | `@Controller('users')` + `@Get(':id')` (+ `setGlobalPrefix`) → endpoint | NestJS controllers | exact |
 | `fastify.get('/x')`, `fastify.route({ method, url })` → endpoint | Fastify | exact |
 | `type Query { users }` (`.graphql`, `.gql`, `typeDefs`), `@Query()` / `@Mutation()`, `queryField('x')` → `QUERY /graphql/users` | GraphQL schemas, NestJS resolvers, Pothos / Nexus | exact |
 | `` gql`query { users { id } }` `` → call to `QUERY /graphql/users`, only when the repo declares a schema | GraphQL client documents | exact |
-| module → table | `prisma.<model>`, Drizzle `.from(users)` / `db.query.users`, TypeORM `Repository<User>` inside the module | exact |
+| module → table | `prisma.<model>`, Drizzle `.from(users)` / `db.query.users`, TypeORM `Repository<User>`, `Article.query` / `Order.objects` / `select(Article)`, GORM `&UserModel{}` inside the module | exact |
 | file → file importers | relative imports, tsconfig/jsconfig `paths`, workspace package names (`@acme/lib/x`) | exact |
 | test → endpoint / page | e2e request calls, `page.goto` | exact / inferred |
 | change → task → file | `tasks.md` Evidence paths | exact |
@@ -329,9 +338,10 @@ renamed route, the Stop hook, explore, wiki, MCP, gain and init.
 
 - Express, Fastify, NestJS, Next.js, Remix / React Router v7 file routes, React Router
   `<Route>` tables, tRPC routers, GraphQL and OpenAPI JSON specs; FastAPI, Flask, Django and
-  Django REST framework; gin, echo, chi, gorilla and net/http; Prisma, Drizzle and TypeORM
-  tables. Python and Go models (SQLAlchemy, Django ORM, GORM) are not read yet, and a Go
-  router mounted through a variable (`r.Mount("/api", api())`) loses its prefix. SvelteKit needs a `.weave/patterns.json` rule (see [Your own patterns](#your-own-patterns)); the coverage block
+  Django REST framework; gin, echo, chi, gorilla and net/http; Rails and Laravel route files;
+  Prisma, Drizzle, TypeORM, SQLAlchemy, Django and GORM tables. Rails and Laravel models
+  (ActiveRecord, Eloquent) are not read yet, Rails `concern`s and `constraints` blocks are read
+  through without their own effect, and a Go router mounted through a variable (`r.Mount("/api", api())`) loses its prefix. SvelteKit needs a `.weave/patterns.json` rule (see [Your own patterns](#your-own-patterns)); the coverage block
   names what was skipped.
 - An OpenAPI spec is read in JSON only, up to 4 MB. A YAML spec is named in the coverage
   block, never guessed at.

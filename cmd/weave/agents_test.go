@@ -21,7 +21,7 @@ func TestAgentBlockKeepsTheFileAndIsWrittenOnce(t *testing.T) {
 	}
 	// a stale section is replaced in place on --upgrade, the rest of the file kept
 	raw, _ := os.ReadFile(p)
-	stale := strings.Replace(string(raw), "Grep is still right", "old text", 1) + "\ntail\n"
+	stale := strings.Replace(string(raw), "skip it", "old text", 1) + "\ntail\n"
 	os.WriteFile(p, []byte(stale), 0o644)
 	if got := writeAgentBlock(p, true); got != "(upgraded)" {
 		t.Fatalf("upgrade: %q", got)

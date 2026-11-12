@@ -55,7 +55,7 @@ type tool struct {
 var toolDefs = []tool{
 	{
 		Name:        "context",
-		Description: "Call before opening or editing files a task is about. One compact pack per file: the page or module it is, the endpoints it serves and calls, tables, the owning spec change, open tasks, and the tests to run. Usually replaces reading the file and the files around it.",
+		Description: "What a file is in the app: the page or module, the endpoints it serves and calls, tables, the owning spec change, open tasks, and the tests to run, in a few hundred tokens. Worth it when you would otherwise open the files around it; not needed for an edit inside one file.",
 		InputSchema: schema{Type: "object", Properties: props{
 			{"files", propDef{Type: "array", Items: &propDef{Type: "string"}, Description: "repo-relative paths"}},
 			{"budget", propDef{Type: "number", Description: "token budget, default 350"}},
