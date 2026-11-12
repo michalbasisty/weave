@@ -106,7 +106,8 @@ failure back into the session, once per distinct failure.
 
 For OpenChamber there is also an extension, [`extensions/openchamber/`](../extensions/openchamber/):
 a Work Status section that runs `weave check` on the open project whenever the tree changes and
-lists each broken call with its closest route. Add the folder, its git URL, or the
+lists each broken call with its closest route, and a rail panel to search the map in plain words
+and send a file's context or impact to the chat. Add the folder, its git URL, or the
 `weave-openchamber.zip` attached to each release in Settings → Extensions.
 
 The server lists five tools: `context`, `impact`, `search`, `changed` and `verify`. In a

@@ -1,6 +1,7 @@
 # weave for OpenChamber
 
-A **weave gate** section in OpenChamber's Work Status. It runs
+Two things in OpenChamber: a **weave** panel in the side rail for finding your way around the
+app, and a **weave gate** section in OpenChamber's Work Status. It runs
 [weave](https://github.com/michalbasisty/weave)'s contract gate on the open project and
 shows what the uncommitted change broke: every front-end call whose endpoint no longer
 exists, the route it most likely meant, where the call is, and the tests to run.
@@ -14,14 +15,32 @@ tests     cd backend && npx jest src/tests/services/tag.service.test.ts
 It re-runs when the tree changes (HEAD or `git status` moves) and at least once a minute,
 and **Re-run** in the section header runs it now.
 
+## The panel
+
+<img src="panel.png" width="360" alt="weave panel: an endpoint's impact in OpenChamber">
+
+The rail panel shows the open project's map:
+
+- counts of screens, endpoints, modules and tables, and the list of screens with how many
+  endpoints each one calls;
+- a search box that takes plain words ("inbox count", "invite member"), a URL or a name;
+- for a hit, **What it is** (`weave context`: the file's screens, endpoints, tables and tests)
+  and **What a change reaches** (`weave impact`: callers, pages, tables and the tests to run);
+- **Add to chat** puts that text into the message box, so the agent starts with the map
+  instead of grepping for it. **Copy** copies it.
+
+The panel builds the map with `weave index` the first time and again when the tree changes,
+and refreshes when an agent turn finishes.
+
 ## Install
 
 1. Install weave: `go install github.com/michalbasisty/weave/cmd/weave@latest`, or a binary
    from [Releases](https://github.com/michalbasisty/weave/releases).
 2. In OpenChamber, **Settings → Extensions**, add this folder (or its git URL, or the
    `weave-openchamber.zip` from a release).
-3. Approve the local service. It runs `weave check` and `git status` on the project you have
-   open, nothing else, and has no dependencies.
+3. Approve the local service. It runs `weave` (`check`, `index`, `search`, `context`,
+   `impact`) and `git status` on the project you have open, nothing else, and has no
+   dependencies.
 
 The service looks for `weave` on `PATH`, then in `~/go/bin`, `~/.local/bin`, `~/bin`,
 `/opt/homebrew/bin` and `/usr/local/bin`, because a desktop app's `PATH` often lacks the
@@ -36,9 +55,12 @@ same gate when the agent stops and hands a failure back to it.
 
 ## Files
 
-- `package.json`: the manifest. A Work Status section the app draws from `GET /status`, and
-  the local service. No panel page, no bundle.
-- `service/main.js`: the service. Plain Node, no packages.
+- `package.json`: the manifest. A Work Status section the app draws from `GET /status`, the
+  rail panel, and the local service.
+- `service/main.js`: the service. Plain Node, no packages. `GET /status` for the section;
+  `/overview`, `/search?q=`, `/context?file=` and `/impact?file=` for the panel.
+- `panel/main.ts`: the panel's source. `panel/main.js` is its bundle, built with
+  `bun node_modules/@openchamber/sdk/scripts/bundle-guest.ts panel/main.ts panel/main.js`.
 
 Checked with `openchamber-guest-check` from `@openchamber/sdk` 2.7.0, and its answers with the
 SDK's `guestStatusViewSchema`.

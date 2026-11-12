@@ -1,7 +1,7 @@
 {
   "name": "weave-openchamber",
-  "version": "0.1.0",
-  "description": "weave's contract gate in OpenChamber's Work Status: which front-end calls your change broke, and the route each one probably meant.",
+  "version": "0.2.0",
+  "description": "weave for OpenChamber: the open project's map in a panel (search it in plain words, see what a file is and what a change to it reaches, add it to the chat) and weave's contract gate in Work Status.",
   "license": "MIT",
   "type": "module",
   "repository": "https://github.com/michalbasisty/weave",
@@ -17,7 +17,8 @@
       "panel": {
         "id": "weave",
         "name": "weave",
-        "icon": "icon.svg"
+        "icon": "icon.svg",
+        "entry": "panel/index.html"
       },
       "statusSection": {
         "title": "weave gate",
