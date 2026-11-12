@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-11-06T14:14:56.746Z",
-  "weave": "weave 0.3.1-0.20261106134218-fa03e2c7c04d+dirty",
+  "measuredAt": "2026-11-12T16:57:18.800Z",
+  "weave": "weave 0.6.1-0.20261112165235-e1b2a01835f4+dirty",
   "repos": [
     {
       "name": "documenso",
@@ -38,8 +38,8 @@
         "found": 30,
         "of": 327
       },
-      "indexMs": 1084,
-      "checkMs": 1214,
+      "indexMs": 1176,
+      "checkMs": 1294,
       "screens": {
         "n": 119,
         "weave": 222,
@@ -74,8 +74,8 @@
         "found": 20,
         "of": 20
       },
-      "indexMs": 42,
-      "checkMs": 63,
+      "indexMs": 39,
+      "checkMs": 55,
       "screens": {
         "n": 8,
         "weave": 215.5,
@@ -190,8 +190,8 @@
         "found": 0,
         "of": 21
       },
-      "indexMs": 24,
-      "checkMs": 33,
+      "indexMs": 21,
+      "checkMs": 34,
       "screens": {
         "n": 0,
         "weave": 0,
@@ -200,10 +200,118 @@
         "files": 0
       },
       "old": null
+    },
+    {
+      "name": "RealWorld (Gin + React)",
+      "url": "https://github.com/gothinkster/golang-gin-realworld-example-app + https://github.com/khaledosman/react-redux-realworld-example-app",
+      "commit": "a41289b + 53b0b4c",
+      "stack": "Go + Gin backend, React + Redux front end",
+      "files": 84,
+      "pages": 8,
+      "endpoints": 21,
+      "modules": 3,
+      "tables": 0,
+      "tablesUsed": 0,
+      "pagesLinked": 8,
+      "calls": {
+        "total": 18,
+        "resolved": 18,
+        "dynamic": 0,
+        "silent": [
+          "frontend/cypress/plugins/index.js"
+        ]
+      },
+      "broken": 0,
+      "grep": {
+        "found": 0,
+        "of": 21
+      },
+      "indexMs": 41,
+      "checkMs": 51,
+      "screens": {
+        "n": 8,
+        "weave": 150.5,
+        "file": 1150,
+        "byHand": 5509.5,
+        "files": 3
+      },
+      "old": null
+    },
+    {
+      "name": "RealWorld (Flask + React)",
+      "url": "https://github.com/gothinkster/flask-realworld-example-app + https://github.com/khaledosman/react-redux-realworld-example-app",
+      "commit": "4b95fb2 + 53b0b4c",
+      "stack": "Python + Flask backend, React + Redux front end",
+      "files": 88,
+      "pages": 8,
+      "endpoints": 19,
+      "modules": 3,
+      "tables": 0,
+      "tablesUsed": 0,
+      "pagesLinked": 8,
+      "calls": {
+        "total": 18,
+        "resolved": 18,
+        "dynamic": 0,
+        "silent": [
+          "frontend/cypress/plugins/index.js"
+        ]
+      },
+      "broken": 0,
+      "grep": {
+        "found": 0,
+        "of": 19
+      },
+      "indexMs": 39,
+      "checkMs": 51,
+      "screens": {
+        "n": 8,
+        "weave": 149.5,
+        "file": 1150,
+        "byHand": 3291.5,
+        "files": 4
+      },
+      "old": null
+    },
+    {
+      "name": "RealWorld (Django + React)",
+      "url": "https://github.com/gothinkster/django-realworld-example-app + https://github.com/khaledosman/react-redux-realworld-example-app",
+      "commit": "29c9d42 + 53b0b4c",
+      "stack": "Python + Django REST framework backend, React + Redux front end",
+      "files": 103,
+      "pages": 8,
+      "endpoints": 13,
+      "modules": 4,
+      "tables": 0,
+      "tablesUsed": 0,
+      "pagesLinked": 8,
+      "calls": {
+        "total": 18,
+        "resolved": 18,
+        "dynamic": 0,
+        "silent": [
+          "frontend/cypress/plugins/index.js"
+        ]
+      },
+      "broken": 0,
+      "grep": {
+        "found": 0,
+        "of": 13
+      },
+      "indexMs": 36,
+      "checkMs": 50,
+      "screens": {
+        "n": 8,
+        "weave": 159.5,
+        "file": 1150,
+        "byHand": 1510,
+        "files": 4
+      },
+      "old": null
     }
   ],
   "schema": {
-    "tools": 14,
-    "tokens": 1440
+    "tools": 5,
+    "tokens": 624
   }
 }

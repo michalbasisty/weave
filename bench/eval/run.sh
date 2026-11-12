@@ -3,6 +3,7 @@
 # in a fresh clone of the repository, one transcript per run.
 #
 #   bench/eval/run.sh <repo> <out-dir> [runs] [model]
+#   TASKS=bench/eval/tasks-documenso.jsonl bench/eval/run.sh bench/repos/documenso …
 #
 # Needs the `claude` CLI signed in, `weave` on PATH (or WEAVE=/path), jq and git.
 # Every run costs real tokens: runs=1 over the four tasks is eight sessions.
@@ -14,6 +15,7 @@ runs=${3:-1}; model=${4:-sonnet}
 weave=${WEAVE:-weave}; weave=$(command -v "$weave" || echo "$weave")
 here=$(cd "$(dirname "$0")" && pwd)
 max_turns=${MAX_TURNS:-40}
+tasks=$(realpath "${TASKS:-$here/tasks.jsonl}")
 tools='Read,Edit,Write,Glob,Grep,Bash(git diff:*),Bash(git status:*),Bash(ls:*),Bash(npx jest:*),Bash(npm test:*)'
 
 while IFS= read -r task; do
@@ -47,5 +49,6 @@ while IFS= read -r task; do
       cd "$here"; rm -rf "$work"
     done
   done
-done < "$here/tasks.jsonl"
+done < "$tasks"
+cp "$tasks" "$out/tasks.jsonl"
 echo "transcripts in $out; summarise with: node $here/report.mjs $out"

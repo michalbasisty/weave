@@ -67,3 +67,34 @@ with `weave mcp`. The agent gets file tools and a short command list (`git diff`
 jest`, `npm test`), never a blanket permission bypass. Each run leaves its transcript,
 the `weave check` result on the tree it left, the files it changed and its diff.
 `report.mjs` reads those and applies the decision rule above.
+
+Other repositories take their own task file: `TASKS=bench/eval/tasks-documenso.jsonl`.
+
+## First pilot
+
+2026-11-12, one run per task and arm, sonnet, release v0.6.0 plus this branch. 14 runs, so
+it reads as a direction, not a result: the protocol asks for 72.
+
+| repo | runs | success, baseline / weave | median tokens in, baseline / weave | change | median cost |
+|---|---|---|---|---|---|
+| RealWorld Express + React (109 files) | 8 | 4/4 / 4/4 | 210,173 / 227,623 | +8% | $0.09 / $0.09 |
+| documenso (2,458 files) | 6 | 3/3 / 3/3 | 223,157 / 212,787 | −5% | $0.10 / $0.08 |
+
+Decision rule: **rethink it** (tokens dropped by less than 10%), on both repos.
+
+What the transcripts show:
+
+- On the small repo the agent called weave 2 to 4 times per task and then read the same files
+  anyway, so weave added calls instead of replacing them. The one clear win was the rename
+  (251k vs 355k tokens, 11 vs 14 tool calls), where `impact` listed every caller up front.
+- On documenso the agent called weave once in three tasks. It went straight to Grep, which
+  works there because the tasks named the procedure (`document.inbox.getCount`) and grep
+  finds a name. The case weave is built for, a URL that exists only once its pieces are
+  joined, did not come up.
+- Success was never the problem: every run finished, left a tree `weave check` passes, and
+  named what it had to.
+
+Next: tasks that describe behaviour rather than name the code ("the page that shows the
+inbox count"), and a weave arm that is told the tool exists in the prompt, not only in the
+server instructions. Both change what is measured, so they go in as new arms, not edits to
+these.

@@ -95,7 +95,7 @@ also      /login, /register, /editor/:slug, /editor share these endpoints
 
 It is quick enough to run on every agent turn:
 
-<img src="docs/img/chart-speed.svg" alt="weave check wall time: documenso 2,458 files about 1.2 seconds, RealWorld Express + React 63 ms, RealWorld NestJS 35 ms." width="100%">
+<img src="docs/img/chart-speed.svg" alt="weave check wall time: documenso 2,458 files about 1.3 seconds, RealWorld Express + React 55 ms, RealWorld NestJS 34 ms." width="100%">
 
 ## Measured on real repositories
 
@@ -107,7 +107,10 @@ It is quick enough to run on every agent turn:
 | screens linked to their endpoints | 87 of 119 | 8 of 8 | — |
 | tables with a module that uses them | 55 of 55 | 4 of 4 | 5 of 5 |
 | false failures on the unchanged repo | **0** | **0** | **0** |
-| `weave check` | ~1.2 s | 63 ms | 35 ms |
+| `weave check` | ~1.3 s | 55 ms | 34 ms |
+
+The same React front end in front of Gin, Flask and Django back ends matches 18 of 18 calls
+with 0 false failures on each ([details](docs/COMPARISON.md#6-python-and-go-back-ends)).
 
 No configuration on any of them. Every number comes from [`bench/run.mjs`](bench/run.mjs),
 which fetches these repositories at fixed commits ([`bench/fetch.sh`](bench/fetch.sh)) and
@@ -173,9 +176,10 @@ of trusting a confident wrong answer.
 - Front ends are JavaScript and TypeScript; back ends are JavaScript, TypeScript, Python and Go.
   Ruby, PHP, Java and .NET back ends are not read yet, and neither are SQLAlchemy, Django or
   GORM models.
-- Whether `context` changes what an agent does over a whole task is not measured yet; the
-  protocol is in [`docs/EVAL.md`](docs/EVAL.md). The numbers above are about weave's answers,
-  not agent outcomes.
+- It does not yet save an agent tokens over a whole task. A first pilot (14 runs, two repos,
+  [`docs/EVAL.md`](docs/EVAL.md#first-pilot)) found the same success with and without weave
+  and a token change between +8% and -5%, short of the 30% the protocol asks for. The numbers
+  above are about weave's answers, not agent outcomes.
 
 ## More
 

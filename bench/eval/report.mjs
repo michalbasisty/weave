@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dir = process.argv[2];
 if (!dir) { console.error('usage: report.mjs <out-dir> [--json]'); process.exit(2); }
-const tasks = new Map(fs.readFileSync(path.join(here, 'tasks.jsonl'), 'utf8').trim().split('\n').map(l => JSON.parse(l)).map(t => [t.id, t]));
+const taskFile = fs.existsSync(path.join(dir, 'tasks.jsonl')) ? path.join(dir, 'tasks.jsonl') : path.join(here, 'tasks.jsonl');
+const tasks = new Map(fs.readFileSync(taskFile, 'utf8').trim().split('\n').map(l => JSON.parse(l)).map(t => [t.id, t]));
 const median = xs => { const s = [...xs].sort((a, b) => a - b); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : 0; };
 
 const runs = [];
@@ -41,6 +42,7 @@ for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.meta'))) {
     tokensOut: u.output_tokens || 0,
     cost: res.total_cost_usd || 0,
     found: want.filter(w => read.has(w) || touched.includes(w)).length + '/' + want.length,
+    answered: (tasks.get(meta.id)?.expect_answer || []).every(a => (res.result || '').includes(a)),
     touched: touched.length,
     answer: (res.result || '').slice(0, 300),
   });
@@ -63,8 +65,11 @@ console.log('\nmedian per run      baseline      weave    change');
 for (const [k, label] of [['tokensIn', 'tokens in'], ['tokensOut', 'tokens out'], ['toolCalls', 'tool calls'], ['secs', 'seconds'], ['cost', 'cost $']]) {
   console.log(label.padEnd(16) + String(k === 'cost' ? m(b, k).toFixed(2) : fmt(m(b, k))).padStart(12) + String(k === 'cost' ? m(w, k).toFixed(2) : fmt(m(w, k))).padStart(11) + ((-drop(k) * 100).toFixed(0) + '%').padStart(10));
 }
-const success = rs => rs.filter(r => r.ok && r.check === 0 && r.found.split('/')[0] === r.found.split('/')[1]).length;
-console.log(`success (finished, check passes, expected files found): baseline ${success(b)}/${b.length}, weave ${success(w)}/${w.length}`);
+// success: the session finished, the gate passes on the tree it left, and an
+// answer task named what it had to (files the agent chose not to open do not count
+// against it: finding the answer without reading them is the point)
+const success = rs => rs.filter(r => r.ok && r.check === 0 && r.answered).length;
+console.log(`success (finished, check passes, expected answer given): baseline ${success(b)}/${b.length}, weave ${success(w)}/${w.length}`);
 const d = drop('tokensIn');
 const verdict = success(w) < success(b) ? 'rethink it: success dropped'
   : d >= 0.3 ? 'ship the MCP half: tokens dropped by 30% or more and success held'

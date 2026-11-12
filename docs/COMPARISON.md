@@ -17,6 +17,9 @@ node bench/charts.mjs               # redraws docs/img/chart-*.svg
 | [documenso](https://github.com/documenso/documenso) | `fdd0337` | Remix + tRPC + Prisma monorepo | 2,458 |
 | RealWorld Express + React: [back end](https://github.com/gothinkster/node-express-realworld-example-app) + [front end](https://github.com/khaledosman/react-redux-realworld-example-app) in one repo | `30b68e1` + `53b0b4c` | Express + Prisma, React + Redux | 109 |
 | [RealWorld NestJS](https://github.com/lujakob/nestjs-realworld-example-app) | `c1c2cc4` | NestJS + TypeORM | 43 |
+| RealWorld Gin + React: [back end](https://github.com/gothinkster/golang-gin-realworld-example-app) + the same front end | `a41289b` + `53b0b4c` | Go + Gin, React + Redux | 84 |
+| RealWorld Flask + React: [back end](https://github.com/gothinkster/flask-realworld-example-app) + the same front end | `4b95fb2` + `53b0b4c` | Python + Flask, React + Redux | 88 |
+| RealWorld Django + React: [back end](https://github.com/gothinkster/django-realworld-example-app) + the same front end | `29c9d42` + `53b0b4c` | Django REST framework, React + Redux | 103 |
 
 None of them is configured for weave: no `.weave/patterns.json`, no hints. The RealWorld
 halves are two upstream repositories copied side by side, the way a team that owns both
@@ -71,7 +74,7 @@ written. It now compares with the last commit too.
 
 ## 4. Speed
 
-<img src="img/chart-speed.svg" alt="weave check wall time: documenso about 1.2 seconds, RealWorld Express + React 63 ms, RealWorld NestJS 35 ms." width="100%">
+<img src="img/chart-speed.svg" alt="weave check wall time: documenso about 1.3 seconds, RealWorld Express + React 55 ms, RealWorld NestJS 34 ms." width="100%">
 
 **Method.** `weave check` on a clean tree, which re-indexes and runs the gate; median of
 three runs after five fresh `weave index` runs. Linux, one process, no daemon.
@@ -83,6 +86,21 @@ three runs after five fresh `weave index` runs. Linux, one process, no daemon.
 **Method.** weave's `tools/list` response, serialised, bytes ÷ 4. The other servers' figures
 are as published by their maintainers and not re-measured here. This is the one row where
 every server is measured in the same unit: JSON schema that sits in context on every turn.
+
+## 6. Python and Go back ends
+
+The three extra RealWorld pairs put the same React front end in front of a Gin, a Flask and
+a Django back end, so the only thing that changes is the server language.
+
+| back end | endpoints | front-end calls matched | broken on the unchanged repo | grep finds the path |
+|---|---|---|---|---|
+| Gin (`router.Group("/api")`, groups passed into handler files) | 21 | 18 of 18 | 0 | 0 of 21 |
+| Flask (`Blueprint(url_prefix=…)`, `register_blueprint`) | 19 | 18 of 18 | 0 | 0 of 19 |
+| Django REST framework (`include()` chains, `router.register`) | 13 | 18 of 18 | 0 | 0 of 13 |
+
+Grep finds none of the paths because every one of them is joined from a prefix in one file
+and a route in another. Django's count is lower because one DRF `router.register` serves a
+whole viewset (list, detail and its actions) and is counted as two routes.
 
 ## Before and after the launch fixes
 
