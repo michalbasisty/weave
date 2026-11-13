@@ -32,7 +32,7 @@ jobs:
               -o "dist/weave-$os-$arch$ext" ./cmd/weave
           done
           # the OpenChamber extension, installable from its release URL (Settings → Extensions)
-          (cd extensions && zip -qr ../dist/weave-openchamber.zip openchamber)
+          (cd extensions && zip -qr ../dist/weave-openchamber.zip openchamber -x 'openchamber/node_modules*' 'openchamber/*.test.mjs' 'openchamber/*/*.test.mjs')
           cd dist
           sha256sum * > checksums.txt
           cat checksums.txt
