@@ -137,7 +137,7 @@ func buildDiagram(g *weave.Graph, f *weave.Facts, broken []Broken, capS, capE, c
 		}
 	}
 	for _, b := range broken {
-		be := brokenEdge{gone: b.Endpoint, closest: weave.Closest(g, b.Endpoint)}
+		be := brokenEdge{gone: b.Endpoint, closest: b.Closest}
 		for _, s := range b.Screens {
 			be.screens = append(be.screens, s)
 			screenSet[s] = true

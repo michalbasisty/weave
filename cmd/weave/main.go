@@ -29,6 +29,8 @@ func main() {
 		code = cmdExplore()
 	case "wiki":
 		code = cmdWiki()
+	case "demo":
+		code = cmdDemo()
 	case "live":
 		servePage = "live"
 		code = cmdServe()
@@ -131,6 +133,7 @@ func helpText() string {
 	return `weave — repo map for agents and people
 
   weave                         status, and what to do next
+  weave demo    [dir] [--live]  break and catch a change in a sample shop, in 30 seconds
   weave explore                 open the map in your browser (--all: every project)
   weave wiki                    write a read-only wiki: a page per module, endpoint, screen, table, change
   weave wiki --check            fail when the wiki no longer describes HEAD

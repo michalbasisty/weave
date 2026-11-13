@@ -21,6 +21,7 @@ One static Go binary. No server, no account, no network.
 
 ```bash
 go install github.com/michalbasisty/weave/cmd/weave@latest   # or grab a binary from Releases
+weave demo --live    # 30 seconds: a sample shop, an endpoint renamed, the gate catches it
 cd your-app
 weave check          # what the uncommitted change breaks; exit 1 if anything
 weave serve          # the map in your browser, every project you use in one dropdown
@@ -29,6 +30,13 @@ weave init --hooks   # wire it into Claude Code, Cursor, VS Code, opencode, Open
 
 Binaries for macOS, Linux and Windows are on
 [Releases](https://github.com/michalbasisty/weave/releases).
+
+`weave demo` unpacks a small Express + React + Prisma shop into a temporary folder, maps it,
+renames `GET /api/orders` the way an agent would, and runs the gate: it fails, names the two
+screens that lost the route and the route they meant, then passes once the client is fixed.
+With `--live` the live map follows along in your browser.
+
+<img src="docs/img/demo.gif" alt="weave demo --live: on the left the terminal maps a sample shop, renames GET /api/orders to /api/orders/history, and the check fails with the closest route; on the right the live map turns the /cart and /orders screens red with a dashed line to the removed route, then green when the client is fixed and the gate passes." width="100%">
 
 ## What it catches
 
@@ -49,9 +57,9 @@ posts the same report, with the screens that lose their data:
 
 > ### ❌ weave check: 1 problem(s)
 >
-> | endpoint | called from | screens |
-> |---|---|---|
-> | `GET /tags` | `frontend/src/agent.js:218` | `/`, `/login`, `/register`, `/editor/:slug`, `/editor` +3 |
+> | endpoint | called from | screens | did you mean |
+> |---|---|---|---|
+> | `GET /tags` | `frontend/src/agent.js:218` | `/`, `/login`, `/register`, `/editor/:slug`, `/editor` +3 | `GET /tag-list` |
 
 and a picture of the blast radius, which GitHub draws from the comment itself: every screen
 that still calls the removed route, the route it most likely meant, and the tables behind it.

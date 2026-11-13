@@ -218,3 +218,21 @@ func TestMermaidLabelsAreQuoted(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+// A rename's target is the route the same change added under the same parent,
+// even when another route is a shorter edit away.
+func TestRenamedToPrefersARouteTheChangeAdded(t *testing.T) {
+	g := &weave.Graph{Nodes: []*weave.GNode{
+		{ID: "endpoint:GET /api/orders/:id", Kind: weave.KindEndpoint, Name: "GET /api/orders/:id"},
+		{ID: "endpoint:GET /api/orders/history", Kind: weave.KindEndpoint, Name: "GET /api/orders/history"},
+	}}
+	if got := renamedTo(g, "GET /api/orders", []string{"GET /api/orders/history"}); got != "GET /api/orders/history" {
+		t.Errorf("with the route added: %q", got)
+	}
+	if got := renamedTo(g, "GET /api/orders", []string{"POST /api/orders/history"}); got != "GET /api/orders/:id" {
+		t.Errorf("an added route of another method is not the rename: %q", got)
+	}
+	if got := renamedTo(g, "GET /api/orders", nil); got != "GET /api/orders/:id" {
+		t.Errorf("with nothing added: %q", got)
+	}
+}

@@ -7,6 +7,7 @@ file is the manual.
 
 ```bash
 weave                      # status, and what to do next
+weave demo [dir] [--live]  # a sample shop in a temp folder (or dir): map, a renamed endpoint, the gate fails with the route it meant, the fix passes; --live opens the live map and waits for Enter between steps
 weave explore              # the map as one file you can open
 weave serve [--port 7777]  # the map hosted, with actions (loopback only), opened in your browser (--no-open skips it); a busy default port moves to the next free one
 weave live                 # the same server opened on /live: screens → endpoints → tables, lit up by the uncommitted change as files change; broken calls red, fixed ones green
@@ -249,15 +250,17 @@ It builds the Go binary, indexes, checks, prints coverage, writes the report to 
 summary and, on a pull request, comments with each removed endpoint that is still called, the
 line that calls it and the screens that reach that line:
 
-| endpoint | called from | screens |
-|---|---|---|
-| `GET /api/v1/orders` | `packages/web/src/pages/Orders.tsx:9` | `/orders` |
+| endpoint | called from | screens | did you mean |
+|---|---|---|---|
+| `GET /api/v1/orders` | `packages/web/src/pages/Orders.tsx:9` | `/orders` | `GET /api/v1/orders/history` |
 
 Under the table is a Mermaid diagram of the blast radius, which GitHub renders in the comment:
 the screens that call the endpoints the change declares (or, for a shared module, the endpoints
 its importers call), those endpoints, the tables behind them (endpoint → module → model →
 table), and each removed endpoint that is still called, in red, with a "did you mean" edge to
-the closest route. It shows at most 10 screens, 10 endpoints and 8 tables, plus a "+N more" node.
+the closest route. "Closest" prefers a route the same change added under the same parent path
+with the same method (`GET /orders` → `GET /orders/history`), then the nearest route by shape.
+It shows at most 10 screens, 10 endpoints and 8 tables, plus a "+N more" node.
 
 `comment: on-change` (the default) posts when the check fails or the change reaches an endpoint,
 and then keeps that one comment current. `on-failure` posts only when the check fails, `always`

@@ -170,8 +170,8 @@
       for (const sc of b.screens) { const a = pos.get('s:' + sc); if (a && ghost) s('path', { d: curve(a, ghost), class: 'link bad' }, linkLayer); }
       const mean = pos.get('e:' + b.closest);
       if (ghost && mean && mean !== ghost) {
-        const x = ghost.x + ghost.w + 10, y1 = ghost.y + ghost.h / 2, y2 = mean.y + mean.h / 2;
-        s('path', { d: `M${ghost.x + ghost.w},${y1} C${x + 40},${y1} ${x + 40},${y2} ${mean.x + mean.w},${y2}`, class: 'link mean' }, linkLayer);
+        const x = ghost.x + ghost.w, y1 = ghost.y + ghost.h / 2, y2 = mean.y + mean.h / 2;
+        s('path', { d: `M${ghost.x + ghost.w},${y1} C${x + 26},${y1} ${x + 26},${y2} ${mean.x + mean.w},${y2}`, class: 'link mean' }, linkLayer);
       }
     }
     svg.__links = links;
@@ -257,7 +257,7 @@
       return;
     }
     const newFiles = st.changes.filter((f) => !prev.changes.includes(f));
-    const what = newFiles.length ? newFiles.map((f) => f.split('/').pop()).join(', ') : st.changes.length ? 'a changed file' : 'the tree';
+    const what = newFiles.length ? newFiles.map((f) => f.split('/').pop()).join(', ') : st.changes.length ? 'An edit' : 'The tree';
     const gone = b.broken.filter((x) => !prev.blast.broken.some((y) => y.gone === x.gone));
     const fixed = prev.blast.broken.filter((x) => !b.broken.some((y) => y.gone === x.gone));
     if (gone.length) {
@@ -269,7 +269,9 @@
     } else if (!st.changes.length && prev.changes.length) {
       log('Committed or reverted: nothing uncommitted.');
     } else {
-      log(`${what} changed → ${plural(b.endpoints.length, 'endpoint')}, ${plural(b.screens.length, 'screen')}, ${plural(b.tables.length, 'table')}.`);
+      const pb = prev.blast;
+      if (!newFiles.length && pb.endpoints.length === b.endpoints.length && pb.screens.length === b.screens.length && pb.tables.length === b.tables.length) return;
+      log(`${what}${newFiles.length ? " changed" : ""} → ${plural(b.endpoints.length, 'endpoint')}, ${plural(b.screens.length, 'screen')}, ${plural(b.tables.length, 'table')}.`);
     }
   };
 
