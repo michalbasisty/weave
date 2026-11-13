@@ -168,3 +168,53 @@ func TestSecondCheckStillFails(t *testing.T) {
 		}
 	}
 }
+
+// The comment draws the blast radius: the removed endpoint in red with the
+// screens that still call it, and a touched file's endpoint with its screens.
+func TestMarkdownDrawsTheBlastRadius(t *testing.T) {
+	root := filepath.Join("..", "..", "test", "fixture")
+	g := weave.BuildGraph(root)
+	gone, file, line := "GET /api/v1/orders", "packages/web/src/pages/Orders.tsx", 9
+	kept := g.Nodes[:0]
+	for _, n := range g.Nodes {
+		if !(n.Kind == weave.KindEndpoint && n.Name == gone) {
+			kept = append(kept, n)
+		}
+	}
+	g.Nodes = append(kept, &weave.GNode{ID: weave.CallID("GET", "/api/v1/orders"), Kind: weave.KindCall, Name: gone, File: &file, Line: &line})
+	g.PrevEndpoints = []string{gone}
+
+	res := Run(g, root, "", false, []string{"README.md"})
+	md := res.Markdown()
+	for _, want := range []string{"**Blast radius**", "```mermaid\nflowchart LR", gone + "<br/><i>removed</i>", ":::gone", "still calls", "linkStyle"} {
+		if !strings.Contains(md, want) {
+			t.Fatalf("no %q in:\n%s", want, md)
+		}
+	}
+
+	// A plain edit to a back-end file: its endpoints, nothing red.
+	var backend string
+	for _, n := range g.Nodes {
+		if n.Kind == weave.KindEndpoint && n.File != nil {
+			backend = *n.File
+			break
+		}
+	}
+	if backend == "" {
+		t.Skip("fixture has no endpoint file")
+	}
+	g2 := weave.BuildGraph(root)
+	ok := Run(g2, root, "", false, []string{backend}).Diagram
+	if !strings.Contains(ok, ":::touched") || strings.Contains(ok, ":::gone") {
+		t.Fatalf("diagram for %s:\n%s", backend, ok)
+	}
+	if strings.Contains(Run(g2, root, "", false, []string{"README.md"}).Diagram, "flowchart") {
+		t.Fatal("a README edit drew a diagram")
+	}
+}
+
+func TestMermaidLabelsAreQuoted(t *testing.T) {
+	if got := label(`GET /a"<b>`); got != "GET /a#quot;#lt;b#gt;" {
+		t.Fatal(got)
+	}
+}

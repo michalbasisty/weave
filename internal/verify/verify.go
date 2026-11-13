@@ -29,6 +29,8 @@ type Result struct {
 	Broken    []Broken
 	Pages     []string
 	Endpoints []string
+	// Diagram is a Mermaid picture of the blast radius, "" when there is none.
+	Diagram string
 }
 
 // Broken is one removed endpoint that a live call site still names.
@@ -266,6 +268,7 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 	if len(removed) > 0 {
 		extra += fmt.Sprintf(", %d endpoint(s) removed", len(removed))
 	}
+	res.Diagram = blastDiagram(g, f, res.Broken)
 	res.Scope = scope + extra
 	res.Errors = errors
 	res.Warnings = warnings

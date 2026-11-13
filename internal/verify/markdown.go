@@ -57,6 +57,9 @@ func (r Result) Markdown() string {
 		}
 		b.WriteString("\n")
 	}
+	if r.Diagram != "" {
+		b.WriteString("**Blast radius**\n\n" + r.Diagram + "\n")
+	}
 	if len(r.Pages)+len(r.Endpoints) > 0 {
 		b.WriteString("<details><summary>What this change touches</summary>\n\n")
 		if len(r.Pages) > 0 {

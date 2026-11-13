@@ -252,8 +252,15 @@ line that calls it and the screens that reach that line:
 |---|---|---|
 | `GET /api/v1/orders` | `packages/web/src/pages/Orders.tsx:9` | `/orders` |
 
-`comment: on-failure` (the default) posts only when the check fails and then keeps that one
-comment current, `always` posts on every run, `false` never does. `weave check --markdown`
+Under the table is a Mermaid diagram of the blast radius, which GitHub renders in the comment:
+the screens that call the endpoints the change declares (or, for a shared module, the endpoints
+its importers call), those endpoints, the tables behind them (endpoint → module → model →
+table), and each removed endpoint that is still called, in red, with a "did you mean" edge to
+the closest route. It shows at most 10 screens, 10 endpoints and 8 tables, plus a "+N more" node.
+
+`comment: on-change` (the default) posts when the check fails or the change reaches an endpoint,
+and then keeps that one comment current. `on-failure` posts only when the check fails, `always`
+posts on every run, and `false` never does. `weave check --markdown`
 prints the same report locally. With `wiki: 'true'` fails a
 branch whose committed `docs/wiki` describes an older tree. It exits 1 when:
 

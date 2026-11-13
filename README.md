@@ -53,6 +53,13 @@ posts the same report, with the screens that lose their data:
 > |---|---|---|
 > | `GET /tags` | `frontend/src/agent.js:218` | `/`, `/login`, `/register`, `/editor/:slug`, `/editor` +3 |
 
+and a picture of the blast radius, which GitHub draws from the comment itself: every screen
+that still calls the removed route, the route it most likely meant, and the tables behind it.
+A PR that breaks nothing gets the same picture of what it reaches, so a reviewer sees the
+screens a back-end change touches before opening a single file.
+
+<img src="docs/img/blast-radius.png" alt="weave's PR comment diagram: eight screens still call the removed GET /tags (red), which points to the closest route GET /tag-list (did you mean), which reads the Tag table." width="100%">
+
 <img src="docs/img/chart-gate.svg" alt="Renaming each of the 15 routes the RealWorld front end calls, one at a time: weave check failed and named the caller 14 times." width="100%">
 
 Three things fail the gate, nothing else: a **removed endpoint that is still called**, a
