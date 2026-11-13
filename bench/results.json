@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-11-12T18:15:55.955Z",
-  "weave": "weave 0.6.1-0.20261112175845-346627f459c3+dirty",
+  "measuredAt": "2026-11-13T17:00:57.225Z",
+  "weave": "weave 0.8.1-0.20261113165310-46959ed01a6d",
   "repos": [
     {
       "name": "documenso",
@@ -38,8 +38,8 @@
         "found": 30,
         "of": 327
       },
-      "indexMs": 1085,
-      "checkMs": 1218,
+      "indexMs": 1351,
+      "checkMs": 1464,
       "screens": {
         "n": 119,
         "weave": 222,
@@ -74,8 +74,8 @@
         "found": 20,
         "of": 20
       },
-      "indexMs": 39,
-      "checkMs": 47,
+      "indexMs": 54,
+      "checkMs": 64,
       "screens": {
         "n": 8,
         "weave": 215.5,
@@ -190,8 +190,8 @@
         "found": 0,
         "of": 21
       },
-      "indexMs": 24,
-      "checkMs": 37,
+      "indexMs": 23,
+      "checkMs": 36,
       "screens": {
         "n": 0,
         "weave": 0,
@@ -226,8 +226,8 @@
         "found": 0,
         "of": 21
       },
-      "indexMs": 48,
-      "checkMs": 74,
+      "indexMs": 50,
+      "checkMs": 71,
       "screens": {
         "n": 8,
         "weave": 180,
@@ -262,8 +262,8 @@
         "found": 0,
         "of": 19
       },
-      "indexMs": 52,
-      "checkMs": 59,
+      "indexMs": 56,
+      "checkMs": 73,
       "screens": {
         "n": 8,
         "weave": 157,
@@ -299,7 +299,7 @@
         "of": 13
       },
       "indexMs": 67,
-      "checkMs": 77,
+      "checkMs": 79,
       "screens": {
         "n": 8,
         "weave": 184,
@@ -334,8 +334,8 @@
         "found": 0,
         "of": 24
       },
-      "indexMs": 41,
-      "checkMs": 53,
+      "indexMs": 40,
+      "checkMs": 52,
       "screens": {
         "n": 8,
         "weave": 179,
@@ -370,8 +370,8 @@
         "found": 1,
         "of": 22
       },
-      "indexMs": 73,
-      "checkMs": 103,
+      "indexMs": 98,
+      "checkMs": 125,
       "screens": {
         "n": 8,
         "weave": 167,
