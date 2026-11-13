@@ -1,7 +1,7 @@
 {
   "name": "weave-openchamber",
-  "version": "0.3.0",
-  "description": "weave for OpenChamber, with nothing to install: it fetches weave itself. A panel with the open project's map (screens, endpoints, modules, tables, search in plain words, what a change reaches), your uncommitted change checked by weave's contract gate, @weave in the composer, and the gate run after every agent turn.",
+  "version": "0.4.0",
+  "description": "weave for OpenChamber, with nothing to install: it fetches weave itself. A panel with the open project's map (screens, endpoints, modules, tables, search in plain words, what a change reaches), your uncommitted change checked by weave's contract gate, the project's specs (change records with their tasks, to tick, edit and hand to a new agent session), @weave in the composer, and the gate run after every agent turn.",
   "license": "MIT",
   "type": "module",
   "repository": "https://github.com/michalbasisty/weave",

@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -158,6 +158,93 @@ test('HTTP: bearer, health, bad events', async () => {
     assert.deepEqual(await ms.json(), { items: [] });
     const mr = await fetch(`${base}/mentions/resolve`, { method: 'POST', headers: auth, body: JSON.stringify({ id: 'nope' }) });
     assert.equal(mr.status, 404);
+  } finally {
+    m.server.close();
+  }
+});
+
+test('specs: change records from the map, paths, Work Status rows, the task prompt', () => {
+  const g = {
+    nodes: [
+      { id: 'change:2026-01-01-orders', kind: 'change', name: '2026-01-01-orders', file: 'specs/changes/2026-01-01-orders/tasks.md' },
+      { id: 'task:2026-01-01-orders/T1', kind: 'task', name: '2026-01-01-orders T1', meta: { done: true, title: 'API list. Evidence: `a.ts`.' } },
+      { id: 'task:2026-01-01-orders/T2', kind: 'task', name: '2026-01-01-orders T2', meta: { done: false, title: 'Web page.' } },
+      { id: 'change:2025-12-01-done', kind: 'change', name: '2025-12-01-done', file: 'specs/changes/2025-12-01-done/tasks.md' },
+    ],
+    edges: [
+      { from: 'change:2026-01-01-orders', to: 'task:2026-01-01-orders/T1', kind: 'has_task' },
+      { from: 'change:2026-01-01-orders', to: 'task:2026-01-01-orders/T2', kind: 'has_task' },
+    ],
+  };
+  const cs = m.changesOf(g);
+  assert.deepEqual(cs.map((c) => [c.slug, c.done, c.total]), [['2026-01-01-orders', 1, 2], ['2025-12-01-done', 0, 0]]);
+  assert.equal(cs[0].tasks[0].title, 'API list.');
+  const rows = m.specStatusRows(cs);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].label, 'orders');
+  assert.deepEqual(rows[0].content, { kind: 'bar', value: 50 });
+  assert.match(rows[0].tooltip, /next T2 Web page/);
+
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'weave-specpath-'));
+  assert.ok(m.specPath(dir, 'specs/changes/x/tasks.md'));
+  for (const bad of ['../specs/a.md', 'specs/../../etc/passwd.md', 'README.md', 'specs/a.txt', 'specs\\a.md', '/specs/a.md']) {
+    assert.equal(m.specPath(dir, bad), null, bad);
+  }
+  assert.ok(m.NAME_OK.test('billing-retry') && !m.NAME_OK.test('../x') && !m.NAME_OK.test('-rf'));
+  assert.match(m.taskPrompt('2026-01-01-orders', 'next  T2  Web page.'), /"2026-01-01-orders"[\s\S]*next {2}T2[\s\S]*tick/);
+  assert.match(m.instructionsText('/w'), /weave plan <change>/);
+});
+
+// The whole specs flow over HTTP against a real weave. CI builds one and sets
+// WEAVE_BIN; without it, this test is skipped.
+test('HTTP: specs list, read, tick, create, save, plan, @ menu', { skip: !process.env.WEAVE_BIN || process.platform === 'win32' }, async () => {
+  process.env.PATH = `${path.dirname(path.resolve(process.env.WEAVE_BIN))}${path.delimiter}${process.env.PATH}`;
+  const repo = mkdtempSync(path.join(os.tmpdir(), 'weave-specs-'));
+  cpSync(path.join(here, '..', '..', '..', 'test', 'fixture'), repo, { recursive: true, filter: (p) => !p.includes(`${path.sep}.weave`) });
+  const git = (...a) => new Promise((r) => execFile('git', ['-C', repo, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], r));
+  await git('init', '-q'); await git('add', '-A'); await git('commit', '-qm', 'fixture');
+
+  await new Promise((r) => m.server.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${m.server.address().port}`;
+  const auth = { Authorization: 'Bearer test-token' };
+  const q = `directory=${encodeURIComponent(repo)}`;
+  const get = async (p) => (await fetch(`${base}${p}${p.includes('?') ? '&' : '?'}${q}`, { headers: auth })).json();
+  const post = async (p, body) => { const r = await fetch(`${base}${p}?${q}`, { method: 'POST', headers: auth, body: JSON.stringify(body) }); return [r.status, await r.json()]; };
+  try {
+    let specs = await get('/specs');
+    assert.equal(specs.full, true);
+    const orders = specs.changes.find((c) => c.slug === '2026-01-01-orders');
+    assert.deepEqual([orders.done, orders.total], [1, 2]);
+    assert.ok(specs.views.some((v) => v.name === '/orders'));
+
+    const page = await get(`/spec?path=${encodeURIComponent(orders.file)}`);
+    assert.match(page.html, /<li>\[ \] T2 Web page/);
+    assert.equal((await post('/spec/save', { path: '../../etc/passwd.md', text: 'x' }))[0], 400);
+
+    const plan = await get('/plan?change=2026-01-01-orders');
+    assert.match(plan.text, /next {2}T2/);
+
+    assert.equal((await post('/spec/task', { change: '2026-01-01-orders', task: 'T2', done: true }))[0], 200);
+    specs = await get('/specs');
+    assert.equal(specs.changes.find((c) => c.slug === '2026-01-01-orders').done, 2);
+    assert.match(readFileSync(path.join(repo, orders.file), 'utf8'), /- \[x\] T2/);
+
+    const [st, made] = await post('/spec/new', { name: 'billing-retry', title: 'Retry failed charges' });
+    assert.equal(st, 200);
+    const created = (await get('/specs')).changes.find((c) => c.slug === made.slug);
+    assert.ok(created, made.slug);
+    const proposal = `specs/changes/${made.slug}/proposal.md`;
+    assert.equal((await post('/spec/save', { path: proposal, text: '# Retry failed charges\n\nWhy: lost revenue.\n' }))[0], 200);
+    assert.match(readFileSync(path.join(repo, proposal), 'utf8'), /lost revenue/);
+    assert.equal((await post('/spec/save', { path: proposal, text: '   ' }))[0], 400);
+    assert.equal((await post('/spec/new', { name: '../evil' }))[0], 400);
+
+    const menu = await fetch(`${base}/mentions/search`, { method: 'POST', headers: auth, body: JSON.stringify({ query: 'spec', directory: repo }) });
+    const items = (await menu.json()).items;
+    const row = items.find((i) => i.title === made.slug);
+    assert.ok(row, JSON.stringify(items));
+    const resolved = await (await fetch(`${base}/mentions/resolve`, { method: 'POST', headers: auth, body: JSON.stringify({ id: row.id }) })).json();
+    assert.match(resolved.text, /Work on the next task/);
   } finally {
     m.server.close();
   }

@@ -233,30 +233,19 @@ func Handler(c Config) http.Handler {
 			writeJSON(w, 500, map[string]string{"error": err.Error()})
 			return
 		}
-		writeJSON(w, 200, map[string]any{"changes": panelSpecs(g), "capabilities": panelCapabilities(c.Root, g), "views": panelViews(c.Root, g)})
+		writeJSON(w, 200, SpecsPayload(c.Root, g))
 	})
 
 	// spec renders one spec file for people. Only Markdown under specs/ is served, and
 	// the renderer escapes before it adds a tag. text is the source the editor starts
 	// from.
 	mux.HandleFunc("/api/spec", func(w http.ResponseWriter, r *http.Request) {
-		rel, abs, ok := specFile(c.Root, r.URL.Query().Get("path"))
-		if !ok {
-			writeJSON(w, 400, map[string]string{"error": "a path under specs/ ending .md"})
-			return
-		}
-		info, err := os.Stat(abs)
-		if err != nil || info.Size() > 512*1024 {
-			writeJSON(w, 400, map[string]string{"error": "unreadable or larger than 512 KB"})
-			return
-		}
-		raw, err := os.ReadFile(abs)
+		page, err := SpecPage(c.Root, r.URL.Query().Get("path"))
 		if err != nil {
 			writeJSON(w, 400, map[string]string{"error": err.Error()})
 			return
 		}
-		md := string(raw)
-		writeJSON(w, 200, map[string]any{"path": rel, "title": specTitle(md), "text": md, "html": renderSpecMD(md)})
+		writeJSON(w, 200, page)
 	})
 
 	// spec-save replaces one spec file: the panel's editor writes through the same lock
@@ -271,21 +260,9 @@ func Handler(c Config) http.Handler {
 			writeJSON(w, 400, map[string]string{"error": "path and text are required"})
 			return
 		}
-		rel, abs, ok := specFile(c.Root, body.Path)
-		if !ok {
-			writeJSON(w, 400, map[string]string{"error": "a path under specs/ ending .md"})
-			return
-		}
-		if info, err := os.Stat(abs); err != nil || info.Size() > 512*1024 {
-			writeJSON(w, 400, map[string]string{"error": "unreadable or larger than 512 KB"})
-			return
-		}
-		if len(body.Text) > 512*1024 {
-			writeJSON(w, 400, map[string]string{"error": "a spec is at most 512 KB"})
-			return
-		}
-		if err := weave.SaveSpecText(c.Root, rel, body.Text); err != nil {
-			writeJSON(w, 500, map[string]string{"error": err.Error()})
+		rel, err := SaveSpec(c.Root, body.Path, body.Text)
+		if err != nil {
+			writeJSON(w, 400, map[string]string{"error": err.Error()})
 			return
 		}
 		writeJSON(w, 200, map[string]any{"ok": true, "path": rel, "bytes": len(body.Text)})
@@ -434,6 +411,51 @@ func specFile(root, path string) (string, string, bool) {
 		return "", "", false
 	}
 	return rel, abs, true
+}
+
+// SpecsPayload is every change record with its tasks, every capability spec,
+// and every screen with what it reaches and the capability that owns it. The
+// panel's Specs drawer and `weave spec list --json` both serve it.
+func SpecsPayload(root string, g *weave.Graph) map[string]any {
+	return map[string]any{"changes": panelSpecs(g), "capabilities": panelCapabilities(root, g), "views": panelViews(root, g)}
+}
+
+// SpecPage reads one Markdown file under specs/: its source, its title, and HTML
+// rendered for people (escaped before any tag is added).
+func SpecPage(root, path string) (map[string]any, error) {
+	rel, abs, ok := specFile(root, path)
+	if !ok {
+		return nil, fmt.Errorf("a path under specs/ ending .md")
+	}
+	info, err := os.Stat(abs)
+	if err != nil || info.Size() > 512*1024 {
+		return nil, fmt.Errorf("unreadable or larger than 512 KB")
+	}
+	raw, err := os.ReadFile(abs)
+	if err != nil {
+		return nil, err
+	}
+	md := string(raw)
+	return map[string]any{"path": rel, "title": specTitle(md), "text": md, "html": renderSpecMD(md)}, nil
+}
+
+// SaveSpec replaces one existing spec file under specs/, through the same lock as
+// the task writer and a temp file, so a reader never sees half a document.
+func SaveSpec(root, path, text string) (string, error) {
+	rel, abs, ok := specFile(root, path)
+	if !ok {
+		return "", fmt.Errorf("a path under specs/ ending .md")
+	}
+	if info, err := os.Stat(abs); err != nil || info.Size() > 512*1024 {
+		return "", fmt.Errorf("unreadable or larger than 512 KB")
+	}
+	if len(text) > 512*1024 {
+		return "", fmt.Errorf("a spec is at most 512 KB")
+	}
+	if err := weave.SaveSpecText(root, rel, text); err != nil {
+		return "", err
+	}
+	return rel, nil
 }
 
 type panelTask struct {

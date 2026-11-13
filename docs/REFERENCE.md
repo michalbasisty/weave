@@ -19,6 +19,12 @@ weave context <file...>    # --budget 250; --depth code for a window at each anc
 weave impact  <file...>    # the full blast radius
 weave plan    <change> [T3]
 weave change  [slug]
+weave spec new <name> [--title …]   # a change record under specs/changes/ (proposal, tasks, spec delta)
+weave spec list [--json]   # every change with its tasks; --json adds capabilities and views
+weave spec show <specs/…md> [--json]  # one spec file; --json adds the rendered HTML
+weave spec save <specs/…md> < text   # write a spec file from stdin
+weave spec task done|reopen <change> <T1>
+weave spec rm <change>
 weave search  <query>
 weave grep    <text>       # --regex, --limit; graph files rank first
 weave check   [file...]    # no args = git diff; exit 1 on a broken contract (--markdown for a PR comment)

@@ -54,8 +54,10 @@ func ExtractRubyPHP(files []SourceFile, b *Builder) []Endpoint {
 // ---------------------------------------------------------------- rails
 
 var (
-	reRbSym      = regexp.MustCompile(`^:?["']?([\w/.\-]+)["']?`)
-	reRbOpt      = func(k string) *regexp.Regexp { return regexp.MustCompile(`\b` + k + `:\s*(\[[^\]]*\]|:?["']?[\w/\-]+["']?)`) }
+	reRbSym = regexp.MustCompile(`^:?["']?([\w/.\-]+)["']?`)
+	reRbOpt = func(k string) *regexp.Regexp {
+		return regexp.MustCompile(`\b` + k + `:\s*(\[[^\]]*\]|:?["']?[\w/\-]+["']?)`)
+	}
 	reRbOnly     = reRbOpt("only")
 	reRbExcept   = reRbOpt("except")
 	reRbParam    = reRbOpt("param")

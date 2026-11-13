@@ -39,7 +39,9 @@ jobs:
         run: google-chrome --version
       - run: node test/ui/panel.mjs
       - name: OpenChamber extension service
-        run: node --test extensions/openchamber/service/main.test.mjs
+        run: |
+          go build -o "$RUNNER_TEMP/weave" ./cmd/weave
+          WEAVE_BIN="$RUNNER_TEMP/weave" node --test extensions/openchamber/service/main.test.mjs
 
   action:
     name: action on the fixture
