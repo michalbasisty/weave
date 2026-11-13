@@ -120,6 +120,7 @@ func (c Config) authed(r *http.Request) bool {
 // documentation, `/api/*` is what the page can do.
 func Handler(c Config) http.Handler {
 	mux := http.NewServeMux()
+	c.liveRoutes(mux)
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {

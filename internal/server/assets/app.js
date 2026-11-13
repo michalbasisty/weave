@@ -503,6 +503,7 @@
     if (!nav.querySelector('[data-wtab]')) {
       const icon = d => '<svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="' + d + '"/></svg>';
       nav.append(el('a', { href: '#specs', 'data-wtab': 'specs', html: icon('M4 2.5h5.5L12 5v8.5H4zM9.5 2.5V5H12M6 8h4M6 10.5h4') + '<span class="tl">Specs</span>' }));
+      nav.append(el('a', { href: 'live', 'data-wtab': 'live', title: 'The map, lit up by your uncommitted change as you edit', html: icon('M1.5 8h3l2-4.5 3 9 2-4.5h3') + '<span class="tl">Live</span>' }));
       nav.append(el('a', { href: '#wiki', 'data-wtab': 'wiki', html: icon('M2.5 3.5h4a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 0-1.5-1.5h-4zM13.5 3.5h-4A1.5 1.5 0 0 0 8 5v8a1.5 1.5 0 0 1 1.5-1.5h4z') + '<span class="tl">Wiki</span>' }));
     }
     for (const a of nav.querySelectorAll('a')) {

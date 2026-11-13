@@ -149,6 +149,14 @@ verdict, every screen, endpoint, module and table drawn on its line, the checks,
 and a generated wiki. A dropdown switches between every repo weave has indexed. Every
 `file:line` opens in VS Code or Cursor. Light and dark follow your system.
 
+**The live map.** `weave live` (or the Live tab in the panel) draws the whole app as three
+columns, screens → endpoints → tables, and lights up what your uncommitted change reaches
+while you or an agent edit. A route that disappears while screens still call it turns red,
+with a dotted line to the route it most likely meant, and goes green when the caller is fixed.
+It watches the working tree, so there is nothing to click.
+
+<img src="docs/img/live.gif" alt="weave live on RealWorld: an edit to the article controller lights up 11 endpoints, 8 screens and 2 tables; renaming GET /tags turns it red with 8 screens still calling it and a did-you-mean line to GET /tag-list; fixing the front-end call turns it green and the gate passes." width="100%">
+
 <img src="docs/img/screens/documenso-overview.png" alt="The panel's overview on documenso: the contract gate passes, 119 screens, 327 endpoints, 103 modules and 55 tables, all 312 frontend calls matched, and the next tests worth writing." width="100%">
 
 **The agent interface.** `weave mcp` gives Claude Code, Cursor, VS Code or opencode five tools,

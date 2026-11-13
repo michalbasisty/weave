@@ -35,6 +35,46 @@ type brokenEdge struct {
 // blastDiagram builds the picture from the graph and what the gate found. It
 // returns "" when there is nothing to draw.
 func blastDiagram(g *weave.Graph, f *weave.Facts, broken []Broken) string {
+	d := buildDiagram(g, f, broken, maxScreens, maxEndpoints, maxTables)
+	if len(d.endpoints)+len(d.broken) == 0 {
+		return ""
+	}
+	return d.mermaid()
+}
+
+// Blast is the same blast radius as data, uncapped, for the live map.
+type Blast struct {
+	Screens   []string      `json:"screens"`
+	Endpoints []string      `json:"endpoints"`
+	Tables    []string      `json:"tables"`
+	Broken    []BlastBroken `json:"broken"`
+}
+
+// BlastBroken is a removed endpoint that a call still names.
+type BlastBroken struct {
+	Gone    string   `json:"gone"`
+	Closest string   `json:"closest"`
+	Caller  string   `json:"caller"`
+	Screens []string `json:"screens"`
+}
+
+// NewBlast computes the blast radius of a gate result on its graph.
+func NewBlast(g *weave.Graph, f *weave.Facts, broken []Broken) Blast {
+	d := buildDiagram(g, f, broken, 0, 0, 0)
+	b := Blast{Screens: d.screens, Endpoints: d.endpoints, Tables: d.tables, Broken: []BlastBroken{}}
+	for i, x := range d.broken {
+		b.Broken = append(b.Broken, BlastBroken{Gone: x.gone, Closest: x.closest, Caller: broken[i].Caller, Screens: x.screens})
+	}
+	for _, xs := range []*[]string{&b.Screens, &b.Endpoints, &b.Tables} {
+		if *xs == nil {
+			*xs = []string{}
+		}
+	}
+	return b
+}
+
+// buildDiagram gathers the blast radius; a cap of 0 keeps everything.
+func buildDiagram(g *weave.Graph, f *weave.Facts, broken []Broken, capS, capE, capT int) diagram {
 	d := diagram{calls: map[[2]string]bool{}, uses: map[[2]string]bool{}}
 
 	// The endpoints the changed files declare or call; a shared module that
@@ -54,9 +94,9 @@ func blastDiagram(g *weave.Graph, f *weave.Facts, broken []Broken) string {
 		}
 	}
 	sort.Strings(d.endpoints)
-	if len(d.endpoints) > maxEndpoints {
-		d.moreEndpoints = len(d.endpoints) - maxEndpoints
-		d.endpoints = d.endpoints[:maxEndpoints]
+	if capE > 0 && len(d.endpoints) > capE {
+		d.moreEndpoints = len(d.endpoints) - capE
+		d.endpoints = d.endpoints[:capE]
 	}
 	shown := map[string]bool{}
 	for _, e := range d.endpoints {
@@ -108,9 +148,9 @@ func blastDiagram(g *weave.Graph, f *weave.Facts, broken []Broken) string {
 		d.screens = append(d.screens, s)
 	}
 	sort.Strings(d.screens)
-	if len(d.screens) > maxScreens {
-		d.moreScreens = len(d.screens) - maxScreens
-		d.screens = d.screens[:maxScreens]
+	if capS > 0 && len(d.screens) > capS {
+		d.moreScreens = len(d.screens) - capS
+		d.screens = d.screens[:capS]
 	}
 
 	// Tables behind each endpoint: endpoint → module → model → table.
@@ -130,14 +170,11 @@ func blastDiagram(g *weave.Graph, f *weave.Facts, broken []Broken) string {
 		d.tables = append(d.tables, t)
 	}
 	sort.Strings(d.tables)
-	if len(d.tables) > maxTables {
-		d.moreTables = len(d.tables) - maxTables
-		d.tables = d.tables[:maxTables]
+	if capT > 0 && len(d.tables) > capT {
+		d.moreTables = len(d.tables) - capT
+		d.tables = d.tables[:capT]
 	}
-	if len(d.endpoints)+len(d.broken) == 0 {
-		return ""
-	}
-	return d.mermaid()
+	return d
 }
 
 func (d diagram) mermaid() string {

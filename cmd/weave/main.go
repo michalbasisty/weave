@@ -29,6 +29,9 @@ func main() {
 		code = cmdExplore()
 	case "wiki":
 		code = cmdWiki()
+	case "live":
+		servePage = "live"
+		code = cmdServe()
 	case "serve":
 		code = cmdServe()
 	case "projects", "list":
@@ -148,6 +151,7 @@ func helpText() string {
   weave check   [file...]       fail when a change breaks a contract (no args: git diff)
   weave hook                    check for an agent hook: exit 2 and the failure on stderr
   weave serve   [--port N]      host the map, the wiki and the actions on 127.0.0.1, and open it
+  weave live                    the same server, opened on the live map: your change lights up as you edit
                 [--no-open]     don't open the browser
   weave fires   [--since N]     what the hook has seen: runs, failures, avg time
   weave delta   [ref]           what the graph gained or lost (--from graph.json, --all)

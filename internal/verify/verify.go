@@ -31,6 +31,8 @@ type Result struct {
 	Endpoints []string
 	// Diagram is a Mermaid picture of the blast radius, "" when there is none.
 	Diagram string
+	// Blast is the same blast radius as data, uncapped.
+	Blast Blast
 }
 
 // Broken is one removed endpoint that a live call site still names.
@@ -269,6 +271,7 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 		extra += fmt.Sprintf(", %d endpoint(s) removed", len(removed))
 	}
 	res.Diagram = blastDiagram(g, f, res.Broken)
+	res.Blast = NewBlast(g, f, res.Broken)
 	res.Scope = scope + extra
 	res.Errors = errors
 	res.Warnings = warnings

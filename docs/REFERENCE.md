@@ -9,6 +9,7 @@ file is the manual.
 weave                      # status, and what to do next
 weave explore              # the map as one file you can open
 weave serve [--port 7777]  # the map hosted, with actions (loopback only), opened in your browser (--no-open skips it); a busy default port moves to the next free one
+weave live                 # the same server opened on /live: screens → endpoints → tables, lit up by the uncommitted change as files change; broken calls red, fixed ones green
                             # the project dropdown lists every repo weave has indexed; /p/<name>/ is its panel
 weave wiki                 # a page per module, endpoint, screen, table, change
 weave wiki --out docs/wiki # a wiki you can commit
