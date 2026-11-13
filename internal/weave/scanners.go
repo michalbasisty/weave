@@ -107,6 +107,40 @@ func quotedAt(s string, k int) (string, int, bool) {
 	return s[st:e], e + 1, true
 }
 
+// concatAt reads a path built with `+` after its first literal, the way older code
+// writes `fetch("/api/collections/" + id)`: each expression becomes `${…}` and
+// each further literal is appended, so the call reads as `/api/collections/${id}`.
+// It stops at anything else, and returns where the path ends.
+func concatAt(s, p string, end int) (string, int) {
+	for {
+		k := skipSpace(s, end)
+		if k >= len(s) || s[k] != '+' || (k+1 < len(s) && (s[k+1] == '+' || s[k+1] == '=')) {
+			return p, end
+		}
+		k = skipSpace(s, k+1)
+		if lit, e, ok := quotedAt(s, k); ok {
+			p, end = p+lit, e
+			continue
+		}
+		e := k
+		for e < len(s) && (isWord(s[e]) || s[e] == '.' || s[e] == '?' && e+1 < len(s) && s[e+1] == '.') {
+			if s[e] == '?' {
+				e++
+			}
+			e++
+		}
+		if e == k {
+			return p, end
+		}
+		// Only a whole segment is a parameter: `"/a?id=" + id` is a query value and
+		// `"/a" + suffix` an unknowable path, and both are kept as they were.
+		if !strings.HasSuffix(p, "/") || strings.ContainsAny(p, "?#") {
+			return p, end
+		}
+		p, end = p+"${"+s[k:e]+"}", e
+	}
+}
+
 // callMatch is line.match(CALL_RE):
 // /\b(?:api|http|httpClient|axios|client|fetcher)\s*\.\s*(get|post|put|patch|delete)\s*\(\s*[`'"]([^`'"]+)[`'"]/.
 // Every candidate hangs off a dot, and their starts increase with the dot, so the
@@ -137,10 +171,11 @@ func callMatch(line string) (verb, path string, ok bool) {
 		if !callClients[name] && !clientLike(name) {
 			continue
 		}
-		p, _, ok := quotedAt(line, skipSpace(line, k+1))
+		p, end, ok := quotedAt(line, skipSpace(line, k+1))
 		if !ok {
 			continue
 		}
+		p, _ = concatAt(line, p, end)
 		// A wrapper weave only guesses at must at least name an absolute path.
 		if !callClients[name] && !strings.HasPrefix(p, "/") {
 			continue
@@ -171,6 +206,7 @@ func fetchMatch(line string) (path, method string, ok bool) {
 		if !ok {
 			continue
 		}
+		p, end = concatAt(line, p, end)
 		return p, fetchMethod(line, end), true
 	}
 }

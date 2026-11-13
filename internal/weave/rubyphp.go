@@ -54,8 +54,10 @@ func ExtractRubyPHP(files []SourceFile, b *Builder) []Endpoint {
 // ---------------------------------------------------------------- rails
 
 var (
-	reRbSym      = regexp.MustCompile(`^:?["']?([\w/.\-]+)["']?`)
-	reRbOpt      = func(k string) *regexp.Regexp { return regexp.MustCompile(`\b` + k + `:\s*(\[[^\]]*\]|:?["']?[\w/\-]+["']?)`) }
+	reRbSym = regexp.MustCompile(`^:?["']?([\w/.\-]+)["']?`)
+	reRbOpt = func(k string) *regexp.Regexp {
+		return regexp.MustCompile(`\b` + k + `:\s*(\[[^\]]*\]|:?["']?[\w/\-]+["']?)`)
+	}
 	reRbOnly     = reRbOpt("only")
 	reRbExcept   = reRbOpt("except")
 	reRbParam    = reRbOpt("param")
@@ -119,10 +121,13 @@ func railsRoutes(a *pyGoAdder, f *SourceFile, byRel map[string]*SourceFile) {
 			continue
 		}
 		// a call whose options run onto the next line: devise_for :users, controllers: …,
+		// Blank and comment lines inside the call do not end it.
 		for strings.HasSuffix(line, ",") && k+1 < len(lines) {
 			k++
 			off += len(lines[k]) + 1
-			line += " " + strings.TrimSpace(lines[k])
+			if next := strings.TrimSpace(lines[k]); next != "" && !strings.HasPrefix(next, "#") {
+				line += " " + next
+			}
 		}
 		top := stack[len(stack)-1]
 		if line == "end" || strings.HasPrefix(line, "end ") || line == "}" {

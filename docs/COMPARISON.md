@@ -22,6 +22,10 @@ node bench/charts.mjs               # redraws docs/img/chart-*.svg
 | RealWorld Django + React: [back end](https://github.com/gothinkster/django-realworld-example-app) + the same front end | `29c9d42` + `53b0b4c` | Django REST framework, React + Redux | 103 |
 | RealWorld Rails + React: [back end](https://github.com/gothinkster/rails-realworld-example-app) + the same front end | `a2ae4ff` + `53b0b4c` | Ruby on Rails, React + Redux | 110 |
 | RealWorld Laravel + React: [back end](https://github.com/gothinkster/laravel-realworld-example-app) + the same front end | `e45c37c` + `53b0b4c` | Laravel, React + Redux | 173 |
+| [Papermark](https://github.com/mfts/papermark) | `ed19717` | Next.js (pages and app router) + Prisma | 1,434 |
+| [Linkwarden](https://github.com/linkwarden/linkwarden) | `24adcc1` | Next.js pages router + Prisma monorepo | 718 |
+| [Outline](https://github.com/outline/outline) | `2206588` | Koa + Sequelize API, React front end | 2,549 |
+| [Umami](https://github.com/umami-software/umami) | `b18d514` | Next.js app router + Prisma | 1,696 |
 
 None of them is configured for weave: no `.weave/patterns.json`, no hints. The RealWorld
 halves are two upstream repositories copied side by side, the way a team that owns both
@@ -54,20 +58,74 @@ bytes ÷ 4, the convention weave's own receipts use. Medians.
 and conclude less. Whether `context` changes a whole session is the open question in
 [`EVAL.md`](EVAL.md).
 
-## 3. The gate on renamed routes
+## 3. The gate on broken routes
 
-<img src="img/chart-gate.svg" alt="Renaming each of the 15 routes the RealWorld front end calls, one at a time: weave check failed and named the caller 14 times." width="100%">
+<img src="img/chart-gate.svg" alt="Every route a front end calls, broken one at a time on ten apps by renaming it, deleting it or changing its method: weave check failed and named the caller 661 of 675 times (185 of 188 on the six RealWorld back ends, 476 of 487 on Papermark, Linkwarden, Outline and Umami), and 265 harmless edits caused 0 false failures." width="100%">
 
-**Method.** On RealWorld, for each endpoint that the front end calls, the first literal
-segment of its route string is renamed in the back end (`/articles/:slug` →
-`/articles-renamed/:slug`), `weave check` runs on the uncommitted change, and the file is
-restored. A catch is exit 1 with `removed endpoint still called: … from <file>:<line>`.
+**Method.** The same React front end runs against six back ends: Express, Gin, Flask, Django,
+Rails and Laravel. For each route the front end calls, `bench/run.mjs` finds the line that
+declares it. That is the route's own line, or, for Rails and Laravel, the line in the routes
+file. Each declaration is tried once, so `resources :articles` counts as one trial even though
+it declares five routes. The line is then changed four ways, one at a time:
 
-**The miss.** Renaming `GET /articles/feed` leaves the front end's `/articles/feed` call
-landing on `GET /articles/:slug`, and Express would route it there too. weave reports what
-the router would do, not what the author meant.
+- **rename**: the route's last fixed segment gets a suffix (`/articles/feed` → `/articles/feed-renamed`, `:tags` → `:tags_renamed`);
+- **delete**: the line is removed;
+- **change method**: GET becomes POST and anything else becomes GET (only where the verb is on that line, so not Django or Rails resources);
+- **control**: a blank line is added under the route, which must not fail.
 
-**Found while measuring.** The first run caught 10 of 15. Two matcher rules let a broken
+After each change, `weave check` runs on the uncommitted change and the file is restored. A
+catch is exit 1 with `removed endpoint still called: … from <file>:<line>`.
+
+**Real products.** Papermark, Linkwarden, Outline and Umami are measured as published. Next.js
+routes are declared by where a file sits, so there a break moves or deletes the file:
+- **rename** adds `-renamed` to the deepest fixed folder or file name;
+- **delete** removes the file;
+- **change method** renames `export async function GET`, or the verb in `req.method === "GET"`
+  and `case "GET":`;
+- **control** adds a blank line at the end of the file.
+
+Outline's Koa routes break on their line, like Express. The result: 476 of 487 breaks were
+caught with the caller named, and 0 of 193 control edits failed. Outline caught 155 of 155.
+Its method trials are few (3), because Koa puts the verb on the line above the path.
+
+**Calls that fall onto another route.** The first run on these apps caught 445 of 487. Most of
+the 42 misses were calls that outlived their route but still matched another one:
+- a Next.js catch-all: with `/auth/forgot-password` gone, NextAuth's `[...nextauth]` took its calls;
+- a parameter route beside it: `/links/archive` fell onto `/links/:id`, and `/tags/merge` onto `/tags/:id`;
+- a call written without its mount prefix: Umami's `/users` ended like `/api/teams/:teamId/users`.
+
+The index sees no broken call there, since every call matches something. The gate now also reads
+the files that called the removed route before the change. If one still spells its path (the
+whole path, or its fixed tail as a string of its own), the gate fails on it with the file and
+line. That took the real products to 476 of 487, and RealWorld to 185 of 188, because
+`/articles/feed` landing on `/articles/:slug` is the same case. The harmless edits still
+failed 0 times.
+
+**The 14 misses left:**
+- **A variable segment with another value to go to.** `/api/unsubscribe/${type}` still reaches
+  `dataroom` when `yir` is gone. weave can't tell which value the call means.
+- **A route declared twice.** On Gin, `PUT /articles/:slug` is declared as `/:slug` and
+  `/:slug/`, so removing one leaves the call served by the other.
+- **Variable tails.** A few calls end in a variable (`/public/collections/${id}`), so a file
+  that spells the path is not proof that the call used the removed route.
+
+**Found on the real products.** Six false alarms on the unchanged trees, now fixed with tests
+in `internal/weave/realapps_test.go`:
+- `${team?.id}` was cut at the `?` as a query string.
+- `"/api/x/" + id` lost its last segment.
+- A `method:` after `body: JSON.stringify({…})` was missed.
+- `req.method !== "POST"`, `switch (req.method)` and `[[...slug]]` were not read in Next pages routes.
+- Koa routes without a leading slash were not read.
+- A test's `server.post("/api/…")` was read as a route declaration.
+
+**Found while measuring this round.** Two bugs, both fixed with tests:
+- Django's `url()` routes have method ANY, and the gate required a removed route's method to
+  equal the call's. So no Django break was ever caught (0 of 11 before the fix).
+- A blank line inside a Rails `devise_for … ,` call ended the call early. That dropped
+  `path_names` and reported `POST /api/users/login` as removed: the one false failure among
+  the 72 harmless edits.
+
+**Found while measuring the first round** (renames on Express only). The first run caught 10 of 15. Two matcher rules let a broken
 call settle on a neighbour: a variable last segment (`/articles/${slug}`) matched a fixed
 route (`/articles/feed`), and a longer call (`/articles/${slug}/comments`) matched a shorter
 endpoint with no literal in common. Both are fixed, with tests. A second `weave check` on the

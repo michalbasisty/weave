@@ -42,4 +42,14 @@ for be in gin flask django rails laravel; do
     git -C "realworld-$be" -c user.name=bench -c user.email=bench@localhost commit --quiet -m "RealWorld: $be back end + React front end"
   fi
 done
+# Four real products, as they are, at the commits measured. weave's own folder is
+# kept out of git so the gate starts from a clean tree.
+for spec in "https://github.com/mfts/papermark ed19717 papermark" \
+            "https://github.com/linkwarden/linkwarden 24adcc1 linkwarden" \
+            "https://github.com/outline/outline 2206588 outline" \
+            "https://github.com/umami-software/umami b18d514 umami"; do
+  set -- $spec
+  get "$1" "$2" "$3"
+  grep -qx '.weave/' "$3/.git/info/exclude" 2>/dev/null || echo '.weave/' >> "$3/.git/info/exclude"
+done
 echo "repositories in $dir"

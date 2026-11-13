@@ -155,32 +155,57 @@ const pct = (a, b) => b ? Math.round((a / b) * 100) : 0;
   });
 }
 
-// 4. The gate: renamed routes
-if (rw?.mutations) {
-  const m = rw.mutations;
-  const cell = 52, gap = 8, x0 = PAD, y0 = 120;
-  let cells = '';
-  m.rows.filter(r => !r.skipped).forEach((r, i) => {
-    const ok = r.exit === 1 && r.named;
-    const x = x0 + i * (cell + gap);
-    cells += `<rect class="${ok ? 'w' : 'n'}" x="${x}" y="${y0}" width="${cell}" height="${cell}" rx="6"><title>${esc(r.endpoint)}: ${ok ? 'caught, caller named' : 'not caught'}</title></rect>`;
-    if (ok) cells += `<path d="M${x + 15},${y0 + 27} l8,8 l15,-17" stroke="#fff" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`;
-  });
-  const missed = m.rows.filter(r => !r.skipped && !(r.exit === 1 && r.named)).map(r => r.endpoint);
-  const H = 250;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Renaming each of ${m.tried} called routes: weave check failed and named the caller ${m.named} times.">
+// 4. The gate: every called route broken three ways on six back ends, plus a
+// harmless edit that must pass
+{
+  const stacks = R.repos.filter(r => r.mutations?.kinds);
+  if (stacks.length) {
+    const kinds = [['rename', 'Rename the route'], ['remove', 'Delete the route'], ['method', 'Change its method'], ['control', 'Harmless edit, must pass']];
+    let tried = 0, caught = 0, ctried = 0, cfail = 0;
+    for (const r of stacks) for (const [k] of kinds) {
+      const v = r.mutations.kinds[k];
+      if (!v) continue;
+      if (k === 'control') { ctried += v.tried; cfail += v.caught; } else { tried += v.tried; caught += v.named; }
+    }
+    const colW = 230, rowH = 46, x0 = PAD + 190, headH = 40;
+    let body = '';
+    let y = 150;
+    kinds.forEach(([, label], j) => { body += `<text class="group" x="${x0 + j * colW}" y="${y - 16}">${esc(label)}</text>`; });
+    const section = (title, rows) => {
+      if (!rows.length) return;
+      body += `<text class="note" x="${PAD}" y="${y + 18}">${esc(title)}</text>`;
+      y += headH - 10;
+      for (const r of rows) {
+        body += `<text class="label" x="${PAD}" y="${y + 22}">${esc(r.name.replace(/^RealWorld \((.*)\)$/, '$1'))}</text>`;
+        kinds.forEach(([k], j) => {
+          const v = r.mutations.kinds[k], x = x0 + j * colW, w = colW - 90;
+          if (!v) { body += `<text class="note" x="${x}" y="${y + 22}">no verb in the route</text>`; return; }
+          const good = k === 'control' ? v.tried - v.caught : v.named;
+          body += `<rect class="n" x="${x}" y="${y + 8}" width="${w}" height="20" rx="4"/>`;
+          body += bar(x, y + 8, w * good / v.tried, 20, 'w');
+          body += `<text class="value" x="${x + w + 10}" y="${y + 23}">${good}/${v.tried}</text>`;
+        });
+        y += rowH;
+      }
+      y += 10;
+    };
+    section('The RealWorld React front end against six back ends', stacks.filter(r => !r.real));
+    section('Real products, as published', stacks.filter(r => r.real));
+    const H = y + 70;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Breaking each route a front end calls, on ${stacks.length} apps: weave check failed and named the caller ${caught} of ${tried} times; ${ctried - cfail} of ${ctried} harmless edits passed.">
 ${style}
   <rect class="bg" x="0" y="0" width="${W}" height="${H}" rx="12"/>
-  <text class="title" x="${PAD}" y="48">Rename a route, and the gate names who still calls it</text>
-  <text class="sub" x="${PAD}" y="74">Each of the ${m.tried} routes the RealWorld front end calls, renamed one at a time, then weave check</text>
-  <text class="value" x="${PAD}" y="104">${m.named} of ${m.tried} failed with the caller's file:line</text>
-  ${cells}
-  <text class="note" x="${PAD}" y="${y0 + cell + 32}">${missed.length ? esc(`Not caught: ${missed.join(', ')}. Its caller now lands on a parameter route (/articles/:slug), which is what Express would do too.`) : ''}</text>
-  <text class="note" x="${PAD}" y="${y0 + cell + 54}">No type checker sees this: the route and its callers only share a string.</text>
+  <text class="title" x="${PAD}" y="48">Break a route, and the gate names who still calls it</text>
+  <text class="sub" x="${PAD}" y="74">Every route a front end calls, broken one at a time on ${stacks.length} apps, then weave check</text>
+  <text class="value" x="${PAD}" y="104">${caught} of ${tried} breaks failed with the caller's file:line · ${cfail} false failures in ${ctried} harmless edits</text>
+  ${body}
+  <text class="note" x="${PAD}" y="${H - 38}">Not caught: a variable segment with another value left (/unsubscribe/\${type}), and a route declared twice (Gin /:slug and /:slug/).</text>
+  <text class="note" x="${PAD}" y="${H - 16}">The harmless edit is a blank line under the route. No type checker sees any of this: a route and its callers only share a string.</text>
 </svg>
 `;
-  fs.writeFileSync(path.join(outDir, 'chart-gate.svg'), svg);
-  console.error('wrote docs/img/chart-gate.svg');
+    fs.writeFileSync(path.join(outDir, 'chart-gate.svg'), svg);
+    console.error('wrote docs/img/chart-gate.svg');
+  }
 }
 
 // 5. Schema cost per session

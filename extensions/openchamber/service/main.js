@@ -4,7 +4,8 @@
 //   otherwise the matching release binary is downloaded once into the service's
 //   data folder, checked against the release's checksums.txt, and kept up to date.
 // - GET /status draws the "weave gate" section in Work Status.
-// - The panel asks /overview, /node, /search, /context, /impact, /changes, /about.
+// - The panel asks /overview, /node, /search, /context, /impact, /changes, /about,
+//   and for specs /specs, /spec, /plan, POST /spec/save, /spec/new, /spec/task.
 // - The composer's @ menu searches the map (/mentions/search, /mentions/resolve).
 // - After an agent turn that changed the tree, it runs the gate and, when the
 //   change broke a call, tells that session once per distinct failure.
@@ -13,7 +14,7 @@
 // Plain Node, no packages. OpenChamber starts it on 127.0.0.1.
 import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -232,6 +233,7 @@ export const instructionsText = (bin) => [
   '- The code behind a screen, URL or behaviour when grep finds nothing: weave search "<plain words>"',
   '- What a file is in the app: weave context <file>',
   '- Before you finish a change to an endpoint or a front-end call: weave check. Exit 1 lists each broken call and the closest route.',
+  '- When the project keeps spec change records (specs/changes/): weave plan <change> gives the next task with its files, endpoints and tests; weave spec task done <change> <T1> ticks it.',
   'If weave finds no screens or endpoints, the project is not a web app it maps; leave it.',
 ].join('\n');
 
@@ -297,6 +299,20 @@ export const view = (result) => {
 };
 
 const gateCache = new Map(); // dir -> { print, at, result }
+
+// Work Status shows the open change records under the gate: how far each is.
+export const specStatusRows = (changes) => changes.filter((c) => c.total && c.done < c.total).slice(0, 3).map((c, i) => {
+  const next = c.tasks.find((t) => !t.done);
+  return {
+    kind: 'line', id: `spec-${i}`, label: c.slug.replace(/^\d{4}-\d{2}-\d{2}-/, ''), icon: 'task-line',
+    content: { kind: 'bar', value: Math.round((100 * c.done) / c.total) },
+    value: `${c.done}/${c.total}`, valueTone: 'muted',
+    tooltip: next ? `${c.slug}: next ${next.id} ${next.title}` : c.slug,
+  };
+});
+const specRows = (dir) => {
+  try { return existsSync(graphPath(dir)) ? specStatusRows(changesOf(graphs.get(dir)?.g ?? readGraph(dir))) : []; } catch { return []; }
+};
 
 const check = async (dir, force) => {
   const weave = await resolveWeave();
@@ -456,6 +472,120 @@ const changes = async (weave, dir) => {
   return { files, gate: gate.error ? { error: gate.error } : { ...parseCheck(gate), out: gate.out?.trim() ?? '' }, impact };
 };
 
+// ---------------------------------------------------------------- specs
+
+// Change records and their tasks, read from the map: no extra weave run, so the
+// @ menu and Work Status can use them inside their time limits.
+export const changesOf = (g) => {
+  const byId = g.byId ?? new Map(g.nodes.map((n) => [n.id, n]));
+  const out = [];
+  for (const c of g.nodes.filter((n) => n.kind === 'change')) {
+    const tasks = g.edges.filter((e) => e.kind === 'has_task' && e.from === c.id).map((e) => byId.get(e.to)).filter(Boolean)
+      .map((t) => ({
+        id: t.id.slice(t.id.lastIndexOf('/') + 1),
+        title: String(t.meta?.title ?? '').replace(/\s+Evidence:.*$/, '').trim(),
+        done: t.meta?.done === true,
+      }));
+    out.push({ slug: c.name, file: c.file ?? '', done: tasks.filter((t) => t.done).length, total: tasks.length, tasks });
+  }
+  return out.sort((a, b) => b.slug.localeCompare(a.slug));
+};
+
+export const NAME_OK = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+// A spec path from the panel: Markdown under specs/, no way out of it.
+export const specPath = (dir, p) => {
+  const rel = String(p ?? '').replace(/^\.\//, '');
+  if (!rel.startsWith('specs/') || !rel.endsWith('.md') || rel.includes('..') || rel.includes('\\') || rel.includes('\0')) return null;
+  const abs = path.resolve(dir, rel);
+  return abs.startsWith(path.resolve(dir) + path.sep) ? { rel, abs } : null;
+};
+
+const runInput = (cmd, args, cwd, input, timeout) => new Promise((resolve) => {
+  const child = execFile(cmd, args, { cwd, timeout, maxBuffer: 8 * 1024 * 1024, windowsHide: true },
+    (error, stdout, stderr) => resolve({ code: error ? (typeof error.code === 'number' ? error.code : -1) : 0, out: String(stdout) + String(stderr) }));
+  child.stdin.end(input);
+});
+
+// Everything the Specs tab lists. A weave older than `spec list --json` still
+// gives the change records, from the map.
+const specsList = async (weave, dir) => {
+  await ensureIndex(weave, dir);
+  const r = await run(weave, ['spec', 'list', '--json', '--root', dir], dir, 60_000);
+  if (r.code === 0) {
+    try { return { ...JSON.parse(r.out), full: true }; } catch { /* an older weave */ }
+  }
+  return { changes: changesOf(await getGraph(weave, dir)), capabilities: [], views: [], full: false };
+};
+
+const specRead = async (weave, dir, p) => {
+  const sp = specPath(dir, p);
+  if (!sp || !existsSync(sp.abs)) return [400, { message: 'no such spec' }];
+  if (statSync(sp.abs).size > 512 * 1024) return [400, { message: 'larger than 512 KB' }];
+  const r = await run(weave, ['spec', 'show', sp.rel, '--json', '--root', dir], dir, 20_000);
+  if (r.code === 0) {
+    try { return [200, JSON.parse(r.out)]; } catch { /* an older weave */ }
+  }
+  const text = readFileSync(sp.abs, 'utf8');
+  return [200, { path: sp.rel, title: /^#\s+(.+)$/m.exec(text)?.[1] ?? sp.rel, text, html: '' }];
+};
+
+const specSave = async (weave, dir, body) => {
+  const sp = specPath(dir, body?.path);
+  if (!sp || !existsSync(sp.abs)) return [400, { message: 'no such spec' }];
+  const text = typeof body.text === 'string' ? body.text : '';
+  if (!text.trim()) return [400, { message: 'A spec cannot be empty.' }];
+  if (text.length > 512 * 1024) return [400, { message: 'A spec is at most 512 KB.' }];
+  const r = await runInput(weave, ['spec', 'save', sp.rel, '--root', dir], dir, text, 20_000);
+  if (r.code !== 0) {
+    if (!/usage: weave spec/.test(r.out)) return [400, { message: r.out.trim() || 'weave could not save it' }];
+    // An older weave: write it the same careful way, through a temp file.
+    const tmp = `${sp.abs}.${process.pid}.tmp`;
+    writeFileSync(tmp, text);
+    renameSync(tmp, sp.abs);
+  }
+  return [200, { ok: true, path: sp.rel }];
+};
+
+const specNew = async (weave, dir, body) => {
+  const name = String(body?.name ?? '').trim();
+  if (!NAME_OK.test(name)) return [400, { message: 'A name is letters, digits, dash or underscore, like billing-retry.' }];
+  const args = ['spec', 'new', name, '--root', dir];
+  const title = String(body?.title ?? '').trim().slice(0, 200);
+  if (title) args.push('--title', title);
+  const r = await run(weave, args, dir, 20_000);
+  if (r.code !== 0) return [400, { message: r.out.trim() || 'weave could not create it' }];
+  const slug = /specs\/changes\/(\S+)/.exec(r.out)?.[1] ?? name;
+  return [200, { ok: true, slug, out: r.out.trim() }];
+};
+
+const specTask = async (weave, dir, body) => {
+  const change = String(body?.change ?? ''); const task = String(body?.task ?? '');
+  if (!NAME_OK.test(change) || !NAME_OK.test(task)) return [400, { message: 'change and task are required' }];
+  const r = await run(weave, ['spec', 'task', body.done === false ? 'reopen' : 'done', change, task, '--root', dir], dir, 20_000);
+  if (r.code !== 0) return [400, { message: r.out.trim() || 'weave could not change it' }];
+  indexed.delete(dir); // tasks.md changed: read the map again
+  return [200, { ok: true, out: r.out.trim() }];
+};
+
+// The next task of a change, as weave plans it: files, endpoints, tables, tests.
+const plan = async (weave, dir, change, task) => {
+  if (!NAME_OK.test(change) || (task && !NAME_OK.test(task))) return [400, { message: 'bad change' }];
+  await ensureIndex(weave, dir);
+  const r = await run(weave, ['plan', change, ...(task ? [task] : []), '--root', dir], dir, 30_000);
+  return [200, { text: r.out.trim(), code: r.code }];
+};
+
+// What an agent needs to do one task: the plan, and how to tick it.
+export const taskPrompt = (change, planText) => [
+  `Work on the next task of the spec change "${change}". weave planned it:`,
+  '',
+  '```',
+  planText,
+  '```',
+  '',
+  'Read the change record in specs/changes/ first. When the task is done and its tests pass, tick it with the "tick" command above, then run weave check.',
+].join('\n');
+
 const panel = async (req, url, dir) => {
   if (url.pathname === '/about') {
     void resolveWeave();
@@ -487,6 +617,12 @@ const panel = async (req, url, dir) => {
     case '/changes':
       await ensureIndex(weave, dir);
       return [200, await changes(weave, dir)];
+    case '/specs':
+      return [200, await specsList(weave, dir)];
+    case '/spec':
+      return specRead(weave, dir, url.searchParams.get('path'));
+    case '/plan':
+      return plan(weave, dir, url.searchParams.get('change') ?? '', url.searchParams.get('task') ?? '');
   }
   return [404, { message: 'not found' }];
 };
@@ -524,12 +660,29 @@ const mentionSearch = async ({ query, directory }) => {
     const g = graphs.get(directory)?.g ?? readGraph(directory);
     hits = g.nodes.filter((n) => n.kind === 'page').slice(0, 20).map((n) => ({ kind: 'page', name: n.name, file: n.file ?? '' }));
   }
+  // Open change records whose name matches (all of them for "spec", "task" or an
+  // empty query): picking one gives the agent the next task's plan.
+  let specRows = [];
+  try {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const all = /^(specs?|tasks?|changes?|plan)$/.test(words[0] ?? '') || !words.length;
+    const g = graphs.get(directory)?.g ?? readGraph(directory);
+    specRows = changesOf(g).filter((c) => c.done < c.total && (all || words.every((w) => c.slug.toLowerCase().includes(w))))
+      .slice(0, 5).map((c) => {
+        const next = c.tasks.find((t) => !t.done);
+        return {
+          id: remember({ dir: directory, kind: 'change', name: c.slug, file: c.file }),
+          title: `${c.slug}`.slice(0, 120),
+          subtitle: `next task · spec ${c.done}/${c.total}${next ? ` · ${next.id} ${next.title}` : ''}`.slice(0, 120),
+        };
+      });
+  } catch { /* no map yet */ }
   return {
-    items: hits.filter((h) => h.file).slice(0, 20).map((h) => ({
+    items: [...specRows, ...hits.filter((h) => h.file).slice(0, 20 - specRows.length).map((h) => ({
       id: remember({ dir: directory, ...h }),
       title: `${h.name}`.slice(0, 120),
       subtitle: `${impactKinds.has(h.kind) ? 'impact' : 'context'} · ${h.kind} · ${h.file}`.slice(0, 120),
-    })),
+    }))],
   };
 };
 
@@ -537,6 +690,10 @@ const mentionResolve = async ({ id }) => {
   const m = mentionIds.get(id);
   if (!m) return [404, { message: 'That weave row is gone; pick it again.' }];
   const weave = await resolveWeave();
+  if (weave && m.kind === 'change') {
+    const r = await run(weave, ['plan', m.name, '--root', m.dir], m.dir, 9000);
+    return [200, { text: taskPrompt(m.name, r.out.trim()).slice(0, 16_000) }];
+  }
   if (!weave || !safeFile(m.dir, m.file)) return [404, { message: 'weave could not read that file.' }];
   const mode = impactKinds.has(m.kind) ? 'impact' : 'context';
   const r = await run(weave, [mode, m.file, '--root', m.dir], m.dir, 9000);
@@ -591,7 +748,8 @@ const readBody = async (req) => {
   try { return JSON.parse(body || '{}'); } catch { return null; }
 };
 
-const PANEL = new Set(['/overview', '/node', '/search', '/context', '/impact', '/changes', '/about']);
+const PANEL = new Set(['/overview', '/node', '/search', '/context', '/impact', '/changes', '/about', '/specs', '/spec', '/plan']);
+const SPEC_WRITES = { '/spec/save': specSave, '/spec/new': specNew, '/spec/task': specTask };
 
 export const server = http.createServer(async (req, res) => {
   try {
@@ -636,6 +794,17 @@ export const server = http.createServer(async (req, res) => {
     }
 
     const dir = url.searchParams.get('directory') ?? '';
+    if (SPEC_WRITES[url.pathname]) {
+      if (req.method !== 'POST') return json(res, 405, { message: 'method not allowed' });
+      if (!path.isAbsolute(dir) || !existsSync(dir)) return json(res, 400, { message: 'open a project first' });
+      const weave = await resolveWeave();
+      if (!weave) return json(res, 200, { error: weaveState.error ?? 'weave is not available.' });
+      const body = await readBody(req);
+      if (!body) return json(res, 400, { message: 'bad request' });
+      const [status, out] = await SPEC_WRITES[url.pathname](weave, dir, body);
+      gateCache.delete(dir);
+      return json(res, status, out);
+    }
     if (PANEL.has(url.pathname)) {
       if (req.method !== 'GET') return json(res, 405, { message: 'method not allowed' });
       if (url.pathname !== '/about' && (!path.isAbsolute(dir) || !existsSync(dir))) return json(res, 400, { message: 'open a project first' });
@@ -659,7 +828,9 @@ export const server = http.createServer(async (req, res) => {
       if (weaveState.status === 'error') return json(res, 200, view({ error: weaveState.error }));
       return json(res, 200, view({ pending: 'Getting weave ready (a one-time download)…' }));
     }
-    json(res, 200, view(await check(dir, false)));
+    const v = view(await check(dir, false));
+    v.rows = [...v.rows, ...specRows(dir)].slice(0, 16);
+    json(res, 200, v);
   } catch (e) {
     console.error(e);
     if (!res.headersSent) json(res, 500, { message: 'weave service error' });

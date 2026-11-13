@@ -4,12 +4,14 @@
 //   change to it reaches. Every item links to its neighbours.
 // - Changes: the uncommitted change, checked by weave's gate, with what it reaches
 //   and a button that hands the failures to the agent.
+// - Specs: the project's change records with their tasks, to tick, read, edit,
+//   start, or hand to the agent as the next task; capability specs; new changes.
 // - Settings: which weave runs, updating it, and what the extension does on its own.
 // Every answer comes from the extension's local service.
 import { connectHost, HostRequestError, type GuestItem } from '@openchamber/sdk';
 import {
   applyHostReady, mountBadge, mountBanner, mountButton, mountEmpty, mountList, mountSearchField, mountSpinner,
-  mountSwitch, mountTabs,
+  mountCheckbox, mountProgress, mountSwitch, mountTabs, mountTextField,
   type ListItem, type Tone,
 } from '@openchamber/sdk/ui';
 
@@ -29,6 +31,14 @@ type About = {
   asset: string | null;
   updated?: boolean; latest?: string | null; reason?: string; error?: string;
 };
+
+type Task = { id: string; title: string; done: boolean };
+type Change = { slug: string; file: string; done: number; total: number; tasks: Task[] };
+type Capability = { name: string; file: string; parts: number; reqs: number };
+type Specs = { changes: Change[]; capabilities: Capability[]; views: unknown[]; full: boolean; error?: string };
+type SpecPage = { path: string; title: string; text: string; html: string };
+// What the Specs tab shows: the list, one change, or one spec file (read or edited).
+type SpecView = { kind: 'list' } | { kind: 'change'; slug: string } | { kind: 'file'; path: string; page: SpecPage | null; editing: string | null };
 
 // A page in the Map tab: a node of the graph, or a plain file.
 type Detail = {
@@ -69,6 +79,18 @@ style.textContent = (`
   .w-kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; font-size: 12px; }
   .w-kv span:nth-child(odd) { color: var(--oc-muted); }
   .w-kv span:nth-child(even) { overflow-wrap: anywhere; font-family: var(--oc-mono); }
+  .w-card { all: unset; display: block; cursor: pointer; border: 1px solid var(--oc-border); border-radius: var(--oc-radius); padding: 8px 10px; }
+  .w-card:hover { background: var(--oc-muted-surface); }
+  .w-card .w-title { margin-bottom: 4px; }
+  .w-md { font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+  .w-md h1 { font-size: 16px; margin: 4px 0 8px; } .w-md h2 { font-size: 14px; margin: 14px 0 6px; } .w-md h3 { font-size: 13px; margin: 12px 0 4px; }
+  .w-md p, .w-md ul, .w-md ol { margin: 6px 0; } .w-md ul, .w-md ol { padding-left: 20px; }
+  .w-md code { font: 12px var(--oc-mono); background: var(--oc-muted-surface); padding: 0 3px; border-radius: 3px; }
+  .w-md pre { font: 12px var(--oc-mono); background: var(--oc-muted-surface); padding: 8px; border-radius: var(--oc-radius); overflow: auto; }
+  .w-md table { border-collapse: collapse; font-size: 12px; display: block; overflow: auto; }
+  .w-md th, .w-md td { border: 1px solid var(--oc-border); padding: 3px 6px; text-align: left; vertical-align: top; }
+  .w-md a { color: inherit; }
+  .w-files { display: flex; flex-wrap: wrap; gap: 4px; }
 `);
 document.head.append(style);
 
@@ -88,7 +110,7 @@ const button = (parent: Element, label: string, onClick: () => void, variant?: '
 // ---------------------------------------------------------------- state
 
 let directory: string | null = null;
-let tab: 'map' | 'changes' | 'settings' = 'map';
+let tab: 'map' | 'changes' | 'specs' | 'settings' = 'map';
 let kind: Kind = 'page';
 let query = '';
 let overview: Overview | null = null;
@@ -97,6 +119,9 @@ let stack: Detail[] = []; // Map tab pages, newest last
 let changes: Changes | null = null;
 let changesLoading = false;
 let about: About | null = null;
+let specs: Specs | null = null;
+let specView: SpecView = { kind: 'list' };
+let newChange: { name: string; title: string } | null = null;
 let error: string | null = null;
 let searchSeq = 0;
 
@@ -131,11 +156,12 @@ const body = el('div', 'w-body');
 wrap.append(tabsSlot, bannerSlot, body);
 
 const tabs = mountTabs(tabsSlot, {
-  items: [{ id: 'map', label: 'Map' }, { id: 'changes', label: 'Changes' }, { id: 'settings', label: 'Settings' }],
+  items: [{ id: 'map', label: 'Map' }, { id: 'changes', label: 'Changes' }, { id: 'specs', label: 'Specs' }, { id: 'settings', label: 'Settings' }],
   activeId: tab, trackBackground: true,
   onChange: (id) => {
     tab = id as typeof tab;
     if (tab === 'changes') void loadChanges();
+    if (tab === 'specs') void loadSpecs();
     if (tab === 'settings') void loadAbout();
     paint();
   },
@@ -163,6 +189,7 @@ const paint = (): void => {
     items: [
       { id: 'map', label: 'Map' },
       { id: 'changes', label: 'Changes', ...(changes && !changes.error && !changes.gate.error && changes.gate.fails.length ? { count: changes.gate.fails.length } : {}) },
+      { id: 'specs', label: 'Specs', ...(openChanges() ? { count: openChanges() } : {}) },
       { id: 'settings', label: 'Settings' },
     ],
   });
@@ -170,6 +197,7 @@ const paint = (): void => {
   body.replaceChildren();
   if (tab === 'map') paintMap();
   else if (tab === 'changes') paintChanges();
+  else if (tab === 'specs') paintSpecs();
   else paintSettings();
 };
 
@@ -420,6 +448,229 @@ const loadChanges = async (force = false): Promise<void> => {
   paint();
 };
 
+// ---------------------------------------------------------------- Specs
+
+const openChanges = (): number => specs?.changes?.filter((c) => c.total && c.done < c.total).length ?? 0;
+const changeFiles = (slug: string): string[] => ['proposal.md', 'tasks.md', 'spec-delta.md'].map((f) => `specs/changes/${slug}/${f}`);
+const short = (slug: string): string => slug.replace(/^\d{4}-\d{2}-\d{2}-/, '');
+
+const loadSpecs = async (): Promise<void> => {
+  if (!directory) return;
+  try {
+    specs = await get<Specs>('/specs');
+  } catch (e) {
+    specs = { changes: [], capabilities: [], views: [], full: false, error: (e as Error).message };
+  }
+  paint();
+};
+
+const post = async <T>(path: string, body: unknown): Promise<T | null> => {
+  try {
+    return await call<T>('POST', path, {}, body);
+  } catch (e) {
+    host.toast({ kind: 'error', message: (e as Error).message });
+    return null;
+  }
+};
+
+const tick = async (slug: string, t: Task, done: boolean): Promise<void> => {
+  t.done = done; // show it at once; the list reloads from the file
+  paint();
+  if (await post('/spec/task', { change: slug, task: t.id, done })) host.toast({ kind: 'success', message: `${t.id} ${done ? 'done' : 'reopened'}` });
+  await loadSpecs();
+};
+
+const planFor = async (slug: string, task?: string): Promise<string | null> => {
+  try {
+    const r = await get<{ text: string }>('/plan', { change: slug, ...(task ? { task } : {}) });
+    return r.text;
+  } catch (e) {
+    host.toast({ kind: 'error', message: (e as Error).message });
+    return null;
+  }
+};
+const taskPrompt = (slug: string, plan: string): string => [
+  `Work on the next task of the spec change "${slug}". weave planned it:`, '', '```', plan, '```', '',
+  'Read the change record in specs/changes/ first. When the task is done and its tests pass, tick it with the "tick" command above, then run weave check.',
+].join('\n');
+
+const giveToAgent = async (slug: string, task?: string): Promise<void> => {
+  const plan = await planFor(slug, task);
+  if (plan) toChat(taskPrompt(slug, plan));
+};
+// A fresh session, in its own worktree when asked, that starts on the task.
+const startOnTask = async (slug: string, task: Task | undefined, worktree: boolean): Promise<void> => {
+  const plan = await planFor(slug, task?.id);
+  if (!plan) return;
+  try {
+    const r = await host.startSession({
+      providerId: 'weave', id: `spec:${slug}${task ? `:${task.id}` : ''}`.slice(0, 128),
+      title: `${short(slug)}${task ? ` ${task.id}: ${task.title}` : ''}`.slice(0, 200), url: '',
+      text: taskPrompt(slug, plan).slice(0, 16000), navigation: 'open', ...(worktree ? { worktree: true } : {}),
+    });
+    host.toast({ kind: r.sent === 'sent' ? 'success' : 'info', message: r.sent === 'sent' ? 'Started a session on the task' : 'Session created; pick a model and send the task' });
+  } catch {
+    toChat(taskPrompt(slug, plan));
+    host.toast({ kind: 'info', message: 'Added the task to the chat instead' });
+  }
+};
+
+const openSpecFile = async (p: string, edit = false): Promise<void> => {
+  const v: SpecView = { kind: 'file', path: p, page: null, editing: null };
+  specView = v;
+  paint();
+  try {
+    v.page = await get<SpecPage>('/spec', { path: p });
+    if (edit) v.editing = v.page.text;
+  } catch (e) {
+    host.toast({ kind: 'error', message: (e as Error).message });
+    specView = { kind: 'list' };
+  }
+  paint();
+};
+
+const paintSpecs = (): void => {
+  if (!directory) return;
+  if (!specs) { const s = slot(); mountSpinner(s, {}); body.append(s); return; }
+  if (specs.error) { const s = slot(); mountBanner(s, { tone: 'error', title: specs.error }); body.append(s); return; }
+  if (specView.kind === 'change') return paintChange(specView.slug);
+  if (specView.kind === 'file') return paintSpecFile(specView);
+
+  const head = el('div', 'w-row');
+  button(head, newChange ? 'Cancel' : 'New change', () => { newChange = newChange ? null : { name: '', title: '' }; paint(); }, newChange ? 'ghost' : undefined);
+  button(head, 'Reload', () => void loadSpecs(), 'outline');
+  body.append(head);
+  if (newChange) paintNewChange(newChange);
+
+  const open = specs.changes.filter((c) => !c.total || c.done < c.total);
+  const done = specs.changes.filter((c) => c.total && c.done >= c.total);
+  if (!specs.changes.length && !specs.capabilities.length) {
+    const s = slot();
+    mountEmpty(s, {
+      title: 'No specs in this project yet',
+      body: 'A change record is three short files under specs/changes/: why, the tasks, and the requirements. weave links each task to the files, endpoints and tests it touches, so an agent can pick up the next task with everything it needs.',
+    });
+    body.append(s);
+    return;
+  }
+  const cards = (list: Change[]): void => {
+    for (const c of list) {
+      const card = el('button', 'w-card');
+      const top = el('div', 'w-head');
+      top.append(el('div', 'w-title', short(c.slug)), el('span', 'w-desc', c.total ? `${c.done}/${c.total}` : 'no tasks'));
+      card.append(top);
+      if (c.total) { const p = slot(); mountProgress(p, { value: (100 * c.done) / c.total, tone: c.done >= c.total ? 'success' : 'info' }); card.append(p); }
+      const next = c.tasks.find((t) => !t.done);
+      card.append(el('div', 'w-desc', next ? `next: ${next.id} ${next.title}` : c.slug));
+      card.onclick = () => { specView = { kind: 'change', slug: c.slug }; paint(); };
+      body.append(card);
+    }
+  };
+  if (open.length) { body.append(el('div', 'w-h', `In progress (${open.length})`)); cards(open); }
+  if (done.length) { body.append(el('div', 'w-h', `Done (${done.length})`)); cards(done); }
+  if (specs.capabilities.length) {
+    body.append(el('div', 'w-h', `Capabilities (${specs.capabilities.length})`));
+    const ls = el('div');
+    mountList(ls, {
+      items: specs.capabilities.map((c, i) => ({ id: String(i), title: c.name, subtitle: c.file, meta: `${c.reqs} req · ${c.parts} parts` })),
+      onSelect: (id) => void openSpecFile(specs!.capabilities[Number(id)].file), ariaLabel: 'Capability specs',
+    });
+    body.append(ls);
+  }
+  if (!specs.full) body.append(el('div', 'w-desc', 'Capability specs and rendered pages need a newer weave: Settings → Check for an update.'));
+};
+
+const paintNewChange = (n: { name: string; title: string }): void => {
+  const nameSlot = slot();
+  mountTextField(nameSlot, { label: 'Name', value: n.name, placeholder: 'billing-retry', mono: true, helper: 'Letters, digits and dashes. weave adds the date.', onChange: (v) => { n.name = v; } });
+  const titleSlot = slot();
+  mountTextField(titleSlot, { label: 'Title', value: n.title, placeholder: 'Retry failed card charges', onChange: (v) => { n.title = v; } });
+  const row = el('div', 'w-row');
+  button(row, 'Create', () => void (async () => {
+    const r = await post<{ slug: string }>('/spec/new', { name: n.name.trim(), title: n.title.trim() });
+    if (!r) return;
+    newChange = null;
+    host.toast({ kind: 'success', message: `Created specs/changes/${r.slug}` });
+    await loadSpecs();
+    void openSpecFile(`specs/changes/${r.slug}/proposal.md`, true);
+  })());
+  body.append(nameSlot, titleSlot, row);
+};
+
+const paintChange = (slug: string): void => {
+  const c = specs?.changes.find((x) => x.slug === slug);
+  const head = el('div', 'w-head');
+  button(head, '← Specs', () => { specView = { kind: 'list' }; paint(); }, 'ghost');
+  head.append(el('div', 'w-title', short(slug)));
+  body.append(head);
+  if (!c) { body.append(el('div', 'w-desc', 'This change record is gone.')); return; }
+  body.append(el('div', 'w-file', slug));
+  if (c.total) { const p = slot(); mountProgress(p, { value: (100 * c.done) / c.total, label: `${c.done} of ${c.total} tasks done`, tone: c.done >= c.total ? 'success' : 'info' }); body.append(p); }
+
+  const next = c.tasks.find((t) => !t.done);
+  if (next) {
+    body.append(el('div', 'w-h', 'Next task'));
+    body.append(el('div', undefined, `${next.id} ${next.title}`));
+    const row = el('div', 'w-row');
+    button(row, 'Start a session on it', () => void startOnTask(slug, next, false));
+    button(row, 'In a new worktree', () => void startOnTask(slug, next, true), 'outline');
+    button(row, 'Add to chat', () => void giveToAgent(slug, next.id), 'outline');
+    body.append(row);
+  }
+  body.append(el('div', 'w-h', 'Tasks'));
+  for (const t of c.tasks) {
+    const s = slot();
+    mountCheckbox(s, { label: `${t.id} ${t.title}`, checked: t.done, onChange: (v) => void tick(slug, t, v) });
+    body.append(s);
+  }
+  if (!c.tasks.length) body.append(el('div', 'w-desc', 'No tasks yet. Add "- [ ] T1 …" lines to tasks.md.'));
+  body.append(el('div', 'w-h', 'Files'));
+  const files = el('div', 'w-files');
+  for (const f of changeFiles(slug)) {
+    const b = el('button', 'w-chip', f.split('/').pop());
+    b.title = f;
+    b.onclick = () => void openSpecFile(f);
+    files.append(b);
+  }
+  body.append(files);
+};
+
+const paintSpecFile = (v: Extract<SpecView, { kind: 'file' }>): void => {
+  const head = el('div', 'w-head');
+  const slug = /^specs\/changes\/([^/]+)\//.exec(v.path)?.[1];
+  button(head, slug ? '← Change' : '← Specs', () => { specView = slug ? { kind: 'change', slug } : { kind: 'list' }; paint(); }, 'ghost');
+  head.append(el('div', 'w-title', v.page?.title ?? v.path));
+  body.append(head);
+  body.append(el('div', 'w-file', v.path));
+  if (!v.page) { const s = slot(); mountSpinner(s, {}); body.append(s); return; }
+  if (v.editing !== null) {
+    const f = slot();
+    mountTextField(f, { value: v.editing, multiline: true, rows: 22, mono: true, onChange: (x) => { v.editing = x; } });
+    body.append(f);
+    const row = el('div', 'w-row');
+    button(row, 'Save', () => void (async () => {
+      if (!(await post('/spec/save', { path: v.path, text: v.editing }))) return;
+      host.toast({ kind: 'success', message: 'Saved' });
+      await loadSpecs();
+      await openSpecFile(v.path);
+    })());
+    button(row, 'Cancel', () => { v.editing = null; paint(); }, 'ghost');
+    body.append(row);
+    return;
+  }
+  const row = el('div', 'w-row');
+  button(row, 'Edit', () => { v.editing = v.page!.text; paint(); }, 'outline');
+  button(row, 'Add to chat', () => toChat(fenced(`${v.path}:`, v.page!.text)), 'outline');
+  body.append(row);
+  if (v.page.html) {
+    const md = el('div', 'w-md');
+    md.innerHTML = v.page.html; // rendered by weave, which escapes the text before it adds a tag
+    body.append(md);
+  } else {
+    body.append(el('pre', 'w-pre', v.page.text));
+  }
+};
+
 // ---------------------------------------------------------------- Settings
 
 const paintSettings = (): void => {
@@ -461,7 +712,7 @@ const paintSettings = (): void => {
     checked: a.settings.autoGate, onChange: (v) => void save({ autoGate: v }),
   });
   body.append(s1, s2);
-  body.append(el('div', 'w-desc', 'In the chat, type @ and pick a row from "weave map" to give the agent a screen, endpoint or table with its impact.'));
+  body.append(el('div', 'w-desc', 'In the chat, type @ and pick a row from "weave map" to give the agent a screen, endpoint or table with its impact, or a spec change with its next task ("@spec" lists them).'));
 };
 
 const loadAbout = async (): Promise<void> => {
@@ -500,6 +751,7 @@ const refresh = async (): Promise<void> => {
     if (dir === directory) error = (e as Error).message;
   }
   if (tab === 'changes') void loadChanges();
+  void loadSpecs();
   paint();
 };
 
@@ -519,7 +771,7 @@ host.onItem(onItem);
 host.onDirectory((dir) => {
   if (dir === directory) return;
   directory = dir;
-  overview = null; hits = []; stack = []; changes = null; error = null;
+  overview = null; hits = []; stack = []; changes = null; error = null; specs = null; specView = { kind: 'list' }; newChange = null;
   paint();
   void refresh();
   if (query.trim()) void runSearch();

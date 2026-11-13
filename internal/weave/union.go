@@ -107,9 +107,7 @@ func expandUnion(c Call, text string, aliases map[string][]string) []string {
 // `/articles/${slug}` is an article, not `/articles/feed`.
 func variableLeafChoices(c Call, endpoints []Endpoint) []*Endpoint {
 	p := c.Path
-	if q := strings.IndexByte(p, '?'); q >= 0 {
-		p = p[:q]
-	}
+	p = WithoutQuery(p)
 	slash := strings.LastIndexByte(p, '/')
 	if slash < 0 || !strings.HasPrefix(p[slash+1:], "${") || !strings.HasSuffix(p, "}") {
 		return nil
@@ -127,7 +125,7 @@ func variableLeafChoices(c Call, endpoints []Endpoint) []*Endpoint {
 			continue
 		}
 		leaf := es[len(es)-1]
-		if strings.HasPrefix(leaf, ":") || leaf == "*" || seen[endpoints[i].ID] {
+		if strings.HasPrefix(leaf, ":") || leaf == "*" || leaf == "**" || seen[endpoints[i].ID] {
 			continue
 		}
 		v := c

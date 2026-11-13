@@ -21,7 +21,9 @@ const arg = (name, fallback) => {
 const WEAVE = path.resolve(arg('weave', 'weave'));
 const OLD = arg('old', '') && path.resolve(arg('old'));
 const REPOS = path.resolve(arg('repos', path.join(here, 'repos')));
-const repos = JSON.parse(fs.readFileSync(path.join(here, 'repos.json'), 'utf8'));
+// --only dir1,dir2 measures a few repositories (results.json then holds only those)
+const only = arg('only', '') && new Set(arg('only').split(','));
+const repos = JSON.parse(fs.readFileSync(path.join(here, 'repos.json'), 'utf8')).filter(r => !only || only.has(r.dir));
 const tokens = bytes => Math.round(bytes / 4); // the convention weave's own receipts use
 
 const SKIP = new Set(['node_modules', '.git', 'dist', 'build', 'coverage', '.next', '.weave', '.turbo', 'out', 'vendor']);
@@ -124,7 +126,7 @@ for (const r of repos) {
   const mt = new Map(g.edges.filter(e => e.kind === 'maps_to').map(e => [e.from, e.to]));
   const usedTables = new Set(g.edges.filter(e => e.kind === 'uses').map(e => mt.get(e.to)));
   results.repos.push({
-    name: r.name, url: r.url, commit: r.commit, stack: r.stack,
+    name: r.name, url: r.url, commit: r.commit, stack: r.stack, real: !!r.real,
     files: g.fileCount ?? files.length,
     pages: kinds('page').length,
     endpoints: eps.length,
@@ -148,7 +150,108 @@ for (const r of repos) {
   });
 }
 
-// the gate: rename each called route in place and see whether `weave check` names a caller
+// the gate: break each route the front end calls, three ways, one at a time, and
+// see whether `weave check` fails and names the caller. A harmless edit to the
+// same line is the control: it must pass, or the gate cries wolf.
+//   rename  the route's last fixed segment: /articles/feed -> /articles/feed-renamed
+//   remove  the line that declares the route
+//   method  the route's verb: GET -> POST, anything else -> GET
+//   control a comment-free blank line under the route; must not fail
+const VERB = /\b(get|post|put|patch|delete|GET|POST|PUT|PATCH|DELETE|Get|Post|Put|Patch|Delete)\b/;
+const swapVerb = v => {
+  const to = v.toLowerCase() === 'get' ? 'post' : 'get';
+  return v === v.toUpperCase() ? to.toUpperCase() : v[0] === v[0].toUpperCase() ? to[0].toUpperCase() + to.slice(1) : to;
+};
+const esc = x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const fixedSegs = ep => ep.name.split(' ')[1].split('/').filter(x => x && !x.startsWith(':') && !x.startsWith('{'));
+// Where the route is declared, as a line to break. Tried in order: a quoted path
+// holding one of the endpoint's fixed segments on the endpoint's line (or just
+// below, when wrapped); a quoted path on that line (Gin's `group.POST("/", …)`);
+// then the app's route files, for frameworks whose endpoints point at a
+// controller (Rails `resources :tags`, Laravel `Route::get('tags', …)`).
+function routeSite(root, ep, routeFiles) {
+  const read = f => fs.readFileSync(path.join(root, f), 'utf8').split('\n');
+  const lines = read(ep.file);
+  for (const seg of [...fixedSegs(ep)].reverse()) {
+    for (let i = ep.line - 1; i < ep.line + 3 && i < lines.length; i++) {
+      const m = new RegExp(`(['"\`])([^'"\`\\n]*\\b${esc(seg)}\\b[^'"\`\\n]*)\\1`).exec(lines[i]);
+      if (m) return { file: ep.file, lines, i, quote: m, seg };
+    }
+  }
+  const m = /(['"`])(\/[^'"`\s]*)\1/.exec(lines[ep.line - 1] ?? '');
+  if (m) return { file: ep.file, lines, i: ep.line - 1, quote: m, seg: null };
+  for (const f of routeFiles) {
+    const fl = read(f);
+    for (const seg of [...fixedSegs(ep)].reverse()) {
+      for (let i = 0; i < fl.length; i++) {
+        if (/^\s*(#|\/\/|\*)/.test(fl[i])) continue;
+        const q = new RegExp(`(['"\`])([^'"\`\\n]*\\b${esc(seg)}\\b[^'"\`\\n]*)\\1`).exec(fl[i]);
+        if (q) return { file: f, lines: fl, i, quote: q, seg };
+        const sym = new RegExp(`:${esc(seg)}\\b`).exec(fl[i]);
+        if (sym) return { file: f, lines: fl, i, symbol: sym[0], seg };
+      }
+    }
+  }
+  return null;
+}
+function routeFilesOf(root) {
+  const out = [];
+  const visit = (dir, rel) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (SKIP.has(e.name) || e.name.startsWith('.')) continue;
+      const r = rel ? rel + '/' + e.name : e.name;
+      if (e.isDirectory()) visit(path.join(dir, e.name), r);
+      else if (/(^|\/)(routes?|urls|routers?)(\.|\/)/.test(r) && /\.(rb|php|py|go|js|ts)$/.test(e.name)) out.push(r);
+    }
+  };
+  visit(root, '');
+  return out;
+}
+// File-routed endpoints (Next.js `app/api/x/route.ts`, `pages/api/x.ts`) are
+// declared by where the file sits, so they break by moving or deleting the file:
+//   rename  the deepest fixed folder or file name gets `-renamed`
+//   remove  the file is deleted
+//   method  `export async function GET` / `req.method === "GET"` names another verb
+//   control a blank line at the end of the file
+const fileRoute = f => /(^|\/)(app\/(.*\/)?route|pages\/api\/.+)\.[tj]sx?$/.test(f);
+function fileSite(root, ep) {
+  if (!fileRoute(ep.file)) return null;
+  const parts = ep.file.split('/');
+  const api = parts.lastIndexOf('api');
+  for (let k = parts.length - 1; k > Math.max(api, 0); k--) {
+    const base = k === parts.length - 1 ? parts[k].replace(/\.[tj]sx?$/, '') : parts[k];
+    if (base === 'route' || base === 'index' || /^[[(@]/.test(base)) continue;
+    return { file: ep.file, at: k, base };
+  }
+  return null;
+}
+function fileEdits(root, ep, site) {
+  const abs = path.join(root, site.file);
+  const text = fs.readFileSync(abs, 'utf8');
+  const parts = site.file.split('/');
+  const renamed = [...parts];
+  renamed[site.at] = parts[site.at].replace(site.base, site.base + '-renamed');
+  const from = path.join(root, ...parts.slice(0, site.at + 1));
+  const to = path.join(root, ...renamed.slice(0, site.at + 1));
+  const verb = ep.name.split(' ')[0];
+  const other = verb === 'GET' ? 'POST' : 'GET';
+  const write = t => () => { fs.writeFileSync(abs, t); return () => fs.writeFileSync(abs, text); };
+  const methodText = () => {
+    if (verb === 'ANY') return null;
+    const exp = new RegExp(`(export\\s+(?:async\\s+function|const|let)\\s+)${verb}\\b`);
+    if (exp.test(text) && !new RegExp(`export\\s+(?:async\\s+function|const|let)\\s+${other}\\b`).test(text)) return text.replace(exp, `$1${other}`);
+    const branch = new RegExp(`(req\\.method\\s*[!=]==?\\s*|case\\s+)(['"])${verb}\\2`, 'g');
+    if (branch.test(text)) return text.replace(branch, `$1$2${other}$2`);
+    return null;
+  };
+  const m = methodText();
+  return {
+    rename: () => { fs.renameSync(from, to); return () => fs.renameSync(to, from); },
+    remove: () => { fs.rmSync(abs); return () => fs.writeFileSync(abs, text); },
+    method: m == null ? null : write(m),
+    control: write(text + '\n'),
+  };
+}
 for (const r of repos.filter(x => x.mutate)) {
   const root = path.join(REPOS, r.dir);
   if (!fs.existsSync(root)) continue;
@@ -159,35 +262,81 @@ for (const r of repos.filter(x => x.mutate)) {
   run(WEAVE, ['index', '--root', '.'], root);
   const g = graphOf(root);
   const called = new Set(g.edges.filter(e => e.kind === 'calls' && e.from.startsWith('file:')).map(e => e.to));
-  const targets = g.nodes.filter(n => n.kind === 'endpoint' && called.has(n.id) && n.file && n.line);
-  let caught = 0, named = 0;
+  const targets = g.nodes.filter(n => n.kind === 'endpoint' && called.has(n.id) && n.file && (n.line || fileRoute(n.file)));
+  const kinds = {};
+  const tally = (kind, row) => {
+    const k = (kinds[kind] ??= { tried: 0, caught: 0, named: 0 });
+    k.tried++;
+    k.caught += row.exit === 1 ? 1 : 0;
+    k.named += row.named ? 1 : 0;
+  };
   const rows = [];
+  const routeFiles = routeFilesOf(root);
+  const seen = new Set();
   for (const ep of targets) {
-    const abs = path.join(root, ep.file);
-    const before = fs.readFileSync(abs, 'utf8');
-    const lines = before.split('\n');
-    // the route string sits on the endpoint's line or, wrapped, just below it
-    let i = ep.line - 1, m = null;
-    for (; i < ep.line + 3 && i < lines.length; i++) {
-      if ((m = /(['"`])(\/[^'"`]*)\1/.exec(lines[i]))) break;
+    const fsite = fileSite(root, ep);
+    if (fsite) {
+      if (seen.has(fsite.file)) { rows.push({ endpoint: ep.name, skipped: true, same: fsite.file }); continue; }
+      seen.add(fsite.file);
+      const row = { endpoint: ep.name, at: fsite.file };
+      for (const [kind, apply] of Object.entries(fileEdits(root, ep, fsite))) {
+        if (!apply) continue;
+        const undo = apply();
+        const c = run(WEAVE, ['check', '--root', '.'], root);
+        undo();
+        const res = { exit: c.code, named: /removed endpoint still called: .* from [^\s;]+:\d+/.test(c.out) };
+        row[kind] = res;
+        tally(kind, res);
+      }
+      Object.assign(row, { exit: row.rename.exit, named: row.rename.named });
+      rows.push(row);
+      continue;
     }
-    if (!m) { rows.push({ endpoint: ep.name, skipped: true }); continue; }
-    // rename the first literal segment: /articles/:slug -> /articles-renamed/:slug
-    const renamed = m[2].replace(/^\/([A-Za-z][\w-]*)/, '/$1-renamed');
-    if (renamed === m[2]) { rows.push({ endpoint: ep.name, skipped: true }); continue; }
-    lines[i] = lines[i].replace(m[0], m[1] + renamed + m[1]);
-    fs.writeFileSync(abs, lines.join('\n'));
-    const c = run(WEAVE, ['check', '--root', '.'], root);
-    fs.writeFileSync(abs, before);
-    const hit = c.code === 1;
-    const names = /removed endpoint still called: .* from [^\s;]+:\d+/.test(c.out);
-    caught += hit ? 1 : 0;
-    named += names ? 1 : 0;
-    rows.push({ endpoint: ep.name, exit: c.code, named: names });
+    const site = ep.line ? routeSite(root, ep, routeFiles) : null;
+    if (!site) { rows.push({ endpoint: ep.name, skipped: true }); continue; }
+    // one trial per declaration: `resources :articles` declares five routes
+    const key = site.file + ':' + site.i;
+    if (seen.has(key)) { rows.push({ endpoint: ep.name, skipped: true, same: key }); continue; }
+    seen.add(key);
+    const abs = path.join(root, site.file);
+    const before = fs.readFileSync(abs, 'utf8');
+    const { lines, i, quote: m, seg, symbol } = site;
+    const edits = {
+      rename: () => {
+        const l = [...lines];
+        if (symbol) l[i] = l[i].replace(symbol, symbol + '_renamed');
+        else if (seg) l[i] = l[i].replace(m[0], m[1] + m[2].replace(new RegExp(`\\b${esc(seg)}\\b`), seg + '-renamed') + m[1]);
+        else l[i] = l[i].replace(m[0], m[1] + '/renamed' + (m[2] === '/' ? '' : m[2]) + m[1]);
+        return l;
+      },
+      remove: () => lines.filter((_, k) => k !== i),
+      method: () => {
+        if (ep.name.startsWith('ANY ')) return null;
+        const v = VERB.exec(lines[i]);
+        if (symbol || !v || v[1].toLowerCase() !== ep.name.split(' ')[0].toLowerCase()) return null;
+        const l = [...lines]; l[i] = l[i].replace(VERB, swapVerb(v[1])); return l;
+      },
+      control: () => { const l = [...lines]; l.splice(i + 1, 0, ''); return l; },
+    };
+    const row = { endpoint: ep.name, at: key };
+    for (const [kind, edit] of Object.entries(edits)) {
+      const after = edit();
+      if (!after) continue;
+      fs.writeFileSync(abs, after.join('\n'));
+      const c = run(WEAVE, ['check', '--root', '.'], root);
+      fs.writeFileSync(abs, before);
+      const res = { exit: c.code, named: /removed endpoint still called: .* from [^\s;]+:\d+/.test(c.out) };
+      row[kind] = res;
+      tally(kind, res);
+    }
+    // the rename keeps its old place in the row for the chart
+    Object.assign(row, { exit: row.rename.exit, named: row.rename.named });
+    rows.push(row);
   }
   run(WEAVE, ['index', '--root', '.'], root);
   const tried = rows.filter(x => !x.skipped).length;
-  results.repos.find(x => x.name === r.name).mutations = { tried, caught, named, rows };
+  const rename = kinds.rename ?? { caught: 0, named: 0 };
+  results.repos.find(x => x.name === r.name).mutations = { tried, caught: rename.caught, named: rename.named, kinds, rows };
 }
 
 // what every agent session pays before its first prompt: the tool schema

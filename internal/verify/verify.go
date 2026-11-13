@@ -5,7 +5,9 @@ package verify
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -147,6 +149,24 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 			if sameShape(r, n.Name) {
 				broken = append(broken, brokenCall{gone: r, call: n})
 				break
+			}
+		}
+	}
+	// A call can outlive its route and still match another one: `/links/archive`
+	// lands on `/links/:id`, `/auth/forgot-password` on a `[...nextauth]` catch-all.
+	// The index then sees no broken call, but the file that called the route before
+	// still names its path, so it is caught from the text.
+	if baseGraph != nil {
+		hit := map[string]bool{}
+		for _, b := range broken {
+			hit[b.gone] = true
+		}
+		for _, r := range removed {
+			if hit[r] {
+				continue
+			}
+			for _, n := range stillNamed(root, baseGraph, g, r) {
+				broken = append(broken, brokenCall{gone: r, call: n})
 			}
 		}
 	}
@@ -344,11 +364,12 @@ func endpointNames(g *weave.Graph) []string {
 func sameShape(a, b string) bool {
 	sa := strings.Fields(a)
 	sb := strings.Fields(b)
-	if len(sa) < 2 || len(sb) < 2 || sa[0] != sb[0] {
+	if len(sa) < 2 || len(sb) < 2 || (sa[0] != sb[0] && sa[0] != "ANY" && sb[0] != "ANY") {
 		return false
 	}
-	xa := segments(sa[1])
-	xb := segments(sb[1])
+	// A call keeps its query string in its name (`/payment?plan=`); a route has none.
+	xa := segments(weave.WithoutQuery(sa[1]))
+	xb := segments(weave.WithoutQuery(sb[1]))
 	n := len(xa)
 	if len(xb) < n {
 		n = len(xb)
@@ -360,7 +381,7 @@ func sameShape(a, b string) bool {
 	for i := 1; i <= n; i++ {
 		p := xa[len(xa)-i]
 		q := xb[len(xb)-i]
-		param := strings.HasPrefix(p, ":") || strings.HasPrefix(q, ":") || p == "*" || q == "*"
+		param := strings.HasPrefix(p, ":") || strings.HasPrefix(q, ":") || p == "*" || q == "*" || p == "**" || q == "**"
 		if param || p == q {
 			if !param && p == q {
 				literal = true
@@ -446,4 +467,84 @@ func editDistance(a, b string) int {
 		prev = cur
 	}
 	return prev[len(b)]
+}
+
+// stillNamed finds the files that called a removed endpoint before the change and
+// still spell its path: the whole path, or a tail of it written as a string of its
+// own (a call relative to its client's base URL). Only routes whose path ends in a
+// fixed segment qualify; `/links/${id}` beside a removed `/links/:id` says nothing.
+func stillNamed(root string, base, now *weave.Graph, removed string) []*weave.GNode {
+	method, path, ok := strings.Cut(removed, " ")
+	if !ok {
+		return nil
+	}
+	segs := segments(path)
+	run := 0 // the fixed segments at the end of the path
+	for i := len(segs) - 1; i >= 0 && !isParam(segs[i]); i-- {
+		run++
+	}
+	if run == 0 {
+		return nil
+	}
+	exists := map[string]bool{}
+	for _, n := range now.Nodes {
+		if n.Kind == weave.KindFile {
+			exists[n.ID] = true
+		}
+	}
+	var out []*weave.GNode
+	for _, e := range base.Edges {
+		if e.Kind != "calls" || e.To != "endpoint:"+removed || !strings.HasPrefix(e.From, "file:") || !exists[e.From] {
+			continue
+		}
+		rel := strings.TrimPrefix(e.From, "file:")
+		raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			continue
+		}
+		if line := pathLine(string(raw), segs[len(segs)-run:], run == len(segs)); line > 0 {
+			file, l := rel, line
+			out = append(out, &weave.GNode{Kind: weave.KindCall, Name: method + " " + path, File: &file, Line: &l})
+		}
+	}
+	return out
+}
+
+func isParam(s string) bool {
+	return strings.HasPrefix(s, ":") || strings.HasPrefix(s, "{") || strings.HasPrefix(s, "<") || s == "*" || s == "**"
+}
+
+// pathLine is the 1-based line where text names /a/b/c as a path: the fixed tail,
+// ended by a quote or a query, and started by a quote (a call relative to its
+// base URL), by `}` (after `${base}`), or, when the tail is the whole route, by
+// anything. 0 when it is not there.
+func pathLine(text string, tail []string, whole bool) int {
+	for k := len(tail); k >= 1; k-- {
+		want := "/" + strings.Join(tail[len(tail)-k:], "/")
+		for from := 0; ; {
+			i := strings.Index(text[from:], want)
+			if i < 0 {
+				break
+			}
+			at := from + i
+			from = at + 1
+			end := at + len(want)
+			if end < len(text) && !strings.ContainsRune("'\"`?#", rune(text[end])) {
+				continue
+			}
+			before := byte(0)
+			if at > 0 {
+				before = text[at-1]
+			}
+			if !(whole && k == len(tail)) && before != '\'' && before != '"' && before != '`' && before != '}' {
+				continue
+			}
+			return strings.Count(text[:at], "\n") + 1
+		}
+		if k == len(tail) && !whole {
+			// a shorter tail than the fixed run is too common to stand for the route
+			break
+		}
+	}
+	return 0
 }

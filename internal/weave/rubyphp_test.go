@@ -102,3 +102,21 @@ Route::prefix('admin')->middleware('auth')->group(function () {
 		"GET /api/admin/stats routes/api.php",
 	)
 }
+
+// A blank or comment line inside a call's options does not end the call: the
+// benchmark's harmless edit (a blank line under devise_for) used to drop
+// path_names and report POST /api/users/login as removed.
+func TestRailsCallOptionsSpanBlankLines(t *testing.T) {
+	got := rubyPHPNames(t, map[string]string{
+		"config/routes.rb": "Rails.application.routes.draw do\n  scope :api do\n    devise_for :users, controllers: { sessions: :sessions },\n\n      # sign in at /login\n      path_names: { sign_in: :login }\n  end\nend\n",
+	})
+	found := false
+	for _, n := range got {
+		if strings.HasPrefix(n, "POST /api/users/login ") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("POST /api/users/login missing: %v", got)
+	}
+}

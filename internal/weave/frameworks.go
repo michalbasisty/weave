@@ -28,7 +28,9 @@ var (
 	rePagesAPI      = jsRe(`(?:^|\/)(?:src\/)?pages\/api\/(.+)\.(?:t|j)sx?$`)
 	rePagesPage     = jsRe(`(?:^|\/)(?:src\/)?pages\/(.+)\.(?:t|j)sx?$`)
 	reMethodExport  = jsRe(`export\s+(?:async\s+function|const|let)\s+(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b`)
-	reMethodBranch  = jsRe(`req\.method\s*={2,3}\s*['"]([A-Z]+)['"]`)
+	reMethodBranch  = jsRe(`req\.method\s*[!=]==?\s*['"]([A-Z]+)['"]`)
+	reMethodSwitch  = jsRe(`switch\s*\(\s*req\.method\s*\)`)
+	reMethodCase    = jsRe(`case\s+['"](GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)['"]\s*:`)
 	reExportDefault = jsRe(`export\s+default\b`)
 	reDynSegment    = jsRe(`^\[(?:\.\.\.)?(.+)\]$`)
 	reIndexSuffix   = regexp.MustCompile(`/index$`)
@@ -42,7 +44,9 @@ func appPath(segs string) string {
 		if s == "" || strings.HasPrefix(s, "(") || strings.HasPrefix(s, "@") { // route groups, parallel slots
 			continue
 		}
-		if strings.HasPrefix(s, "[...") || strings.HasPrefix(s, "[[...") {
+		if strings.HasPrefix(s, "[[...") {
+			parts = append(parts, "**") // optional: the bare path too
+		} else if strings.HasPrefix(s, "[...") {
 			parts = append(parts, "*")
 		} else {
 			parts = append(parts, reDynSegment.ReplaceAllString(s, ":$1"))
@@ -70,7 +74,7 @@ func ExtractNextRoutes(files []SourceFile, b *Builder) ExtractStats {
 		if app != nil {
 			path = appPath(app[1])
 		} else {
-			path = NormalizePath("/api/" + reBracketParam.ReplaceAllString(reIndexSuffix.ReplaceAllString(pages[1], ""), ":$1"))
+			path = appPath("api/" + reIndexSuffix.ReplaceAllString(pages[1], ""))
 		}
 
 		var methods []string
@@ -87,6 +91,11 @@ func ExtractNextRoutes(files []SourceFile, b *Builder) ExtractStats {
 		}
 		for _, m := range reMethodBranch.FindAllStringSubmatch(f.Text, -1) {
 			add(m[1])
+		}
+		if reMethodSwitch.MatchString(f.Text) {
+			for _, m := range reMethodCase.FindAllStringSubmatch(f.Text, -1) {
+				add(m[1])
+			}
 		}
 		if len(methods) == 0 && reExportDefault.MatchString(f.Text) {
 			add("ANY")
