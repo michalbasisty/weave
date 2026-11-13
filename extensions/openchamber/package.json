@@ -1,14 +1,14 @@
 {
   "name": "weave-openchamber",
-  "version": "0.2.0",
-  "description": "weave for OpenChamber: the open project's map in a panel (search it in plain words, see what a file is and what a change to it reaches, add it to the chat) and weave's contract gate in Work Status.",
+  "version": "0.3.0",
+  "description": "weave for OpenChamber, with nothing to install: it fetches weave itself. A panel with the open project's map (screens, endpoints, modules, tables, search in plain words, what a change reaches), your uncommitted change checked by weave's contract gate, @weave in the composer, and the gate run after every agent turn.",
   "license": "MIT",
   "type": "module",
   "repository": "https://github.com/michalbasisty/weave",
   "openchamber": {
     "apiVersion": 1,
     "engines": {
-      "openchamber": ">=2.6.0"
+      "openchamber": ">=2.7.0"
     },
     "id": "weave",
     "name": "weave",
@@ -28,6 +28,25 @@
         },
         "requiresProject": true
       },
+      "actions": [
+        {
+          "id": "impact",
+          "label": "weave: what a change reaches",
+          "icon": "icon.svg",
+          "where": "file"
+        }
+      ],
+      "mentions": {
+        "label": "weave map"
+      },
+      "instructions": true,
+      "sessionEvents": {
+        "events": [
+          "turn-started",
+          "turn-finished"
+        ]
+      },
+      "sessionControl": {},
       "service": {
         "entry": "service/main.js",
         "runtime": "host",
@@ -36,7 +55,8 @@
             "weave",
             "git"
           ]
-        }
+        },
+        "keepRunning": true
       }
     }
   }

@@ -104,10 +104,14 @@ ends on it, such as OpenChamber) a plugin at `.opencode/plugins/weave.js`. On `s
 the plugin runs `weave check`; when it fails with something new it shows a toast and sends the
 failure back into the session, once per distinct failure.
 
-For OpenChamber there is also an extension, [`extensions/openchamber/`](../extensions/openchamber/):
-a Work Status section that runs `weave check` on the open project whenever the tree changes and
-lists each broken call with its closest route, and a rail panel to search the map in plain words
-and send a file's context or impact to the chat. Add the folder, its git URL, or the
+For OpenChamber there is also an extension, [`extensions/openchamber/`](../extensions/openchamber/),
+and it needs nothing else installed: it downloads the weave release for the machine (checked against
+`checksums.txt`) unless a weave 0.8.0 or newer is already on `PATH`. It adds a rail panel with the
+map (screens, endpoints, modules, tables, plain-word search, each item's neighbours, context and
+impact), a Changes tab with the gate's verdict on the uncommitted change, a "weave gate" Work Status
+section, "weave map" rows in the composer's @ menu, and a note that tells every session about weave.
+After an agent turn that changed the code, it runs the gate and tells that session what broke,
+once per failure. Add `https://github.com/michalbasisty/weave-openchamber`, this folder, or the
 `weave-openchamber.zip` attached to each release in Settings → Extensions.
 
 The server lists five tools: `context`, `impact`, `search`, `changed` and `verify`. In a

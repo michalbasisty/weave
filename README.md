@@ -165,7 +165,7 @@ the commit it describes; `weave wiki --check` fails when the pages are stale.
 | **Python, Go, Ruby and PHP back ends** | FastAPI, Flask, Django and Django REST framework; gin, echo, chi, gorilla and net/http; Rails and Laravel routes. The RealWorld React front end matches 18 of 18 calls against each of the Gin, Flask, Django, Rails and Laravel back ends |
 | **Front ends** | React Router `<Route>` tables (lazy imports too), Next.js and Remix file routes; `fetch`, axios and any HTTP-like client, tRPC hooks, `gql` documents |
 | **Data** | Prisma, Drizzle, TypeORM, SQLAlchemy, Django models, GORM |
-| **Agents** | Claude Code, Cursor, VS Code / Copilot, opencode (MCP config, instructions, gate hook), and OpenChamber, which also gets an [extension](extensions/openchamber/): the gate's verdict in Work Status and a panel to search the map and send impact to the chat |
+| **Agents** | Claude Code, Cursor, VS Code / Copilot, opencode (MCP config, instructions, gate hook), and OpenChamber, which also gets a self-contained [extension](extensions/openchamber/) (it fetches weave itself): a map panel, the gate on your change and after each agent turn, and @weave in the composer |
 | **Monorepos** | workspace package names (`@acme/lib/…`) and tsconfig `paths` (`~/…`) |
 | **Anything else** | a one-line regex in [`.weave/patterns.json`](docs/REFERENCE.md#your-own-patterns) |
 
