@@ -18,6 +18,9 @@ import (
 	"github.com/michalbasisty/weave/internal/weave"
 )
 
+// servePage is the page cmdServe opens: "" for the panel, "live" for the live map.
+var servePage = ""
+
 // cmdServe hosts the page a person actually works in: the explorer, the wiki under
 // /wiki/, and actions wired to the same CLI the agent uses. Loopback only.
 func cmdServe() int {
@@ -60,6 +63,7 @@ func cmdServe() int {
 	}), ReadHeaderTimeout: 5 * time.Second}
 	fmt.Printf("weave serve: %s\n", root)
 	fmt.Printf("  http://%s/?t=%s\n", addr, token)
+	fmt.Printf("  live map: http://%s/live\n", addr)
 	if p := ln.Addr().(*net.TCPAddr).Port; p != port {
 		fmt.Printf("  port %d is taken (another weave serve?), so this one is on %d\n", port, p)
 	}
@@ -69,7 +73,7 @@ func cmdServe() int {
 	fmt.Println("  the token is kept in .weave/serve.token; --new-token rotates it")
 	fmt.Println("  one page: the map, a Check button, file:line that opens, notes, specs, the wiki under /wiki/")
 	if !hasFlag("no-open") {
-		if openBrowser("http://" + addr + "/?t=" + token) {
+		if openBrowser("http://" + addr + "/" + servePage + "?t=" + token) {
 			fmt.Println("  opened in your browser; --no-open skips that")
 		}
 	}

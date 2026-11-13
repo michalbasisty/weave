@@ -1,0 +1,204 @@
+The sample shop that `weave demo` unpacks: an Express API, a React front end and a
+Prisma schema. Each file starts at a "-- path --" line.
+-- README.md --
+# weave demo shop
+
+A small web app for `weave demo`: an Express API, a React front end and a Prisma schema.
+-- server/package.json --
+{ "name": "shop-server", "private": true, "scripts": { "test": "jest" }, "dependencies": { "express": "^4.19.0", "@prisma/client": "^5.0.0" }, "devDependencies": { "jest": "^29.0.0" } }
+-- server/prisma/schema.prisma --
+model User {
+  id     String     @id
+  email  String     @unique
+  orders Order[]
+  cart   CartItem[]
+}
+
+model Product {
+  id       String     @id
+  name     String
+  featured Boolean    @default(false)
+  reviews  Review[]
+  cart     CartItem[]
+}
+
+model Review {
+  id        String  @id
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  text      String
+}
+
+model CartItem {
+  id        String  @id
+  userId    String
+  productId String
+  user      User    @relation(fields: [userId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Order {
+  id     String @id
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  total  Int
+}
+-- server/src/app.ts --
+import express from 'express';
+import products from './products/products.routes';
+import cart from './cart/cart.routes';
+import orders from './orders/orders.routes';
+import users from './users/users.routes';
+
+const app = express();
+app.use(express.json());
+app.use('/api/products', products);
+app.use('/api/cart', cart);
+app.use('/api/orders', orders);
+app.use('/api/users', users);
+export default app;
+-- server/src/cart/cart.routes.ts --
+import { Router } from 'express';
+import { prisma } from '../db';
+
+const router = Router();
+router.get('/', async (req, res) => res.json(await prisma.cartItem.findMany({ where: { userId: req.headers['x-user'] as string } })));
+router.post('/items', async (req, res) => res.json(await prisma.cartItem.create({ data: req.body })));
+router.delete('/items/:id', async (req, res) => res.json(await prisma.cartItem.delete({ where: { id: req.params.id } })));
+export default router;
+-- server/src/db.ts --
+import { PrismaClient } from '@prisma/client';
+export const prisma = new PrismaClient();
+-- server/src/orders/orders.routes.ts --
+import { Router } from 'express';
+import { prisma } from '../db';
+
+const router = Router();
+router.get('/', async (req, res) => res.json(await prisma.order.findMany({ where: { userId: req.headers['x-user'] as string } })));
+router.post('/checkout', async (req, res) => res.json(await prisma.order.create({ data: req.body })));
+router.get('/:id', async (req, res) => res.json(await prisma.order.findUnique({ where: { id: req.params.id } })));
+export default router;
+-- server/src/products/products.routes.ts --
+import { Router } from 'express';
+import { prisma } from '../db';
+
+const router = Router();
+router.get('/', async (_req, res) => res.json(await prisma.product.findMany()));
+router.get('/featured', async (_req, res) => res.json(await prisma.product.findMany({ where: { featured: true } })));
+router.get('/:id', async (req, res) => res.json(await prisma.product.findUnique({ where: { id: req.params.id } })));
+router.get('/:id/reviews', async (req, res) => res.json(await prisma.review.findMany({ where: { productId: req.params.id } })));
+router.post('/:id/reviews', async (req, res) => res.json(await prisma.review.create({ data: { ...req.body, productId: req.params.id } })));
+export default router;
+-- server/src/users/users.routes.ts --
+import { Router } from 'express';
+import { prisma } from '../db';
+
+const router = Router();
+router.post('/login', async (req, res) => res.json(await prisma.user.findUnique({ where: { email: req.body.email } })));
+router.get('/me', async (req, res) => res.json(await prisma.user.findUnique({ where: { id: req.headers['x-user'] as string } })));
+export default router;
+-- server/test/orders.test.ts --
+import request from 'supertest';
+import app from '../src/app';
+
+test('GET /api/orders lists my orders', async () => {
+  const res = await request(app).get('/api/orders');
+  expect(res.status).toBe(200);
+});
+-- web/package.json --
+{ "name": "shop-web", "private": true, "dependencies": { "axios": "^1.7.0", "react": "^18.3.1", "react-router-dom": "^6.26.0" } }
+-- web/src/App.tsx --
+import { Routes, Route } from 'react-router-dom';
+import Home from './pages/Home';
+import Product from './pages/Product';
+import Cart from './pages/Cart';
+import Orders from './pages/Orders';
+import Login from './pages/Login';
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/products/:id" element={<Product />} />
+      <Route path="/cart" element={<Cart />} />
+      <Route path="/orders" element={<Orders />} />
+      <Route path="/login" element={<Login />} />
+    </Routes>
+  );
+}
+-- web/src/api/cart.ts --
+import { http } from './http';
+
+export const getCart = () => http.get('/api/cart').then((r) => r.data);
+export const addToCart = (productId: string) => http.post('/api/cart/items', { productId }).then((r) => r.data);
+-- web/src/api/http.ts --
+import axios from 'axios';
+
+export const http = axios.create({ headers: { 'content-type': 'application/json' } });
+-- web/src/api/orders.ts --
+import { http } from './http';
+
+export const listOrders = () => http.get('/api/orders').then((r) => r.data);
+export const getOrder = (id: string) => http.get(`/api/orders/${id}`).then((r) => r.data);
+export const checkout = () => http.post('/api/orders/checkout', {}).then((r) => r.data);
+-- web/src/api/products.ts --
+import { http } from './http';
+
+export const listProducts = () => http.get('/api/products').then((r) => r.data);
+export const featuredProducts = () => http.get('/api/products/featured').then((r) => r.data);
+export const getProduct = (id: string) => http.get(`/api/products/${id}`).then((r) => r.data);
+export const listReviews = (id: string) => http.get(`/api/products/${id}/reviews`).then((r) => r.data);
+export const addReview = (id: string, text: string) => http.post(`/api/products/${id}/reviews`, { text }).then((r) => r.data);
+-- web/src/api/users.ts --
+import { http } from './http';
+
+export const login = (email: string) => http.post('/api/users/login', { email }).then((r) => r.data);
+export const me = () => http.get('/api/users/me').then((r) => r.data);
+-- web/src/pages/Cart.tsx --
+import { useEffect, useState } from 'react';
+import { getCart } from '../api/cart';
+import { checkout } from '../api/orders';
+
+export default function Cart() {
+  const [cart, setCart] = useState<{ items: unknown[] }>({ items: [] });
+  useEffect(() => { getCart().then(setCart); }, []);
+  return <button onClick={() => checkout()}>Check out {cart.items.length} items</button>;
+}
+-- web/src/pages/Home.tsx --
+import { useEffect, useState } from 'react';
+import { featuredProducts } from '../api/products';
+import { me } from '../api/users';
+
+export default function Home() {
+  const [items, setItems] = useState([]);
+  useEffect(() => { featuredProducts().then(setItems); me(); }, []);
+  return <ul>{items.length} featured</ul>;
+}
+-- web/src/pages/Login.tsx --
+import { login } from '../api/users';
+
+export default function Login() {
+  return <button onClick={() => login('me@example.com')}>Log in</button>;
+}
+-- web/src/pages/Orders.tsx --
+import { useEffect, useState } from 'react';
+import { listOrders } from '../api/orders';
+import { me } from '../api/users';
+
+export default function Orders() {
+  const [orders, setOrders] = useState([]);
+  useEffect(() => { listOrders().then(setOrders); me(); }, []);
+  return <ul>{orders.length} orders</ul>;
+}
+-- web/src/pages/Product.tsx --
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { getProduct, listReviews } from '../api/products';
+import { addToCart } from '../api/cart';
+
+export default function Product() {
+  const { id = '' } = useParams();
+  const [reviews, setReviews] = useState([]);
+  useEffect(() => { getProduct(id); listReviews(id).then(setReviews); }, [id]);
+  return <button onClick={() => addToCart(id)}>Add to cart ({reviews.length} reviews)</button>;
+}

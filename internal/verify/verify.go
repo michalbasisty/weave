@@ -29,6 +29,10 @@ type Result struct {
 	Broken    []Broken
 	Pages     []string
 	Endpoints []string
+	// Diagram is a Mermaid picture of the blast radius, "" when there is none.
+	Diagram string
+	// Blast is the same blast radius as data, uncapped.
+	Blast Blast
 }
 
 // Broken is one removed endpoint that a live call site still names.
@@ -36,6 +40,7 @@ type Broken struct {
 	Endpoint string
 	Caller   string
 	Screens  []string
+	Closest  string // the route the call most likely meant, "" when none is near
 }
 
 // Text renders the result the way `weave check` prints it: one scope line, then
@@ -112,6 +117,22 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 			removed = append(removed, e)
 		}
 	}
+	// What this change added: against the committed tree when it is at hand,
+	// since the last local index may already hold the edit.
+	before := prev
+	if baseGraph != nil {
+		before = endpointNames(baseGraph)
+	}
+	prevSet := make(map[string]bool, len(before))
+	for _, e := range before {
+		prevSet[e] = true
+	}
+	var added []string
+	for _, e := range now {
+		if !prevSet[e] {
+			added = append(added, e)
+		}
+	}
 
 	type brokenCall struct {
 		gone string
@@ -155,7 +176,7 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 			}
 			screensOf[file] = screens
 		}
-		res.Broken = append(res.Broken, Broken{b.gone, locNode(b.call), screens})
+		res.Broken = append(res.Broken, Broken{b.gone, locNode(b.call), screens, renamedTo(g, b.gone, added)})
 	}
 	if len(broken) > 0 {
 		var parts []string
@@ -164,7 +185,7 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 				break
 			}
 			part := fmt.Sprintf("%s from %s", b.gone, locNode(b.call))
-			if c := weave.Closest(g, b.gone); c != "" {
+			if c := res.Broken[i].Closest; c != "" {
 				part += " (closest now: " + c + ")"
 			}
 			parts = append(parts, part)
@@ -266,6 +287,8 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 	if len(removed) > 0 {
 		extra += fmt.Sprintf(", %d endpoint(s) removed", len(removed))
 	}
+	res.Diagram = blastDiagram(g, f, res.Broken)
+	res.Blast = NewBlast(g, f, res.Broken)
 	res.Scope = scope + extra
 	res.Errors = errors
 	res.Warnings = warnings
@@ -375,4 +398,52 @@ func head[T any](list []T, n int) []T {
 		return list[:n]
 	}
 	return list
+}
+
+// renamedTo guesses where a removed endpoint went. A route added by the same
+// change, with the same method and under the same parent path, is the likeliest
+// answer (`GET /orders` → `GET /orders/history`); otherwise the nearest route.
+func renamedTo(g *weave.Graph, gone string, added []string) string {
+	method, path, ok := strings.Cut(gone, " ")
+	if !ok {
+		return ""
+	}
+	parent := path
+	if i := strings.LastIndex(strings.TrimSuffix(path, "/"), "/"); i >= 0 {
+		parent = path[:i+1]
+	}
+	best, bestD := "", 1<<30
+	for _, a := range added {
+		m, p, ok := strings.Cut(a, " ")
+		if !ok || m != method || !strings.HasPrefix(p, parent) {
+			continue
+		}
+		if d := editDistance(path, p); d < bestD || (d == bestD && a < best) {
+			best, bestD = a, d
+		}
+	}
+	if best != "" {
+		return best
+	}
+	return weave.Closest(g, gone)
+}
+
+func editDistance(a, b string) int {
+	prev := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		cur := make([]int, len(b)+1)
+		cur[0] = i
+		for j := 1; j <= len(b); j++ {
+			c := prev[j-1]
+			if a[i-1] != b[j-1] {
+				c++
+			}
+			cur[j] = min(c, prev[j]+1, cur[j-1]+1)
+		}
+		prev = cur
+	}
+	return prev[len(b)]
 }

@@ -29,6 +29,11 @@ func main() {
 		code = cmdExplore()
 	case "wiki":
 		code = cmdWiki()
+	case "demo":
+		code = cmdDemo()
+	case "live":
+		servePage = "live"
+		code = cmdServe()
 	case "serve":
 		code = cmdServe()
 	case "projects", "list":
@@ -128,6 +133,7 @@ func helpText() string {
 	return `weave — repo map for agents and people
 
   weave                         status, and what to do next
+  weave demo    [dir] [--live]  break and catch a change in a sample shop, in 30 seconds
   weave explore                 open the map in your browser (--all: every project)
   weave wiki                    write a read-only wiki: a page per module, endpoint, screen, table, change
   weave wiki --check            fail when the wiki no longer describes HEAD
@@ -148,6 +154,7 @@ func helpText() string {
   weave check   [file...]       fail when a change breaks a contract (no args: git diff)
   weave hook                    check for an agent hook: exit 2 and the failure on stderr
   weave serve   [--port N]      host the map, the wiki and the actions on 127.0.0.1, and open it
+  weave live                    the same server, opened on the live map: your change lights up as you edit
                 [--no-open]     don't open the browser
   weave fires   [--since N]     what the hook has seen: runs, failures, avg time
   weave delta   [ref]           what the graph gained or lost (--from graph.json, --all)
