@@ -22,6 +22,10 @@ node bench/charts.mjs               # redraws docs/img/chart-*.svg
 | RealWorld Django + React: [back end](https://github.com/gothinkster/django-realworld-example-app) + the same front end | `29c9d42` + `53b0b4c` | Django REST framework, React + Redux | 103 |
 | RealWorld Rails + React: [back end](https://github.com/gothinkster/rails-realworld-example-app) + the same front end | `a2ae4ff` + `53b0b4c` | Ruby on Rails, React + Redux | 110 |
 | RealWorld Laravel + React: [back end](https://github.com/gothinkster/laravel-realworld-example-app) + the same front end | `e45c37c` + `53b0b4c` | Laravel, React + Redux | 173 |
+| [Papermark](https://github.com/mfts/papermark) | `ed19717` | Next.js (pages and app router) + Prisma | 1,434 |
+| [Linkwarden](https://github.com/linkwarden/linkwarden) | `24adcc1` | Next.js pages router + Prisma monorepo | 718 |
+| [Outline](https://github.com/outline/outline) | `2206588` | Koa + Sequelize API, React front end | 2,549 |
+| [Umami](https://github.com/umami-software/umami) | `b18d514` | Next.js app router + Prisma | 1,696 |
 
 None of them is configured for weave: no `.weave/patterns.json`, no hints. The RealWorld
 halves are two upstream repositories copied side by side, the way a team that owns both
@@ -56,7 +60,7 @@ and conclude less. Whether `context` changes a whole session is the open questio
 
 ## 3. The gate on broken routes
 
-<img src="img/chart-gate.svg" alt="Every route the RealWorld front end calls, broken one at a time on six back ends (Express, Gin, Flask, Django, Rails, Laravel) by renaming it, deleting it or changing its method: weave check failed and named the caller 170 of 188 times, and 72 harmless edits caused 0 false failures." width="100%">
+<img src="img/chart-gate.svg" alt="Every route a front end calls, broken one at a time on ten apps by renaming it, deleting it or changing its method: weave check failed and named the caller 615 of 675 times (170 of 188 on the six RealWorld back ends, 445 of 487 on Papermark, Linkwarden, Outline and Umami), and 265 harmless edits caused 0 false failures." width="100%">
 
 **Method.** The same React front end runs against six back ends: Express, Gin, Flask, Django,
 Rails and Laravel. For each route the front end calls, `bench/run.mjs` finds the line that
@@ -72,7 +76,38 @@ it declares five routes. The line is then changed four ways, one at a time:
 After each change, `weave check` runs on the uncommitted change and the file is restored. A
 catch is exit 1 with `removed endpoint still called: … from <file>:<line>`.
 
-**The misses.** On every back end, breaking `GET /articles/feed` leaves the front end's
+**Real products.** Papermark, Linkwarden, Outline and Umami are measured as published. Next.js
+routes are declared by where a file sits, so there a break moves or deletes the file:
+- **rename** adds `-renamed` to the deepest fixed folder or file name;
+- **delete** removes the file;
+- **change method** renames `export async function GET`, or the verb in `req.method === "GET"`
+  and `case "GET":`;
+- **control** adds a blank line at the end of the file.
+
+Outline's Koa routes break on their line, like Express. The result: 445 of 487 breaks were
+caught with the caller named, and 0 of 193 control edits failed. Outline caught 155 of 155.
+Its method trials are few (3), because Koa puts the verb on the line above the path.
+
+In all 42 misses on these apps, the broken call still reaches some route:
+- **A Next.js catch-all** (20 of the 42). Papermark and Linkwarden route `/api/auth/*` to
+  NextAuth's `[...nextauth]`. With `/auth/forgot-password` gone, the catch-all serves its calls.
+- **A parameter route beside the broken one.** `/links/archive` falls onto `/links/:id`, and
+  `/tags/merge` onto `/tags/:id`, as `/articles/feed` does in RealWorld.
+- **A variable segment with another choice left.** `/api/unsubscribe/${type}` still reaches
+  `dataroom` when `yir` is gone.
+- **A call written without its mount prefix.** Umami calls `/users` relative to `/api`, and
+  with `/api/users` gone, it ends like `/api/teams/:teamId/users`.
+
+**Found on the real products.** Six false alarms on the unchanged trees, now fixed with tests
+in `internal/weave/realapps_test.go`:
+- `${team?.id}` was cut at the `?` as a query string.
+- `"/api/x/" + id` lost its last segment.
+- A `method:` after `body: JSON.stringify({…})` was missed.
+- `req.method !== "POST"`, `switch (req.method)` and `[[...slug]]` were not read in Next pages routes.
+- Koa routes without a leading slash were not read.
+- A test's `server.post("/api/…")` was read as a route declaration.
+
+**The misses on RealWorld.** On every back end, breaking `GET /articles/feed` leaves the front end's
 `/articles/feed` call landing on `GET /articles/:slug`, and the router would send it there
 too. weave reports what the router would do, not what the author meant. On Gin, `PUT
 /articles/:slug` is declared twice (`/:slug` and `/:slug/`), so removing one leaves the call

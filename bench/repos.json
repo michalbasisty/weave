@@ -60,5 +60,41 @@
     "commit": "e45c37c + 53b0b4c",
     "stack": "PHP + Laravel backend, React + Redux front end",
     "mutate": true
+  },
+  {
+    "name": "Papermark",
+    "dir": "papermark",
+    "url": "https://github.com/mfts/papermark",
+    "commit": "ed19717",
+    "stack": "Next.js (pages and app router) + Prisma",
+    "mutate": true,
+    "real": true
+  },
+  {
+    "name": "Linkwarden",
+    "dir": "linkwarden",
+    "url": "https://github.com/linkwarden/linkwarden",
+    "commit": "24adcc1",
+    "stack": "Next.js pages router + Prisma monorepo",
+    "mutate": true,
+    "real": true
+  },
+  {
+    "name": "Outline",
+    "dir": "outline",
+    "url": "https://github.com/outline/outline",
+    "commit": "2206588",
+    "stack": "Koa + Sequelize API, React front end",
+    "mutate": true,
+    "real": true
+  },
+  {
+    "name": "Umami",
+    "dir": "umami",
+    "url": "https://github.com/umami-software/umami",
+    "commit": "b18d514",
+    "stack": "Next.js app router + Prisma",
+    "mutate": true,
+    "real": true
   }
 ]

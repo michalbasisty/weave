@@ -167,30 +167,39 @@ const pct = (a, b) => b ? Math.round((a / b) * 100) : 0;
       if (!v) continue;
       if (k === 'control') { ctried += v.tried; cfail += v.caught; } else { tried += v.tried; caught += v.named; }
     }
-    const colW = 230, rowH = 46, x0 = PAD + 190, y0 = 150;
+    const colW = 230, rowH = 46, x0 = PAD + 190, headH = 40;
     let body = '';
-    kinds.forEach(([, label], j) => { body += `<text class="group" x="${x0 + j * colW}" y="${y0 - 16}">${esc(label)}</text>`; });
-    stacks.forEach((r, i) => {
-      const y = y0 + i * rowH;
-      body += `<text class="label" x="${PAD}" y="${y + 22}">${esc(r.name.replace(/^RealWorld \((.*)\)$/, '$1'))}</text>`;
-      kinds.forEach(([k], j) => {
-        const v = r.mutations.kinds[k], x = x0 + j * colW, w = colW - 90;
-        if (!v) { body += `<text class="note" x="${x}" y="${y + 22}">no verb in the route</text>`; return; }
-        const good = k === 'control' ? v.tried - v.caught : v.named;
-        body += `<rect class="n" x="${x}" y="${y + 8}" width="${w}" height="20" rx="4"/>`;
-        body += bar(x, y + 8, w * good / v.tried, 20, 'w');
-        body += `<text class="value" x="${x + w + 10}" y="${y + 23}">${good}/${v.tried}</text>`;
-      });
-    });
-    const H = y0 + stacks.length * rowH + 70;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Breaking each route the RealWorld front end calls, on six back ends: weave check failed and named the caller ${caught} of ${tried} times; ${ctried - cfail} of ${ctried} harmless edits passed.">
+    let y = 150;
+    kinds.forEach(([, label], j) => { body += `<text class="group" x="${x0 + j * colW}" y="${y - 16}">${esc(label)}</text>`; });
+    const section = (title, rows) => {
+      if (!rows.length) return;
+      body += `<text class="note" x="${PAD}" y="${y + 18}">${esc(title)}</text>`;
+      y += headH - 10;
+      for (const r of rows) {
+        body += `<text class="label" x="${PAD}" y="${y + 22}">${esc(r.name.replace(/^RealWorld \((.*)\)$/, '$1'))}</text>`;
+        kinds.forEach(([k], j) => {
+          const v = r.mutations.kinds[k], x = x0 + j * colW, w = colW - 90;
+          if (!v) { body += `<text class="note" x="${x}" y="${y + 22}">no verb in the route</text>`; return; }
+          const good = k === 'control' ? v.tried - v.caught : v.named;
+          body += `<rect class="n" x="${x}" y="${y + 8}" width="${w}" height="20" rx="4"/>`;
+          body += bar(x, y + 8, w * good / v.tried, 20, 'w');
+          body += `<text class="value" x="${x + w + 10}" y="${y + 23}">${good}/${v.tried}</text>`;
+        });
+        y += rowH;
+      }
+      y += 10;
+    };
+    section('The RealWorld React front end against six back ends', stacks.filter(r => !r.real));
+    section('Real products, as published', stacks.filter(r => r.real));
+    const H = y + 70;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Breaking each route a front end calls, on ${stacks.length} apps: weave check failed and named the caller ${caught} of ${tried} times; ${ctried - cfail} of ${ctried} harmless edits passed.">
 ${style}
   <rect class="bg" x="0" y="0" width="${W}" height="${H}" rx="12"/>
   <text class="title" x="${PAD}" y="48">Break a route, and the gate names who still calls it</text>
-  <text class="sub" x="${PAD}" y="74">Every route the RealWorld front end calls, broken one at a time on six back ends, then weave check</text>
+  <text class="sub" x="${PAD}" y="74">Every route a front end calls, broken one at a time on ${stacks.length} apps, then weave check</text>
   <text class="value" x="${PAD}" y="104">${caught} of ${tried} breaks failed with the caller's file:line · ${cfail} false failures in ${ctried} harmless edits</text>
   ${body}
-  <text class="note" x="${PAD}" y="${H - 38}">Not caught: GET /articles/feed, whose caller then lands on /articles/:slug, and a Gin route declared twice (/:slug and /:slug/).</text>
+  <text class="note" x="${PAD}" y="${H - 38}">Most misses are a route whose caller then lands on a neighbour: /articles/feed on /articles/:slug, or a Next.js catch-all ([...nextauth]).</text>
   <text class="note" x="${PAD}" y="${H - 16}">The harmless edit is a blank line under the route. No type checker sees any of this: a route and its callers only share a string.</text>
 </svg>
 `;
