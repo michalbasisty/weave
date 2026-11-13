@@ -66,20 +66,22 @@ exactly as they are published ([Papermark](https://github.com/mfts/papermark),
 [Linkwarden](https://github.com/linkwarden/linkwarden), [Outline](https://github.com/outline/outline)
 and [Umami](https://github.com/umami-software/umami)).
 
-**The gate failed and named the caller 615 times out of 675** (445 of 487 on the real
+**The gate failed and named the caller 661 times out of 675** (476 of 487 on the real
 products). A blank line added to each route file, the harmless control, **failed the gate 0
 times out of 265**.
 
-Most misses happen when the broken call still matches another route, so it reaches real code:
-- `/articles/feed` falls onto `/articles/:slug`, and `/links/archive` falls onto `/links/:id`.
-- A Next.js catch-all such as `[...nextauth]` picks up the calls to `/auth/forgot-password`.
+When a call outlives its route but still matches another one (`/links/archive` falling onto
+`/links/:id`, or `/auth/forgot-password` onto NextAuth's `[...nextauth]` catch-all), the gate
+finds it by the path its file still spells. The 14 misses are a variable segment that still
+has another value to go to (`/unsubscribe/${type}` with only `yir` gone), and a route declared
+twice, where removing one copy breaks nothing.
 
 Three things fail the gate, nothing else: a **removed endpoint that is still called**, a
 **call that matches no endpoint**, and a **requirement whose test fails** (when you link
 them). Untested endpoints and stale specs are warnings, because a gate that cries wolf gets
 switched off in a week.
 
-<img src="docs/img/chart-gate.svg" alt="Every route a front end calls, broken one at a time on ten apps (the RealWorld React front end on Express, Gin, Flask, Django, Rails and Laravel, plus Papermark, Linkwarden, Outline and Umami) by renaming it, deleting it or changing its method: weave check failed and named the caller 615 of 675 times, and 265 harmless edits caused 0 false failures." width="100%">
+<img src="docs/img/chart-gate.svg" alt="Every route a front end calls, broken one at a time on ten apps (the RealWorld React front end on Express, Gin, Flask, Django, Rails and Laravel, plus Papermark, Linkwarden, Outline and Umami) by renaming it, deleting it or changing its method: weave check failed and named the caller 661 of 675 times, and 265 harmless edits caused 0 false failures." width="100%">
 
 ### On a pull request
 
@@ -168,7 +170,7 @@ Rerun on 2026-11-13 against the current code:
 | screens linked to their endpoints | 87 of 119 | 8 of 8 | — |
 | tables with a module that uses them | 55 of 55 | 4 of 4 | 5 of 5 |
 | false failures on the unchanged repo | **0** | **0** | **0** |
-| `weave check` | ~1.7 s | 64 ms | 38 ms |
+| `weave check` | ~1.7 s | 71 ms | 38 ms |
 
 The same React front end in front of Gin, Flask, Django, Rails and Laravel back ends matches
 18 of 18 calls with 0 false failures on each ([details](docs/COMPARISON.md#6-python-go-ruby-and-php-back-ends)).
@@ -181,8 +183,8 @@ Four real products, cloned as they are:
 | files / endpoints | 1,434 / 374 | 718 / 74 | 2,549 / 250 | 1,696 / 207 |
 | front-end calls matched | 124 of 130 | **46 of 46** | **79 of 79** | **23 of 23** |
 | false failures on the unchanged repo | **0** | **0** | **0** | **0** |
-| breaks caught (rename, delete, method) | 196 of 213 | 60 of 80 | 155 of 155 | 34 of 39 |
-| `weave check` | ~1.1 s | ~0.5 s | ~1.6 s | ~0.6 s |
+| breaks caught (rename, delete, method) | 205 of 213 | 78 of 80 | **155 of 155** | 38 of 39 |
+| `weave check` | ~1.0 s | ~0.5 s | ~1.7 s | ~0.6 s |
 
 Papermark's unmatched calls go to four routes that the public repo does not have:
 - `/api/teams/:teamId/billing/manage`, called from six components;
@@ -222,7 +224,7 @@ on a fixture app:
 | the panel in headless Chrome (`test/ui/panel.mjs`) | 25 checks: menus, specs, editing and saving a spec, the Check button, file links, the wiki |
 | the OpenChamber extension (`node --test`) | 11 tests: downloading and verifying weave, the agent note, the @ menu, the gate after each agent turn, and the Specs tab end to end against a freshly built weave |
 | the Action on `test/fixture` | the real `action.yml` runs against a small app on every pull request |
-| the benchmark (`bench/`) | the numbers above on pinned commits of 12 public repos: 0 false failures on each unchanged repo, and 675 deliberate breaks (rename, delete, change method) on ten apps with 265 harmless edits as the control |
+| the benchmark (`bench/`) | the numbers above on pinned commits of 12 public repos: 0 false failures on each unchanged repo, and 675 deliberate breaks (rename, delete, change method) on ten apps, 661 caught, with 265 harmless edits as the control |
 
 The agent itself was measured too. Over 72 Claude Code sessions on two repos, with and
 without weave ([`docs/EVAL.md`](docs/EVAL.md#second-round-72-sessions)), the tasks succeeded

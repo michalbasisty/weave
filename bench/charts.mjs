@@ -199,7 +199,7 @@ ${style}
   <text class="sub" x="${PAD}" y="74">Every route a front end calls, broken one at a time on ${stacks.length} apps, then weave check</text>
   <text class="value" x="${PAD}" y="104">${caught} of ${tried} breaks failed with the caller's file:line · ${cfail} false failures in ${ctried} harmless edits</text>
   ${body}
-  <text class="note" x="${PAD}" y="${H - 38}">Most misses are a route whose caller then lands on a neighbour: /articles/feed on /articles/:slug, or a Next.js catch-all ([...nextauth]).</text>
+  <text class="note" x="${PAD}" y="${H - 38}">Not caught: a variable segment with another value left (/unsubscribe/\${type}), and a route declared twice (Gin /:slug and /:slug/).</text>
   <text class="note" x="${PAD}" y="${H - 16}">The harmless edit is a blank line under the route. No type checker sees any of this: a route and its callers only share a string.</text>
 </svg>
 `;

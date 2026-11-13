@@ -60,7 +60,7 @@ and conclude less. Whether `context` changes a whole session is the open questio
 
 ## 3. The gate on broken routes
 
-<img src="img/chart-gate.svg" alt="Every route a front end calls, broken one at a time on ten apps by renaming it, deleting it or changing its method: weave check failed and named the caller 615 of 675 times (170 of 188 on the six RealWorld back ends, 445 of 487 on Papermark, Linkwarden, Outline and Umami), and 265 harmless edits caused 0 false failures." width="100%">
+<img src="img/chart-gate.svg" alt="Every route a front end calls, broken one at a time on ten apps by renaming it, deleting it or changing its method: weave check failed and named the caller 661 of 675 times (185 of 188 on the six RealWorld back ends, 476 of 487 on Papermark, Linkwarden, Outline and Umami), and 265 harmless edits caused 0 false failures." width="100%">
 
 **Method.** The same React front end runs against six back ends: Express, Gin, Flask, Django,
 Rails and Laravel. For each route the front end calls, `bench/run.mjs` finds the line that
@@ -84,19 +84,30 @@ routes are declared by where a file sits, so there a break moves or deletes the 
   and `case "GET":`;
 - **control** adds a blank line at the end of the file.
 
-Outline's Koa routes break on their line, like Express. The result: 445 of 487 breaks were
+Outline's Koa routes break on their line, like Express. The result: 476 of 487 breaks were
 caught with the caller named, and 0 of 193 control edits failed. Outline caught 155 of 155.
 Its method trials are few (3), because Koa puts the verb on the line above the path.
 
-In all 42 misses on these apps, the broken call still reaches some route:
-- **A Next.js catch-all** (20 of the 42). Papermark and Linkwarden route `/api/auth/*` to
-  NextAuth's `[...nextauth]`. With `/auth/forgot-password` gone, the catch-all serves its calls.
-- **A parameter route beside the broken one.** `/links/archive` falls onto `/links/:id`, and
-  `/tags/merge` onto `/tags/:id`, as `/articles/feed` does in RealWorld.
-- **A variable segment with another choice left.** `/api/unsubscribe/${type}` still reaches
-  `dataroom` when `yir` is gone.
-- **A call written without its mount prefix.** Umami calls `/users` relative to `/api`, and
-  with `/api/users` gone, it ends like `/api/teams/:teamId/users`.
+**Calls that fall onto another route.** The first run on these apps caught 445 of 487. Most of
+the 42 misses were calls that outlived their route but still matched another one:
+- a Next.js catch-all: with `/auth/forgot-password` gone, NextAuth's `[...nextauth]` took its calls;
+- a parameter route beside it: `/links/archive` fell onto `/links/:id`, and `/tags/merge` onto `/tags/:id`;
+- a call written without its mount prefix: Umami's `/users` ended like `/api/teams/:teamId/users`.
+
+The index sees no broken call there, since every call matches something. The gate now also reads
+the files that called the removed route before the change. If one still spells its path (the
+whole path, or its fixed tail as a string of its own), the gate fails on it with the file and
+line. That took the real products to 476 of 487, and RealWorld to 185 of 188, because
+`/articles/feed` landing on `/articles/:slug` is the same case. The harmless edits still
+failed 0 times.
+
+**The 14 misses left:**
+- **A variable segment with another value to go to.** `/api/unsubscribe/${type}` still reaches
+  `dataroom` when `yir` is gone. weave can't tell which value the call means.
+- **A route declared twice.** On Gin, `PUT /articles/:slug` is declared as `/:slug` and
+  `/:slug/`, so removing one leaves the call served by the other.
+- **Variable tails.** A few calls end in a variable (`/public/collections/${id}`), so a file
+  that spells the path is not proof that the call used the removed route.
 
 **Found on the real products.** Six false alarms on the unchanged trees, now fixed with tests
 in `internal/weave/realapps_test.go`:
@@ -106,12 +117,6 @@ in `internal/weave/realapps_test.go`:
 - `req.method !== "POST"`, `switch (req.method)` and `[[...slug]]` were not read in Next pages routes.
 - Koa routes without a leading slash were not read.
 - A test's `server.post("/api/…")` was read as a route declaration.
-
-**The misses on RealWorld.** On every back end, breaking `GET /articles/feed` leaves the front end's
-`/articles/feed` call landing on `GET /articles/:slug`, and the router would send it there
-too. weave reports what the router would do, not what the author meant. On Gin, `PUT
-/articles/:slug` is declared twice (`/:slug` and `/:slug/`), so removing one leaves the call
-served by the other.
 
 **Found while measuring this round.** Two bugs, both fixed with tests:
 - Django's `url()` routes have method ANY, and the gate required a removed route's method to

@@ -252,3 +252,29 @@ func TestSameShapeMatchesAnyMethod(t *testing.T) {
 		t.Error("different methods still differ")
 	}
 }
+
+// A call that outlived its route but lands on another one (a catch-all, a `/:id`
+// beside it) is found by the path its file still spells.
+func TestPathLineFindsACallThatFellOntoAnotherRoute(t *testing.T) {
+	cases := []struct {
+		text  string
+		tail  []string
+		whole bool
+		want  int
+	}{
+		{"x\nfetch(\"/api/v1/auth/forgot-password\", {", []string{"api", "v1", "auth", "forgot-password"}, true, 2},
+		{"useUpdateQuery(`/users`);", []string{"api", "users"}, true, 1},
+		{"fetch(`/api/teams/${teamId}/documents/move`, {", []string{"documents", "move"}, false, 1},
+		{"fetch(`/api/v1/links/archive?all=1`)", []string{"api", "v1", "links", "archive"}, true, 1},
+		// updated callers, and paths that only start the same way, are not the route
+		{"api.get('/articles/feed-renamed')", []string{"articles", "feed"}, true, 0},
+		{"api.get(`/articles/feed/${id}`)", []string{"articles", "feed"}, true, 0},
+		{"fetch(`/api/x/move`)", []string{"documents", "move"}, false, 0},
+		{"const label = 'move'", []string{"documents", "move"}, false, 0},
+	}
+	for _, c := range cases {
+		if got := pathLine(c.text, c.tail, c.whole); got != c.want {
+			t.Errorf("pathLine(%q, %v) = %d, want %d", c.text, c.tail, got, c.want)
+		}
+	}
+}
