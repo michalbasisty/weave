@@ -344,7 +344,7 @@ func endpointNames(g *weave.Graph) []string {
 func sameShape(a, b string) bool {
 	sa := strings.Fields(a)
 	sb := strings.Fields(b)
-	if len(sa) < 2 || len(sb) < 2 || sa[0] != sb[0] {
+	if len(sa) < 2 || len(sb) < 2 || (sa[0] != sb[0] && sa[0] != "ANY" && sb[0] != "ANY") {
 		return false
 	}
 	xa := segments(sa[1])

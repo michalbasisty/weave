@@ -236,3 +236,17 @@ func TestRenamedToPrefersARouteTheChangeAdded(t *testing.T) {
 		t.Errorf("with nothing added: %q", got)
 	}
 }
+
+// A Django or catch-all route has method ANY. Removing it breaks a GET call to
+// the same path; the gate used to require the methods to be equal and passed.
+func TestSameShapeMatchesAnyMethod(t *testing.T) {
+	if !sameShape("ANY /api/tags/", "GET /tags") {
+		t.Error("ANY /api/tags/ should match GET /tags")
+	}
+	if !sameShape("GET /api/tags", "ANY /api/tags") {
+		t.Error("an ANY call should match GET /api/tags")
+	}
+	if sameShape("POST /api/tags", "GET /api/tags") {
+		t.Error("different methods still differ")
+	}
+}

@@ -26,34 +26,39 @@
     "dir": "realworld-gin",
     "url": "https://github.com/gothinkster/golang-gin-realworld-example-app + https://github.com/khaledosman/react-redux-realworld-example-app",
     "commit": "a41289b + 53b0b4c",
-    "stack": "Go + Gin backend, React + Redux front end"
+    "stack": "Go + Gin backend, React + Redux front end",
+    "mutate": true
   },
   {
     "name": "RealWorld (Flask + React)",
     "dir": "realworld-flask",
     "url": "https://github.com/gothinkster/flask-realworld-example-app + https://github.com/khaledosman/react-redux-realworld-example-app",
     "commit": "4b95fb2 + 53b0b4c",
-    "stack": "Python + Flask backend, React + Redux front end"
+    "stack": "Python + Flask backend, React + Redux front end",
+    "mutate": true
   },
   {
     "name": "RealWorld (Django + React)",
     "dir": "realworld-django",
     "url": "https://github.com/gothinkster/django-realworld-example-app + https://github.com/khaledosman/react-redux-realworld-example-app",
     "commit": "29c9d42 + 53b0b4c",
-    "stack": "Python + Django REST framework backend, React + Redux front end"
+    "stack": "Python + Django REST framework backend, React + Redux front end",
+    "mutate": true
   },
   {
     "name": "RealWorld (Rails + React)",
     "dir": "realworld-rails",
     "url": "https://github.com/gothinkster/rails-realworld-example-app + https://github.com/khaledosman/react-redux-realworld-example-app",
     "commit": "a2ae4ff + 53b0b4c",
-    "stack": "Ruby on Rails backend, React + Redux front end"
+    "stack": "Ruby on Rails backend, React + Redux front end",
+    "mutate": true
   },
   {
     "name": "RealWorld (Laravel + React)",
     "dir": "realworld-laravel",
     "url": "https://github.com/gothinkster/laravel-realworld-example-app + https://github.com/khaledosman/react-redux-realworld-example-app",
     "commit": "e45c37c + 53b0b4c",
-    "stack": "PHP + Laravel backend, React + Redux front end"
+    "stack": "PHP + Laravel backend, React + Redux front end",
+    "mutate": true
   }
 ]

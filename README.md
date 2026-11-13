@@ -59,12 +59,19 @@ Exit code 1, the caller's line, the route it most likely meant, and the tests to
 change renames a route, "most likely meant" is the route that same change added, not just the
 nearest name.
 
+Every route the RealWorld front end calls was broken one at a time, on six back ends, three
+ways: renamed, deleted, and given another HTTP method. The gate failed and named the caller
+170 times out of 188. The 18 misses are two cases. When `GET /articles/feed` goes away, the
+call still matches `/articles/:slug`, so it lands on a real route. On Gin, one route is
+declared twice, so removing one copy breaks nothing. A blank line added under each route, the
+harmless control, failed the gate 0 times out of 72.
+
 Three things fail the gate, nothing else: a **removed endpoint that is still called**, a
 **call that matches no endpoint**, and a **requirement whose test fails** (when you link
 them). Untested endpoints and stale specs are warnings, because a gate that cries wolf gets
 switched off in a week.
 
-<img src="docs/img/chart-gate.svg" alt="Renaming each of the 15 routes the RealWorld front end calls, one at a time: weave check failed and named the caller 14 times." width="100%">
+<img src="docs/img/chart-gate.svg" alt="Every route the RealWorld front end calls, broken one at a time on six back ends (Express, Gin, Flask, Django, Rails, Laravel) by renaming it, deleting it or changing its method: weave check failed and named the caller 170 of 188 times, and 72 harmless edits caused 0 false failures." width="100%">
 
 ### On a pull request
 
@@ -153,7 +160,6 @@ Rerun on 2026-11-13 against the current code:
 | screens linked to their endpoints | 87 of 119 | 8 of 8 | — |
 | tables with a module that uses them | 55 of 55 | 4 of 4 | 5 of 5 |
 | false failures on the unchanged repo | **0** | **0** | **0** |
-| renamed routes the gate caught | — | **14 of 15** | — |
 | `weave check` | ~1.5 s | 64 ms | 36 ms |
 
 The same React front end in front of Gin, Flask, Django, Rails and Laravel back ends matches
@@ -174,13 +180,13 @@ on a fixture app:
 
 | suite | what it holds |
 |---|---|
-| 171 Go tests (`go test ./...`) | extractors for every supported stack, the graph, the gate, the PR comment and its diagram, the MCP server, the panel's API and the live map |
+| 173 Go tests (`go test ./...`) | extractors for every supported stack, the graph, the gate, the PR comment and its diagram, the MCP server, the panel's API and the live map |
 | a regression repo (`test/integration`) | every shape that once caused a false FAIL on a real repository, rebuilt as one small repo so the bug can't come back unnoticed |
 | `weave demo` end to end | the sample shop must fail on the rename with the right screens and route, then pass after the fix |
 | the panel in headless Chrome (`test/ui/panel.mjs`) | 25 checks: menus, specs, editing and saving a spec, the Check button, file links, the wiki |
 | the OpenChamber extension (`node --test`) | 9 tests: downloading and verifying weave, the agent note, the @ menu, the gate after each agent turn |
 | the Action on `test/fixture` | the real `action.yml` runs against a small app on every pull request |
-| the benchmark (`bench/`) | the numbers above on pinned commits of public repos, including 0 false failures on each unchanged repo |
+| the benchmark (`bench/`) | the numbers above on pinned commits of public repos: 0 false failures on each unchanged repo, and 188 deliberate breaks (rename, delete, change method) on six back ends with 72 harmless edits as the control |
 
 The agent itself was measured too. Over 72 Claude Code sessions on two repos, with and
 without weave ([`docs/EVAL.md`](docs/EVAL.md#second-round-72-sessions)), the tasks succeeded

@@ -54,20 +54,38 @@ bytes ÷ 4, the convention weave's own receipts use. Medians.
 and conclude less. Whether `context` changes a whole session is the open question in
 [`EVAL.md`](EVAL.md).
 
-## 3. The gate on renamed routes
+## 3. The gate on broken routes
 
-<img src="img/chart-gate.svg" alt="Renaming each of the 15 routes the RealWorld front end calls, one at a time: weave check failed and named the caller 14 times." width="100%">
+<img src="img/chart-gate.svg" alt="Every route the RealWorld front end calls, broken one at a time on six back ends (Express, Gin, Flask, Django, Rails, Laravel) by renaming it, deleting it or changing its method: weave check failed and named the caller 170 of 188 times, and 72 harmless edits caused 0 false failures." width="100%">
 
-**Method.** On RealWorld, for each endpoint that the front end calls, the first literal
-segment of its route string is renamed in the back end (`/articles/:slug` →
-`/articles-renamed/:slug`), `weave check` runs on the uncommitted change, and the file is
-restored. A catch is exit 1 with `removed endpoint still called: … from <file>:<line>`.
+**Method.** The same React front end runs against six back ends: Express, Gin, Flask, Django,
+Rails and Laravel. For each route the front end calls, `bench/run.mjs` finds the line that
+declares it. That is the route's own line, or, for Rails and Laravel, the line in the routes
+file. Each declaration is tried once, so `resources :articles` counts as one trial even though
+it declares five routes. The line is then changed four ways, one at a time:
 
-**The miss.** Renaming `GET /articles/feed` leaves the front end's `/articles/feed` call
-landing on `GET /articles/:slug`, and Express would route it there too. weave reports what
-the router would do, not what the author meant.
+- **rename**: the route's last fixed segment gets a suffix (`/articles/feed` → `/articles/feed-renamed`, `:tags` → `:tags_renamed`);
+- **delete**: the line is removed;
+- **change method**: GET becomes POST and anything else becomes GET (only where the verb is on that line, so not Django or Rails resources);
+- **control**: a blank line is added under the route, which must not fail.
 
-**Found while measuring.** The first run caught 10 of 15. Two matcher rules let a broken
+After each change, `weave check` runs on the uncommitted change and the file is restored. A
+catch is exit 1 with `removed endpoint still called: … from <file>:<line>`.
+
+**The misses.** On every back end, breaking `GET /articles/feed` leaves the front end's
+`/articles/feed` call landing on `GET /articles/:slug`, and the router would send it there
+too. weave reports what the router would do, not what the author meant. On Gin, `PUT
+/articles/:slug` is declared twice (`/:slug` and `/:slug/`), so removing one leaves the call
+served by the other.
+
+**Found while measuring this round.** Two bugs, both fixed with tests:
+- Django's `url()` routes have method ANY, and the gate required a removed route's method to
+  equal the call's. So no Django break was ever caught (0 of 11 before the fix).
+- A blank line inside a Rails `devise_for … ,` call ended the call early. That dropped
+  `path_names` and reported `POST /api/users/login` as removed: the one false failure among
+  the 72 harmless edits.
+
+**Found while measuring the first round** (renames on Express only). The first run caught 10 of 15. Two matcher rules let a broken
 call settle on a neighbour: a variable last segment (`/articles/${slug}`) matched a fixed
 route (`/articles/feed`), and a longer call (`/articles/${slug}/comments`) matched a shorter
 endpoint with no literal in common. Both are fixed, with tests. A second `weave check` on the

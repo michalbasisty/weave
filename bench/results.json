@@ -1,6 +1,6 @@
 {
-  "measuredAt": "2026-11-13T17:00:57.225Z",
-  "weave": "weave 0.8.1-0.20261113165310-46959ed01a6d",
+  "measuredAt": "2026-11-13T17:30:51.891Z",
+  "weave": "weave 0.8.1-0.20261113172526-d004650a5e1d+dirty",
   "repos": [
     {
       "name": "documenso",
@@ -38,8 +38,8 @@
         "found": 30,
         "of": 327
       },
-      "indexMs": 1351,
-      "checkMs": 1464,
+      "indexMs": 1242,
+      "checkMs": 1239,
       "screens": {
         "n": 119,
         "weave": 222,
@@ -74,8 +74,8 @@
         "found": 20,
         "of": 20
       },
-      "indexMs": 54,
-      "checkMs": 64,
+      "indexMs": 42,
+      "checkMs": 54,
       "screens": {
         "n": 8,
         "weave": 215.5,
@@ -88,79 +88,324 @@
         "tried": 15,
         "caught": 14,
         "named": 14,
+        "kinds": {
+          "rename": {
+            "tried": 15,
+            "caught": 14,
+            "named": 14
+          },
+          "remove": {
+            "tried": 15,
+            "caught": 14,
+            "named": 14
+          },
+          "method": {
+            "tried": 7,
+            "caught": 7,
+            "named": 7
+          },
+          "control": {
+            "tried": 15,
+            "caught": 0,
+            "named": 0
+          }
+        },
         "rows": [
           {
             "endpoint": "GET /articles",
+            "at": "backend/src/app/routes/article/article.controller.ts:29",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 1,
             "named": true
           },
           {
             "endpoint": "GET /articles/feed",
+            "at": "backend/src/app/routes/article/article.controller.ts:45",
+            "rename": {
+              "exit": 0,
+              "named": false
+            },
+            "remove": {
+              "exit": 0,
+              "named": false
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 0,
             "named": false
           },
           {
             "endpoint": "POST /articles",
+            "at": "backend/src/app/routes/article/article.controller.ts:70",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 1,
             "named": true
           },
           {
             "endpoint": "GET /articles/:slug",
+            "at": "backend/src/app/routes/article/article.controller.ts:87",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 1,
             "named": true
           },
           {
             "endpoint": "PUT /articles/:slug",
+            "at": "backend/src/app/routes/article/article.controller.ts:110",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 1,
             "named": true
           },
           {
             "endpoint": "GET /articles/:slug/comments",
+            "at": "backend/src/app/routes/article/article.controller.ts:149",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 1,
             "named": true
           },
           {
             "endpoint": "POST /articles/:slug/comments",
+            "at": "backend/src/app/routes/article/article.controller.ts:170",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 1,
             "named": true
           },
           {
             "endpoint": "POST /articles/:slug/favorite",
+            "at": "backend/src/app/routes/article/article.controller.ts:210",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 1,
             "named": true
           },
           {
             "endpoint": "POST /users",
+            "at": "backend/src/app/routes/auth/auth.controller.ts:13",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 1,
             "named": true
           },
           {
             "endpoint": "POST /users/login",
+            "at": "backend/src/app/routes/auth/auth.controller.ts:29",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 1,
             "named": true
           },
           {
             "endpoint": "GET /user",
+            "at": "backend/src/app/routes/auth/auth.controller.ts:44",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 1,
             "named": true
           },
           {
             "endpoint": "PUT /user",
+            "at": "backend/src/app/routes/auth/auth.controller.ts:60",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 1,
             "named": true
           },
           {
             "endpoint": "GET /profiles/:username",
+            "at": "backend/src/app/routes/profile/profile.controller.ts:14",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 1,
             "named": true
           },
           {
             "endpoint": "POST /profiles/:username/follow",
+            "at": "backend/src/app/routes/profile/profile.controller.ts:34",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 1,
             "named": true
           },
           {
             "endpoint": "GET /tags",
+            "at": "backend/src/app/routes/tag/tag.controller.ts:12",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
             "exit": 1,
             "named": true
           }
@@ -190,7 +435,7 @@
         "found": 0,
         "of": 21
       },
-      "indexMs": 23,
+      "indexMs": 22,
       "checkMs": 36,
       "screens": {
         "n": 0,
@@ -226,8 +471,8 @@
         "found": 0,
         "of": 21
       },
-      "indexMs": 50,
-      "checkMs": 71,
+      "indexMs": 46,
+      "checkMs": 64,
       "screens": {
         "n": 8,
         "weave": 180,
@@ -235,7 +480,366 @@
         "byHand": 9326.5,
         "files": 5
       },
-      "old": null
+      "old": null,
+      "mutations": {
+        "tried": 15,
+        "caught": 13,
+        "named": 13,
+        "kinds": {
+          "rename": {
+            "tried": 15,
+            "caught": 13,
+            "named": 13
+          },
+          "remove": {
+            "tried": 15,
+            "caught": 13,
+            "named": 13
+          },
+          "method": {
+            "tried": 15,
+            "caught": 13,
+            "named": 13
+          },
+          "control": {
+            "tried": 15,
+            "caught": 0,
+            "named": 0
+          }
+        },
+        "rows": [
+          {
+            "endpoint": "GET /api/articles/feed",
+            "at": "backend/articles/routers.go:14",
+            "rename": {
+              "exit": 0,
+              "named": false
+            },
+            "remove": {
+              "exit": 0,
+              "named": false
+            },
+            "method": {
+              "exit": 0,
+              "named": false
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 0,
+            "named": false
+          },
+          {
+            "endpoint": "POST /api/articles",
+            "at": "backend/articles/routers.go:16",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "PUT /api/articles/:slug",
+            "at": "backend/articles/routers.go:17",
+            "rename": {
+              "exit": 0,
+              "named": false
+            },
+            "remove": {
+              "exit": 0,
+              "named": false
+            },
+            "method": {
+              "exit": 0,
+              "named": false
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 0,
+            "named": false
+          },
+          {
+            "endpoint": "POST /api/articles/:slug/favorite",
+            "at": "backend/articles/routers.go:20",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/articles/:slug/comments",
+            "at": "backend/articles/routers.go:22",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/articles",
+            "at": "backend/articles/routers.go:28",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/articles/:slug",
+            "at": "backend/articles/routers.go:29",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/articles/:slug/comments",
+            "at": "backend/articles/routers.go:30",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/tags",
+            "at": "backend/articles/routers.go:35",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/users",
+            "at": "backend/users/routers.go:13",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/users/login",
+            "at": "backend/users/routers.go:14",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/user",
+            "at": "backend/users/routers.go:19",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "PUT /api/user",
+            "at": "backend/users/routers.go:21",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/profiles/:username",
+            "at": "backend/users/routers.go:25",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/profiles/:username/follow",
+            "at": "backend/users/routers.go:29",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          }
+        ]
+      }
     },
     {
       "name": "RealWorld (Flask + React)",
@@ -262,8 +866,8 @@
         "found": 0,
         "of": 19
       },
-      "indexMs": 56,
-      "checkMs": 73,
+      "indexMs": 48,
+      "checkMs": 62,
       "screens": {
         "n": 8,
         "weave": 157,
@@ -271,7 +875,366 @@
         "byHand": 4597,
         "files": 6
       },
-      "old": null
+      "old": null,
+      "mutations": {
+        "tried": 15,
+        "caught": 14,
+        "named": 14,
+        "kinds": {
+          "rename": {
+            "tried": 15,
+            "caught": 14,
+            "named": 14
+          },
+          "remove": {
+            "tried": 15,
+            "caught": 14,
+            "named": 14
+          },
+          "method": {
+            "tried": 15,
+            "caught": 14,
+            "named": 14
+          },
+          "control": {
+            "tried": 15,
+            "caught": 0,
+            "named": 0
+          }
+        },
+        "rows": [
+          {
+            "endpoint": "GET /api/articles",
+            "at": "backend/conduit/articles/views.py:22",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/articles",
+            "at": "backend/conduit/articles/views.py:38",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "PUT /api/articles/:slug",
+            "at": "backend/conduit/articles/views.py:56",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/articles/:slug",
+            "at": "backend/conduit/articles/views.py:77",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/articles/:slug/favorite",
+            "at": "backend/conduit/articles/views.py:87",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/articles/feed",
+            "at": "backend/conduit/articles/views.py:113",
+            "rename": {
+              "exit": 0,
+              "named": false
+            },
+            "remove": {
+              "exit": 0,
+              "named": false
+            },
+            "method": {
+              "exit": 0,
+              "named": false
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 0,
+            "named": false
+          },
+          {
+            "endpoint": "GET /api/tags",
+            "at": "backend/conduit/articles/views.py:126",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/articles/:slug/comments",
+            "at": "backend/conduit/articles/views.py:136",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/articles/:slug/comments",
+            "at": "backend/conduit/articles/views.py:145",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/profiles/:username",
+            "at": "backend/conduit/profile/views.py:13",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/profiles/:username/follow",
+            "at": "backend/conduit/profile/views.py:23",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/users",
+            "at": "backend/conduit/user/views.py:16",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/users/login",
+            "at": "backend/conduit/user/views.py:29",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/user",
+            "at": "backend/conduit/user/views.py:42",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "PUT /api/user",
+            "at": "backend/conduit/user/views.py:52",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          }
+        ]
+      }
     },
     {
       "name": "RealWorld (Django + React)",
@@ -298,8 +1261,8 @@
         "found": 0,
         "of": 13
       },
-      "indexMs": 67,
-      "checkMs": 79,
+      "indexMs": 65,
+      "checkMs": 67,
       "screens": {
         "n": 8,
         "weave": 184,
@@ -307,7 +1270,203 @@
         "byHand": 3756,
         "files": 7
       },
-      "old": null
+      "old": null,
+      "mutations": {
+        "tried": 9,
+        "caught": 8,
+        "named": 8,
+        "kinds": {
+          "rename": {
+            "tried": 9,
+            "caught": 8,
+            "named": 8
+          },
+          "remove": {
+            "tried": 9,
+            "caught": 8,
+            "named": 8
+          },
+          "control": {
+            "tried": 9,
+            "caught": 0,
+            "named": 0
+          }
+        },
+        "rows": [
+          {
+            "endpoint": "ANY /api/articles/",
+            "at": "backend/conduit/apps/articles/urls.py:15",
+            "rename": {
+              "exit": 0,
+              "named": false
+            },
+            "remove": {
+              "exit": 0,
+              "named": false
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 0,
+            "named": false
+          },
+          {
+            "endpoint": "ANY /api/articles/:pk/",
+            "skipped": true,
+            "same": "backend/conduit/apps/articles/urls.py:15"
+          },
+          {
+            "endpoint": "ANY /api/articles/feed/",
+            "skipped": true,
+            "same": "backend/conduit/apps/articles/urls.py:15"
+          },
+          {
+            "endpoint": "ANY /api/articles/:article_slug/favorite/",
+            "at": "backend/conduit/apps/articles/urls.py:17",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "ANY /api/articles/:article_slug/comments/",
+            "at": "backend/conduit/apps/articles/urls.py:20",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "ANY /api/tags/",
+            "at": "backend/conduit/apps/articles/urls.py:26",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "ANY /api/user/",
+            "at": "backend/conduit/apps/authentication/urls.py:7",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "ANY /api/users/",
+            "at": "backend/conduit/apps/authentication/urls.py:8",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "ANY /api/users/login/",
+            "at": "backend/conduit/apps/authentication/urls.py:9",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "ANY /api/profiles/:username/",
+            "at": "backend/conduit/apps/profiles/urls.py:5",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "ANY /api/profiles/:username/follow/",
+            "at": "backend/conduit/apps/profiles/urls.py:6",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          }
+        ]
+      }
     },
     {
       "name": "RealWorld (Rails + React)",
@@ -334,8 +1493,8 @@
         "found": 0,
         "of": 24
       },
-      "indexMs": 40,
-      "checkMs": 52,
+      "indexMs": 35,
+      "checkMs": 47,
       "screens": {
         "n": 8,
         "weave": 179,
@@ -343,7 +1502,236 @@
         "byHand": 2825,
         "files": 10
       },
-      "old": null
+      "old": null,
+      "mutations": {
+        "tried": 10,
+        "caught": 9,
+        "named": 9,
+        "kinds": {
+          "rename": {
+            "tried": 10,
+            "caught": 9,
+            "named": 9
+          },
+          "remove": {
+            "tried": 10,
+            "caught": 9,
+            "named": 9
+          },
+          "control": {
+            "tried": 10,
+            "caught": 0,
+            "named": 0
+          }
+        },
+        "rows": [
+          {
+            "endpoint": "POST /api/users/login",
+            "at": "backend/config/routes.rb:3",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/users",
+            "at": "backend/config/routes.rb:2",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/user",
+            "at": "backend/config/routes.rb:6",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "PUT /api/user",
+            "skipped": true,
+            "same": "backend/config/routes.rb:6"
+          },
+          {
+            "endpoint": "GET /api/profiles/:username",
+            "at": "backend/config/routes.rb:8",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/profiles/:profile_username/follow",
+            "at": "backend/config/routes.rb:9",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/articles",
+            "at": "backend/config/routes.rb:12",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/articles",
+            "skipped": true,
+            "same": "backend/config/routes.rb:12"
+          },
+          {
+            "endpoint": "GET /api/articles/:slug",
+            "skipped": true,
+            "same": "backend/config/routes.rb:12"
+          },
+          {
+            "endpoint": "PUT /api/articles/:slug",
+            "skipped": true,
+            "same": "backend/config/routes.rb:12"
+          },
+          {
+            "endpoint": "POST /api/articles/:article_slug/favorite",
+            "at": "backend/config/routes.rb:13",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/articles/:article_slug/comments",
+            "at": "backend/config/routes.rb:14",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/articles/:article_slug/comments",
+            "skipped": true,
+            "same": "backend/config/routes.rb:14"
+          },
+          {
+            "endpoint": "GET /api/articles/feed",
+            "at": "backend/config/routes.rb:15",
+            "rename": {
+              "exit": 0,
+              "named": false
+            },
+            "remove": {
+              "exit": 0,
+              "named": false
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 0,
+            "named": false
+          },
+          {
+            "endpoint": "GET /api/tags",
+            "at": "backend/config/routes.rb:18",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          }
+        ]
+      }
     },
     {
       "name": "RealWorld (Laravel + React)",
@@ -370,8 +1758,8 @@
         "found": 1,
         "of": 22
       },
-      "indexMs": 98,
-      "checkMs": 125,
+      "indexMs": 77,
+      "checkMs": 94,
       "screens": {
         "n": 8,
         "weave": 167,
@@ -379,7 +1767,243 @@
         "byHand": 3994,
         "files": 9
       },
-      "old": null
+      "old": null,
+      "mutations": {
+        "tried": 8,
+        "caught": 7,
+        "named": 7,
+        "kinds": {
+          "rename": {
+            "tried": 8,
+            "caught": 7,
+            "named": 7
+          },
+          "remove": {
+            "tried": 8,
+            "caught": 7,
+            "named": 7
+          },
+          "method": {
+            "tried": 7,
+            "caught": 6,
+            "named": 6
+          },
+          "control": {
+            "tried": 8,
+            "caught": 0,
+            "named": 0
+          }
+        },
+        "rows": [
+          {
+            "endpoint": "POST /api/users/login",
+            "at": "backend/routes/api.php:15",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/users",
+            "skipped": true,
+            "same": "backend/routes/api.php:15"
+          },
+          {
+            "endpoint": "GET /api/user",
+            "at": "backend/routes/api.php:18",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/profiles/:user",
+            "at": "backend/routes/api.php:21",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/profiles/:user/follow",
+            "at": "backend/routes/api.php:22",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/articles/feed",
+            "at": "backend/routes/api.php:25",
+            "rename": {
+              "exit": 0,
+              "named": false
+            },
+            "remove": {
+              "exit": 0,
+              "named": false
+            },
+            "method": {
+              "exit": 0,
+              "named": false
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 0,
+            "named": false
+          },
+          {
+            "endpoint": "POST /api/articles/:article/favorite",
+            "at": "backend/routes/api.php:26",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "GET /api/tags",
+            "at": "backend/routes/api.php:41",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "method": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "PUT /api/user",
+            "skipped": true,
+            "same": "backend/routes/api.php:18"
+          },
+          {
+            "endpoint": "GET /api/articles",
+            "skipped": true,
+            "same": "backend/routes/api.php:25"
+          },
+          {
+            "endpoint": "POST /api/articles",
+            "skipped": true,
+            "same": "backend/routes/api.php:25"
+          },
+          {
+            "endpoint": "GET /api/articles/:article",
+            "skipped": true,
+            "same": "backend/routes/api.php:25"
+          },
+          {
+            "endpoint": "PUT /api/articles/:article",
+            "skipped": true,
+            "same": "backend/routes/api.php:25"
+          },
+          {
+            "endpoint": "GET /api/articles/:article/comments",
+            "at": "backend/routes/api.php:35",
+            "rename": {
+              "exit": 1,
+              "named": true
+            },
+            "remove": {
+              "exit": 1,
+              "named": true
+            },
+            "control": {
+              "exit": 0,
+              "named": false
+            },
+            "exit": 1,
+            "named": true
+          },
+          {
+            "endpoint": "POST /api/articles/:article/comments",
+            "skipped": true,
+            "same": "backend/routes/api.php:35"
+          }
+        ]
+      }
     }
   ],
   "schema": {
