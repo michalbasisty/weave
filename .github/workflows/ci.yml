@@ -40,7 +40,7 @@ jobs:
       - run: node test/ui/panel.mjs
       - name: OpenChamber extension service
         run: |
-          go build -o "$RUNNER_TEMP/weave" ./cmd/weave
+          go build -ldflags "-X github.com/michalbasisty/weave/internal/version.Version=99.0.0-ci" -o "$RUNNER_TEMP/weave" ./cmd/weave
           WEAVE_BIN="$RUNNER_TEMP/weave" node --test extensions/openchamber/service/main.test.mjs
 
   action:

@@ -143,7 +143,9 @@ excludes), so generated clients and build output never show up as modules.
 | edge | source | confidence |
 |---|---|---|
 | `app.use('/api/v1/x', router)` + `router.get('/y')`, `app.get('/y')`, `usersRouter.post('/y')` → endpoint | Express mount table + router files | exact |
+| `router.post("users.list", …)` in a file importing `@koa/router` → `POST /users.list` | Koa | exact |
 | `app/api/x/route.ts` exporting `GET`/`POST` → endpoint | Next.js file routing | exact |
+| `pages/api/x/[id].ts` with `req.method === "PUT"`, `!== "POST"` or `switch (req.method) { case "GET": … }`; `[...slug]` takes one segment or more, `[[...slug]]` none as well | Next.js pages router | exact |
 | `app/x/page.tsx`, `pages/x.tsx` → page | Next.js file routing | exact |
 | `app/routes/api.render.tsx`, `app/routes/api+/health.ts`, `_auth+/t.$team+/_index.tsx` → endpoint (loader/action) or page (default export) | Remix and React Router v7 file routes, flat and `+` folders | exact |
 | `quotes: { list: procedure.query(…) }`, `list: publicProcedure.input(z…).query(…)` → `QUERY /api/trpc/quotes.list` | tRPC routers, across lines | exact |
@@ -157,7 +159,7 @@ excludes), so generated clients and build output never show up as modules.
 | `scope :api`, `resources :articles, param: :slug, only: […]`, nested `resource :favorite`, `member`/`collection`, `get :feed, on: :collection`, `match … via:`, `devise_for` → endpoints at the controller's `def action` | Rails `config/routes.rb` | exact |
 | `Route::get('users/{id}', 'UserController@show')`, `[X::class, 'm']`, `Route::resource`/`apiResource` with `only`/`except`, `Route::group(['prefix' => …])`, `Route::prefix(…)->group(…)`; `routes/api.php` under `/api` → endpoints at the controller method | Laravel `routes/*.php` | exact |
 | your own wrapper, via `.weave/patterns.json` | one regex per rule | exact |
-| `api.get('/orders')`, ``api.get(`/orders/${id}`)``, `requests.post('/users')`, `apiClient.get('/x')` → endpoint | client call sites; any receiver named like an HTTP client (`api`, `http`, `client`, `request`, `fetch`, `agent`) | exact / inferred |
+| `api.get('/orders')`, ``api.get(`/orders/${id}`)``, `fetch("/orders/" + id)`, `requests.post('/users')`, `apiClient.get('/x')` → endpoint | client call sites; any receiver named like an HTTP client (`api`, `http`, `client`, `request`, `fetch`, `agent`) | exact / inferred |
 | ``api.put(`/tasks/${id}/${action}`)`` with `action: 'start' \| 'stop'` (inline or a `type` alias) → `PUT /tasks/:id/start` and `/stop` | a literal-union segment is one call per value; a value no route serves is a broken call. Untyped, a variable last segment over two or more fixed routes is a choice between them | exact / inferred |
 | `fetch('https://api.github.com/…')` | a call to another host is not a contract with this repo and is never counted as broken | — |
 | page → endpoint | `<Route>` + lazy imports + the component import graph | exact / inferred |

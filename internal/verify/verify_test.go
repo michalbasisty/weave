@@ -25,6 +25,8 @@ func TestSameShapeNeedsALiteralSegment(t *testing.T) {
 		{"GET /api/v1/tasks/42", "GET /api/v1/tasks/:id", true},
 		{"GET /api/v1/tasks", "GET /api/v1/tasks", true},
 		{"DELETE /api/v1/tasks/:id", "GET /api/v1/tasks/:id", false},
+		{"GET /api/v1/payment?plan=", "GET /api/v1/payment", true},
+		{"GET /api/teams/${team?.id}/links", "GET /api/teams/:teamId/links", true},
 	}
 	for _, c := range cases {
 		if got := sameShape(c.endpoint, c.call); got != c.want {

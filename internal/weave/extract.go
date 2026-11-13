@@ -156,10 +156,13 @@ type Endpoint struct {
 var (
 	// `router.get`, `app.get`, `userRouter.post`, `routes.delete`, `app.all`: the
 	// receivers Express code uses. A client (`api.get`) is never one of them.
-	reRouterVerb  = jsRe("\\b(?:app|server|fastify|router|routes|[A-Za-z_$][\\w$]*Router)\\.(get|post|put|patch|delete|all)\\s*\\(\\s*['\"`](\\/[^'\"`]*)['\"`]")
-	reRouterAny   = jsRe(`\b(?:app|server|fastify|router|routes|[A-Za-z_$][\w$]*Router)\.(?:get|post|put|patch|delete|all)\s*\(\s*['"\x60]\/`)
-	reMount       = jsRe("app\\.use\\s*\\(\\s*['\"`](\\/api[^'\"`]*)['\"`]\\s*,\\s*(\\w+)\\s*\\)")
-	reDefaultImp  = jsRe(`import\s+(\w+)\s+from\s+['"](\.{1,2}\/[^'"]+)['"]`)
+	reRouterVerb = jsRe("\\b(?:app|server|fastify|router|routes|[A-Za-z_$][\\w$]*Router)\\.(get|post|put|patch|delete|all)\\s*\\(\\s*['\"`](\\/[^'\"`]*)['\"`]")
+	reRouterAny  = jsRe(`\b(?:app|server|fastify|router|routes|[A-Za-z_$][\w$]*Router)\.(?:get|post|put|patch|delete|all)\s*\(\s*['"\x60]\/`)
+	reMount      = jsRe("app\\.use\\s*\\(\\s*['\"`](\\/api[^'\"`]*)['\"`]\\s*,\\s*(\\w+)\\s*\\)")
+	reDefaultImp = jsRe(`import\s+(\w+)\s+from\s+['"](\.{1,2}\/[^'"]+)['"]`)
+	// @koa/router takes a path without its slash: Outline's `router.post("users.list", …)`.
+	reKoaImport   = jsRe(`from\s+['"](?:@koa\/router|koa-router)['"]|require\(\s*['"](?:@koa\/router|koa-router)['"]\s*\)`)
+	reKoaVerb     = jsRe("\\brouter\\.(get|post|put|patch|delete|all)\\s*\\(\\s*['\"`]([A-Za-z_][^'\"`\\s]*)['\"`]")
 	reRouterFirst = jsRe("router\\.(?:get|post)\\(\\s*['\"`](\\/[^'\"`]*)['\"`]")
 	reTrailSlash  = regexp.MustCompile(`/+$`)
 )
@@ -175,7 +178,11 @@ func ExtractEndpoints(files []SourceFile, b *Builder) []Endpoint {
 	known := knownSet(files)
 	var routeFiles []*SourceFile
 	for i := range files {
-		if isCode(files[i].Rel) && mayDeclareRoutes(files[i].Text) && reRouterAny.MatchString(files[i].Text) {
+		// A test drives the routes (`server.post("/api/users.info")`); it declares none.
+		if reTestOrSpec.MatchString(files[i].Rel) {
+			continue
+		}
+		if isCode(files[i].Rel) && mayDeclareRoutes(files[i].Text) && (reRouterAny.MatchString(files[i].Text) || reKoaImport.MatchString(files[i].Text)) {
 			routeFiles = append(routeFiles, &files[i])
 		}
 	}
@@ -246,7 +253,11 @@ func ExtractEndpoints(files []SourceFile, b *Builder) []Endpoint {
 			b.Node(&GNode{ID: ModuleID(mod), Kind: KindModule, Name: mod, File: Ptr(DirOf(f.Rel))})
 		}
 		b.Node(fileNode(f.Rel))
-		for _, m := range reRouterVerb.FindAllStringSubmatchIndex(f.Text, -1) {
+		matches := reRouterVerb.FindAllStringSubmatchIndex(f.Text, -1)
+		if reKoaImport.MatchString(f.Text) {
+			matches = append(matches, reKoaVerb.FindAllStringSubmatchIndex(f.Text, -1)...)
+		}
+		for _, m := range matches {
 			line := lineAt(f.Text, m[0])
 			method := strings.ToUpper(f.Text[m[2]:m[3]])
 			if method == "ALL" {
@@ -255,6 +266,8 @@ func ExtractEndpoints(files []SourceFile, b *Builder) []Endpoint {
 			sub := f.Text[m[4]:m[5]]
 			if sub == "/" {
 				sub = ""
+			} else if !strings.HasPrefix(sub, "/") {
+				sub = "/" + sub
 			}
 			path := NormalizePath(base + sub)
 			eid := EndpointID(method, path)
@@ -390,7 +403,12 @@ func fetchMethodAhead(lines []string, n int, path string) string {
 	line := lines[n]
 	at := strings.Index(line, path)
 	if at < 0 {
-		return ""
+		// A path joined with `+` is written in parts: find its first literal.
+		lit, _, _ := strings.Cut(path, "${")
+		if at = strings.Index(line, lit); at < 0 || lit == "" {
+			return ""
+		}
+		path = lit
 	}
 	// Start at the options brace, not the first `{`: a template segment `${id}`
 	// opens a brace earlier on the same line.
@@ -407,10 +425,23 @@ func fetchMethodAhead(lines []string, n int, path string) string {
 	if n+1 < end {
 		body += "\n" + strings.Join(lines[n+1:end], "\n")
 	}
-	if close := strings.IndexByte(body, '}'); close >= 0 {
-		body = body[:close]
+	// Only the options object's own keys: `body: JSON.stringify({ … })` closes a
+	// brace before `method:` does.
+	var own strings.Builder
+	depth := 1
+	for i := 0; i < len(body) && depth > 0; i++ {
+		switch body[i] {
+		case '{', '(', '[':
+			depth++
+		case '}', ')', ']':
+			depth--
+		default:
+			if depth == 1 {
+				own.WriteByte(body[i])
+			}
+		}
 	}
-	if m := reFetchMethod.FindStringSubmatch(body); m != nil {
+	if m := reFetchMethod.FindStringSubmatch(own.String()); m != nil {
 		return m[1]
 	}
 	return ""
@@ -432,9 +463,7 @@ type Call struct {
 func unknowablePath(p string) bool {
 	// A query string is not part of the path: `/tasks?status=${s}` is resolvable,
 	// `/tasks${qs}` is not.
-	if q := strings.IndexByte(p, '?'); q >= 0 {
-		p = p[:q]
-	}
+	p = WithoutQuery(p)
 	segs := strings.Split(strings.TrimLeft(jsstr.TrimStart(p), "/"), "/")
 	for i, s := range segs {
 		j := strings.Index(s, "${")
@@ -632,15 +661,54 @@ func ExtractPages(webFiles []SourceFile, b *Builder, allFiles []SourceFile, al *
 
 var reTemplateExpr = regexp.MustCompile(`\$\{[^}]*\}`)
 
+// alignScore compares an endpoint's segments with a call's from the tail: a
+// literal match scores 2, a parameter 0.5. A call may omit the mount prefix, but
+// a length mismatch must share at least one literal.
+func alignScore(es, cs []string) (float64, bool) {
+	n := min(len(es), len(cs))
+	if n == 0 {
+		return 0, false
+	}
+	score := 0.0
+	literals := 0
+	for k := 1; k <= n; k++ {
+		a := es[len(es)-k]
+		b := cs[len(cs)-k]
+		if strings.HasPrefix(a, ":") || a == "*" || a == "**" {
+			score += 0.5
+			continue
+		}
+		if b == "*" {
+			// A variable leaf names one of many items (`/articles/${slug}`), never a
+			// fixed route beside them (`/articles/feed`).
+			if k == 1 && len(cs) > 1 {
+				return 0, false
+			}
+			score += 0.4
+			continue
+		}
+		if a == b {
+			score += 2
+			literals++
+			continue
+		}
+		return 0, false
+	}
+	// `/orders` is not `/api/reports/:id`, and `/articles/${slug}/comments` is not
+	// `/articles/:slug` under a mount prefix, unless a literal lines up.
+	if len(cs) != len(es) && literals == 0 {
+		return 0, false
+	}
+	return score, true
+}
+
 // MatchEndpoint links a call site to the endpoint it hits. Call sites are written
 // relative to their client's base URL and repos mix families (`/api/v1/...`,
 // `/api/...`, `/api/trpc/...`), so the comparison aligns on the tail of both paths
 // instead of assuming one mount.
 func MatchEndpoint(call Call, endpoints []Endpoint) *Endpoint {
 	p := call.Path
-	if i := strings.IndexByte(p, '?'); i >= 0 {
-		p = p[:i]
-	}
+	p = WithoutQuery(p)
 	if strings.Contains(p, "${") {
 		// A template literal cut short by an inner quote still names the path before it.
 		open := strings.Index(p, "${")
@@ -669,44 +737,20 @@ func MatchEndpoint(call Call, endpoints []Endpoint) *Endpoint {
 			continue
 		}
 		es := segments(e.Path)
-		n := min(len(es), len(cs))
-		if n == 0 {
-			continue
-		}
-		score := 0.0
-		literals := 0
-		ok := true
-		for k := 1; k <= n; k++ {
-			a := es[len(es)-k]
-			b := cs[len(cs)-k]
-			if strings.HasPrefix(a, ":") || a == "*" {
-				score += 0.5
-				continue
+		score, ok := alignScore(es, cs)
+		// A catch-all (`[...slug]`, `*path`) takes the rest of the call, one segment
+		// or more; an optional one (`[[...slug]]`) takes none as well.
+		if last := len(es) - 1; last >= 0 && (es[last] == "*" || es[last] == "**") {
+			from := len(cs) - 1
+			if es[last] == "**" {
+				from = len(cs)
 			}
-			if b == "*" {
-				// A variable leaf names one of many items (`/articles/${slug}`), never a
-				// fixed route beside them (`/articles/feed`).
-				if k == 1 && len(cs) > 1 {
-					ok = false
+			for l := from; l >= 1; l-- {
+				if sc, k := alignScore(es[:last], cs[:l]); k && (!ok || sc > score) {
+					score, ok = sc+0.5, true
 					break
 				}
-				score += 0.4
-				continue
 			}
-			if a == b {
-				score += 2
-				literals++
-				continue
-			}
-			ok = false
-			break
-		}
-		// A call may omit the mount prefix, but it must share at least one literal
-		// segment: otherwise `/orders` would match `/api/reports/:id`.
-		// The same holds the other way: a longer call (`/articles/${slug}/comments`) is
-		// not `/articles/:slug` with a mount prefix unless a literal lines up.
-		if ok && len(cs) != len(es) && literals == 0 {
-			ok = false
 		}
 		if ok && score > bestScore {
 			bestScore = score
@@ -839,4 +883,24 @@ func NormalizePath(p string) string {
 		return "/"
 	}
 	return clean
+}
+
+// WithoutQuery cuts a call path at its query string. A `?` inside `${…}` is
+// JavaScript (`${team?.id}`, `${a ? b : c}`), not the start of a query.
+func WithoutQuery(p string) string {
+	depth := 0
+	for i := 0; i < len(p); i++ {
+		switch {
+		case p[i] == '$' && i+1 < len(p) && p[i+1] == '{':
+			depth++
+			i++
+		case p[i] == '{' && depth > 0:
+			depth++
+		case p[i] == '}' && depth > 0:
+			depth--
+		case p[i] == '?' && depth == 0:
+			return p[:i]
+		}
+	}
+	return p
 }

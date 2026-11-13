@@ -172,9 +172,7 @@ func BuildGraph(root string) *Graph {
 		}
 		// A fetch of the app root (`/?t=…`) is a page load, not a contract.
 		bare := c.Path
-		if q := strings.IndexByte(bare, '?'); q >= 0 {
-			bare = bare[:q]
-		}
+		bare = WithoutQuery(bare)
 		if strings.TrimLeft(bare, "/") == "" {
 			continue
 		}
@@ -482,9 +480,7 @@ func testModule(rel string) string {
 
 func matchPage(path string, pages []Page) *Page {
 	p := path
-	if i := strings.IndexByte(p, '?'); i >= 0 {
-		p = p[:i]
-	}
+	p = WithoutQuery(p)
 	p = strings.TrimSuffix(p, "/")
 	if p == "" {
 		p = "/"

@@ -347,8 +347,9 @@ func sameShape(a, b string) bool {
 	if len(sa) < 2 || len(sb) < 2 || (sa[0] != sb[0] && sa[0] != "ANY" && sb[0] != "ANY") {
 		return false
 	}
-	xa := segments(sa[1])
-	xb := segments(sb[1])
+	// A call keeps its query string in its name (`/payment?plan=`); a route has none.
+	xa := segments(weave.WithoutQuery(sa[1]))
+	xb := segments(weave.WithoutQuery(sb[1]))
 	n := len(xa)
 	if len(xb) < n {
 		n = len(xb)
@@ -360,7 +361,7 @@ func sameShape(a, b string) bool {
 	for i := 1; i <= n; i++ {
 		p := xa[len(xa)-i]
 		q := xb[len(xb)-i]
-		param := strings.HasPrefix(p, ":") || strings.HasPrefix(q, ":") || p == "*" || q == "*"
+		param := strings.HasPrefix(p, ":") || strings.HasPrefix(q, ":") || p == "*" || q == "*" || p == "**" || q == "**"
 		if param || p == q {
 			if !param && p == q {
 				literal = true

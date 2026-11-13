@@ -72,12 +72,10 @@ func sameStem(a, b string) bool {
 // shapeOf writes every variable segment the same way, so `/tasks/${id}` and
 // `/tasks/:id` compare equal; the query string is not part of the route.
 func shapeOf(p string) string {
-	if i := strings.IndexByte(p, '?'); i >= 0 {
-		p = p[:i]
-	}
+	p = WithoutQuery(p)
 	segs := strings.Split(p, "/")
 	for i, s := range segs {
-		if strings.HasPrefix(s, ":") || strings.HasPrefix(s, "${") || s == "*" || strings.HasPrefix(s, "{") || strings.HasPrefix(s, "<") {
+		if strings.HasPrefix(s, ":") || strings.HasPrefix(s, "${") || s == "*" || s == "**" || strings.HasPrefix(s, "{") || strings.HasPrefix(s, "<") {
 			segs[i] = ":"
 		}
 	}
