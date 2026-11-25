@@ -57,6 +57,7 @@ func BuildGraph(root string) *Graph {
 	apiStats := ExtractOpenAPI(files, b)
 	nestEndpoints := ExtractNestAndFastify(files, b)
 	gqlEndpoints, gqlCalls := ExtractGraphQL(files, b)
+	pyGoEndpoints := append(ExtractPythonGo(files, b), ExtractRubyPHP(files, b)...)
 
 	// Patterns from .weave/patterns.json: the escape hatch for a team's own wrapper.
 	pat := CompilePatterns(LoadPatterns(root))
@@ -71,11 +72,12 @@ func BuildGraph(root string) *Graph {
 	}
 
 	var allEndpoints []Endpoint
-	for _, list := range [][]Endpoint{endpoints, nestEndpoints, gqlEndpoints, nextStats.Endpoints, trpcStats.Endpoints, apiStats.Endpoints, customEndpoints} {
+	for _, list := range [][]Endpoint{endpoints, nestEndpoints, gqlEndpoints, pyGoEndpoints, nextStats.Endpoints, trpcStats.Endpoints, apiStats.Endpoints, customEndpoints} {
 		allEndpoints = append(allEndpoints, list...)
 	}
 	ExtractModels(t.Prisma, b, files)
 	ExtractORMModels(files, b)
+	ExtractPythonGoModels(files, b)
 	// Any module that declares a <Route> can hold the route table: App.js, router.jsx,
 	// src/main.tsx. Reading only the web folders missed every one outside them.
 	var routeFiles []SourceFile

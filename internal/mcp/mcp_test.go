@@ -99,6 +99,10 @@ func TestToolListAndInitializeMatchTypeScript(t *testing.T) {
 				if err := json.Unmarshal(env.Result, &got); err != nil {
 					t.Fatal(err)
 				}
+				if os.Getenv("UPDATE_GOLDEN") != "" {
+					_ = os.WriteFile(filepath.Join("testdata", pair.file), []byte(string(env.Result)+"\n"), 0o644)
+					continue
+				}
 				if err := json.Unmarshal(want, &wantAny); err != nil {
 					t.Fatal(err)
 				}

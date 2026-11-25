@@ -32,10 +32,10 @@ func (r Result) Markdown() string {
 	}
 
 	if len(r.Broken) > 0 {
-		b.WriteString("**Removed endpoints that are still called**\n\n| endpoint | called from | screens |\n|---|---|---|\n")
+		b.WriteString("**Removed endpoints that are still called**\n\n| endpoint | called from | screens | did you mean |\n|---|---|---|---|\n")
 		for i, x := range r.Broken {
 			if i == 20 {
-				fmt.Fprintf(&b, "| … %d more | | |\n", len(r.Broken)-20)
+				fmt.Fprintf(&b, "| … %d more | | | |\n", len(r.Broken)-20)
 				break
 			}
 			screens := "—"
@@ -45,7 +45,11 @@ func (r Result) Markdown() string {
 					screens += fmt.Sprintf(" +%d", len(x.Screens)-5)
 				}
 			}
-			fmt.Fprintf(&b, "| `%s` | `%s` | %s |\n", x.Endpoint, x.Caller, screens)
+			closest := "—"
+			if x.Closest != "" {
+				closest = "`" + x.Closest + "`"
+			}
+			fmt.Fprintf(&b, "| `%s` | `%s` | %s | %s |\n", x.Endpoint, x.Caller, screens, closest)
 		}
 		b.WriteString("\n")
 	}
@@ -66,6 +70,9 @@ func (r Result) Markdown() string {
 			fmt.Fprintf(&b, "- ⚠️ %s\n", mdEscape(w))
 		}
 		b.WriteString("\n")
+	}
+	if r.Diagram != "" {
+		b.WriteString("**Blast radius**\n\n" + r.Diagram + "\n")
 	}
 	if len(r.Pages)+len(r.Endpoints) > 0 {
 		b.WriteString("<details><summary>What this change touches</summary>\n\n")

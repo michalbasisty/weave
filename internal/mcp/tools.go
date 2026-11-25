@@ -55,7 +55,7 @@ type tool struct {
 var toolDefs = []tool{
 	{
 		Name:        "context",
-		Description: "START HERE before editing a file. One compact pack: what the file is (page/module), the endpoints it serves, tables, the spec change that owns it, open tasks, and the tests to run. Cheaper than reading files or grepping.",
+		Description: "What a file is in the app: the page or module, the endpoints it serves and calls, tables, the owning spec change, open tasks, and the tests to run, in a few hundred tokens. Worth it when you would otherwise open the files around it; not needed for an edit inside one file.",
 		InputSchema: schema{Type: "object", Properties: props{
 			{"files", propDef{Type: "array", Items: &propDef{Type: "string"}, Description: "repo-relative paths"}},
 			{"budget", propDef{Type: "number", Description: "token budget, default 350"}},
@@ -64,14 +64,14 @@ var toolDefs = []tool{
 	},
 	{
 		Name:        "impact",
-		Description: "Full blast radius of a change: every module, endpoint, table, page, test and requirement it can reach, plus endpoints no test covers. Use when you need the complete list, not the summary.",
+		Description: "Before renaming, moving or removing a route, procedure or API call: every page, client call, module, table, test and requirement that reaches it, in one list, so you do not grep for each caller. Also names endpoints no test covers.",
 		InputSchema: schema{Type: "object", Properties: props{
 			{"files", propDef{Type: "array", Items: &propDef{Type: "string"}, Description: "repo-relative paths"}},
 		}, Required: []string{"files"}},
 	},
 	{
 		Name:        "search",
-		Description: "Find endpoints, pages, modules, tables, requirements and tests by name. One line per hit. With text: true, scan source lines for a literal string (or a regex) instead.",
+		Description: "Find where something lives when the task describes it instead of naming a file: plain words (\"inbox count\", \"favorite an article\") or a URL. Matches endpoints, pages, modules, tables, requirements and tests, one line per hit, including URLs that exist only once a router prefix and a route are joined, which grep cannot find. With text: true, scan source lines for a literal string (or a regex) instead.",
 		InputSchema: schema{Type: "object", Properties: props{
 			{"query", propDef{Type: "string"}},
 			{"limit", propDef{Type: "number"}},
@@ -174,16 +174,32 @@ var toolDefs = []tool{
 	},
 }
 
-func visibleTools(multi, manager bool) []tool {
+// coreTools are in every session. The usage log: context took 62% of calls, and
+// no tool outside these five reached three.
+var coreTools = map[string]bool{"context": true, "impact": true, "search": true, "changed": true, "verify": true}
+
+var specTools = map[string]bool{"plan": true, "changes": true, "task_done": true, "task_reopen": true, "change_new": true, "change_delete": true}
+
+func visibleTools(multi, manager, specs, full bool) []tool {
 	base := make([]tool, 0, len(toolDefs))
 	for _, t := range toolDefs {
-		if manager {
+		switch {
+		case manager:
 			if t.Name != "ask" && t.Name != "plan" && t.Name != "status" {
 				continue
 			}
-		} else if t.Name == "ask" {
+		case t.Name == "ask":
 			// ask stays a CLI command: the usage log never called it, and a tool that
 			// costs a model call should not sit in every session's schema.
+			continue
+		case full, coreTools[t.Name]:
+		case specTools[t.Name]:
+			if !specs {
+				continue
+			}
+		default:
+			// remember, recall, status: notes are for people (weave remember, the
+			// panel), and status repeats the panel's overview
 			continue
 		}
 		base = append(base, t)

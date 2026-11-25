@@ -7,8 +7,10 @@ file is the manual.
 
 ```bash
 weave                      # status, and what to do next
+weave demo [dir] [--live]  # a sample shop in a temp folder (or dir): map, a renamed endpoint, the gate fails with the route it meant, the fix passes; --live opens the live map and waits for Enter between steps
 weave explore              # the map as one file you can open
 weave serve [--port 7777]  # the map hosted, with actions (loopback only), opened in your browser (--no-open skips it); a busy default port moves to the next free one
+weave live                 # the same server opened on /live: screens → endpoints → tables, lit up by the uncommitted change as files change; broken calls red, fixed ones green
                             # the project dropdown lists every repo weave has indexed; /p/<name>/ is its panel
 weave wiki                 # a page per module, endpoint, screen, table, change
 weave wiki --out docs/wiki # a wiki you can commit
@@ -31,9 +33,9 @@ weave evidence [REQ...]    # which requirements a JUnit report proves
 weave doctor               # graph health and what it could not read
 weave perf    [--runs N]   # index timings over time
 weave projects             # every registered repo
-weave init    [--upgrade] [--hooks] [--only claude,cursor,vscode,opencode]
+weave init    [--upgrade] [--hooks] [--no-instructions] [--only claude,cursor,vscode,opencode]
 weave forget  <name>
-weave mcp     [--all]      # MCP server on stdio
+weave mcp     [--all] [--all-tools]   # MCP on stdio; --all: every project, --all-tools: every tool
 weave --version
 
 --root <dir>        point at a specific checkout
@@ -61,11 +63,11 @@ weave           25 files ·   5 ep ·  1 changes    ~/code/weave
 Then work on any of them from anywhere — no `cd`, no paths:
 
 ```bash
-weave --project qrgent plan 2026-10-19-ui-restyle
+weave --project shopfront plan 2026-10-19-ui-restyle
 weave --project weave explore
 ```
 
-Names match loosely (`qrgent`, `QR-gent` and `qr-gent` are the same), a unique fragment is
+Names match loosely (`shopfront`, `Shop-Front` and `shop-front` are the same), a unique fragment is
 enough (`print`), and an ambiguous one is refused with the candidates listed.
 `weave forget <name>` drops one.
 
@@ -91,9 +93,34 @@ and the server answers for the repo it was started in.
 
 `--only claude` (or `--only cursor,vscode`) writes just the ones you name.
 
-It also appends `.weave/` to `.gitignore` and prints the `claude mcp add` line plus an
-`AGENTS.md` snippet. `--upgrade` replaces only a stale `weave` entry; `--hooks` adds the
-Claude Code `Stop` hook that runs the gate at the end of a turn.
+It also appends `.weave/` to `.gitignore`, prints the `claude mcp add` line, and adds a short
+"Repo map (weave)" section to `CLAUDE.md` and `AGENTS.md` (created if missing, between
+`<!-- weave:start -->` and `<!-- weave:end -->`). The section says when to use which tool in
+the terms a task arrives in: `impact` before a rename or removal, `search` for a screen or a
+behaviour grep cannot find, and to skip weave for a one-file edit. The agent eval found that
+the server instructions alone did not change what agents reach for. `--no-instructions` skips
+it.
+
+`--upgrade` replaces only a stale `weave` entry or section. `--hooks` adds the gate at the end
+of a turn: the Claude Code `Stop` hook in `.claude/settings.json`, and for opencode (and front
+ends on it, such as OpenChamber) a plugin at `.opencode/plugins/weave.js`. On `session.idle`
+the plugin runs `weave check`; when it fails with something new it shows a toast and sends the
+failure back into the session, once per distinct failure.
+
+For OpenChamber there is also an extension, [`extensions/openchamber/`](../extensions/openchamber/),
+and it needs nothing else installed: it downloads the weave release for the machine (checked against
+`checksums.txt`) unless a weave 0.8.0 or newer is already on `PATH`. It adds a rail panel with the
+map (screens, endpoints, modules, tables, plain-word search, each item's neighbours, context and
+impact), a Changes tab with the gate's verdict on the uncommitted change, a "weave gate" Work Status
+section, "weave map" rows in the composer's @ menu, and a note that tells every session about weave.
+After an agent turn that changed the code, it runs the gate and tells that session what broke,
+once per failure. Add `https://github.com/michalbasisty/weave-openchamber`, this folder, or the
+`weave-openchamber.zip` attached to each release in Settings → Extensions.
+
+The server lists five tools: `context`, `impact`, `search`, `changed` and `verify`. In a
+repo with `specs/changes/` it adds `plan`, `changes`, `task_done`, `task_reopen`,
+`change_new` and `change_delete`. `remember`, `recall` and `status` are CLI and panel
+features; they still answer if an agent calls them, and `weave mcp --all-tools` lists them.
 
 Manual, if you prefer the absolute path (an MCP client spawns the server with its own
 `PATH`):
@@ -104,7 +131,7 @@ claude mcp add weave -- /abs/path/weave mcp --root .
 
 ## What it extracts, and how exact it is
 
-weave reads every JavaScript, TypeScript, GraphQL, Prisma, JSON and Markdown file
+weave reads every JavaScript, TypeScript, Python, Go, Ruby, PHP, GraphQL, Prisma, JSON and Markdown file
 except what git ignores (`.gitignore` at any depth, `.git/info/exclude`, global
 excludes), so generated clients and build output never show up as modules.
 
@@ -117,6 +144,13 @@ excludes), so generated clients and build output never show up as modules.
 | `quotes: { list: procedure.query(…) }`, `list: publicProcedure.input(z…).query(…)` → `QUERY /api/trpc/quotes.list` | tRPC routers, across lines | exact |
 | `team: teamRouter` + `find: findTeamsRoute` in other files → `QUERY /api/trpc/team.find` | tRPC routers split across files: aliases, nested objects, imported procedures | exact |
 | `openapi.json` / `swagger.json` / any `.json` with `openapi`+`paths` | any language's spec | exact |
+| `@router.get("/items/{id}")` with `APIRouter(prefix=…)` and `include_router(…, prefix=…)` → `GET /items/:id` | FastAPI | exact |
+| `@bp.route("/users/<int:id>", methods=[…])` with `Blueprint(url_prefix=…)` | Flask | exact |
+| `path("api/", include("shop.urls"))`, `re_path(r'^tags/?$', …)`, `router.register(r'orders', …)` → `ANY /api/orders/` and `/api/orders/:pk/` | Django and Django REST framework URLconfs, following `include()` | exact |
+| `v1 := r.Group("/api")`, `v1.GET("/users/:id")`, a group passed to `func Register(r *gin.RouterGroup)` | gin, echo, gorilla `PathPrefix` | exact |
+| `r.Route("/orders", func(r chi.Router) { r.Get("/{id}", …) })`, `mux.HandleFunc("GET /reports/{id}", …)` | chi, net/http (Go 1.22 patterns) | exact |
+| `scope :api`, `resources :articles, param: :slug, only: […]`, nested `resource :favorite`, `member`/`collection`, `get :feed, on: :collection`, `match … via:`, `devise_for` → endpoints at the controller's `def action` | Rails `config/routes.rb` | exact |
+| `Route::get('users/{id}', 'UserController@show')`, `[X::class, 'm']`, `Route::resource`/`apiResource` with `only`/`except`, `Route::group(['prefix' => …])`, `Route::prefix(…)->group(…)`; `routes/api.php` under `/api` → endpoints at the controller method | Laravel `routes/*.php` | exact |
 | your own wrapper, via `.weave/patterns.json` | one regex per rule | exact |
 | `api.get('/orders')`, ``api.get(`/orders/${id}`)``, `requests.post('/users')`, `apiClient.get('/x')` → endpoint | client call sites; any receiver named like an HTTP client (`api`, `http`, `client`, `request`, `fetch`, `agent`) | exact / inferred |
 | ``api.put(`/tasks/${id}/${action}`)`` with `action: 'start' \| 'stop'` (inline or a `type` alias) → `PUT /tasks/:id/start` and `/stop` | a literal-union segment is one call per value; a value no route serves is a broken call. Untyped, a variable last segment over two or more fixed routes is a choice between them | exact / inferred |
@@ -125,11 +159,13 @@ excludes), so generated clients and build output never show up as modules.
 | `model` → `@@map` table, relations | `schema.prisma` | exact |
 | `pgTable('users', …)` / `mysqlTable` / `sqliteTable` → table | Drizzle schema files | exact |
 | `@Entity('users') class User` → table (default: snake_case class name) | TypeORM entities | exact |
+| `class Article(db.Model): __tablename__ = 'article'` (default: snake_case), `class Order(models.Model)` with `Meta.db_table` (default: `app_model`), abstract bases skipped | SQLAlchemy, Flask-SQLAlchemy, Django models | exact |
+| `type UserModel struct { gorm.Model … }`, `TableName()` (default: GORM's snake_case plural) | GORM structs | exact |
 | `@Controller('users')` + `@Get(':id')` (+ `setGlobalPrefix`) → endpoint | NestJS controllers | exact |
 | `fastify.get('/x')`, `fastify.route({ method, url })` → endpoint | Fastify | exact |
 | `type Query { users }` (`.graphql`, `.gql`, `typeDefs`), `@Query()` / `@Mutation()`, `queryField('x')` → `QUERY /graphql/users` | GraphQL schemas, NestJS resolvers, Pothos / Nexus | exact |
 | `` gql`query { users { id } }` `` → call to `QUERY /graphql/users`, only when the repo declares a schema | GraphQL client documents | exact |
-| module → table | `prisma.<model>`, Drizzle `.from(users)` / `db.query.users`, TypeORM `Repository<User>` inside the module | exact |
+| module → table | `prisma.<model>`, Drizzle `.from(users)` / `db.query.users`, TypeORM `Repository<User>`, `Article.query` / `Order.objects` / `select(Article)`, GORM `&UserModel{}` inside the module | exact |
 | file → file importers | relative imports, tsconfig/jsconfig `paths`, workspace package names (`@acme/lib/x`) | exact |
 | test → endpoint / page | e2e request calls, `page.goto` | exact / inferred |
 | change → task → file | `tasks.md` Evidence paths | exact |
@@ -225,14 +261,25 @@ applies locally to `--against` refs that have not been fetched.
 It builds the Go binary, indexes, checks, prints coverage, writes the report to the job
 summary and, on a pull request, comments with each removed endpoint that is still called, the
 line that calls it and the screens that reach that line:
-| endpoint | called from | screens |
-|---|---|---|
-| `GET /api/v1/orders` | `packages/web/src/pages/Orders.tsx:9` | `/orders` |
 
-`comment: on-failure` (the default) posts only when the check fails and then keeps that one
-comment current, `always` posts on every run, `false` never does. `weave check --markdown`
-prints the same report locally. With `wiki: 'true'` fails a
-branch whose committed `docs/wiki` describes an older tree. It exits 1 when:
+| endpoint | called from | screens | did you mean |
+|---|---|---|---|
+| `GET /api/v1/orders` | `packages/web/src/pages/Orders.tsx:9` | `/orders` | `GET /api/v1/orders/history` |
+
+Under the table is a Mermaid diagram of the blast radius, which GitHub renders in the comment:
+the screens that call the endpoints the change declares (or, for a shared module, the endpoints
+its importers call), those endpoints, the tables behind them (endpoint → module → model →
+table), and each removed endpoint that is still called, in red, with a "did you mean" edge to
+the closest route. "Closest" prefers a route the same change added under the same parent path
+with the same method (`GET /orders` → `GET /orders/history`), then the nearest route by shape.
+It shows at most 10 screens, 10 endpoints and 8 tables, plus a "+N more" node.
+
+`comment: on-change` (the default) posts when the check fails or the change reaches an endpoint,
+and then keeps that one comment current. `on-failure` posts only when the check fails. A run
+that could not gate posts its diagnosis in either mode; `always` posts on every run, and
+`false` never does. `weave check --markdown` prints the same report locally. With
+`wiki: 'true'` fails a branch whose committed `docs/wiki` describes an older tree. It exits 1
+when:
 
 - a **removed endpoint is still called** — compared with the previous index's endpoint set;
 - a changed file contains a call site that matches no endpoint;
@@ -333,8 +380,11 @@ renamed route, the Stop hook, explore, wiki, MCP, gain and init.
 ## Known limits
 
 - Express, Fastify, NestJS, Next.js, Remix / React Router v7 file routes, React Router
-  `<Route>` tables, tRPC routers, GraphQL and OpenAPI JSON specs; Prisma, Drizzle and TypeORM
-  tables. SvelteKit needs a `.weave/patterns.json` rule (see [Your own patterns](#your-own-patterns)); the coverage block
+  `<Route>` tables, tRPC routers, GraphQL and OpenAPI JSON specs; FastAPI, Flask, Django and
+  Django REST framework; gin, echo, chi, gorilla and net/http; Rails and Laravel route files;
+  Prisma, Drizzle, TypeORM, SQLAlchemy, Django and GORM tables. Rails and Laravel models
+  (ActiveRecord, Eloquent) are not read yet, Rails `concern`s and `constraints` blocks are read
+  through without their own effect, and a Go router mounted through a variable (`r.Mount("/api", api())`) loses its prefix. SvelteKit needs a `.weave/patterns.json` rule (see [Your own patterns](#your-own-patterns)); the coverage block
   names what was skipped.
 - An OpenAPI spec is read in JSON only, up to 4 MB. A YAML spec is named in the coverage
   block, never guessed at.

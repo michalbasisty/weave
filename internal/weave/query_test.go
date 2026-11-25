@@ -8,7 +8,7 @@ import (
 )
 
 // A shared client that calls nothing itself still has a blast radius: the files
-// that import it call 193 endpoints on QR-gent, and "impact" used to answer zero.
+// that import it call 193 endpoints in a real 750-file app, and "impact" used to answer zero.
 func TestImpactViaImportersCalls(t *testing.T) {
 	root := copyFixture(t)
 	write := func(rel, body string) {

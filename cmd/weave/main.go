@@ -39,6 +39,11 @@ func main() {
 		code = cmdExplore()
 	case "wiki":
 		code = cmdWiki()
+	case "demo":
+		code = cmdDemo()
+	case "live":
+		servePage = "live"
+		code = cmdServe()
 	case "serve":
 		code = cmdServe()
 	case "projects", "list":
@@ -138,6 +143,7 @@ func helpText() string {
 	return `weave — repo map for agents and people
 
   weave                         status, and what to do next
+  weave demo    [dir] [--live]  break and catch a change in a sample shop, in 30 seconds
   weave explore                 open the map in your browser (--all: every project)
   weave wiki                    write a read-only wiki: a page per module, endpoint, screen, table, change
   weave wiki --check            fail when the wiki no longer describes HEAD
@@ -158,6 +164,7 @@ func helpText() string {
   weave check   [file...]       fail when a change breaks a contract (exit 1), or cannot run (exit 2; no args: git diff)
   weave hook                    check for an agent hook: exit 2 broken, exit 1 could not run
   weave serve   [--port N]      host the map, the wiki and the actions on 127.0.0.1, and open it
+  weave live                    the same server, opened on the live map: your change lights up as you edit
                 [--no-open]     don't open the browser
   weave fires   [--since N]     what the hook has seen: runs, failures, avg time
   weave delta   [ref]           what the graph gained or lost (--from graph.json, --all)
@@ -167,7 +174,8 @@ func helpText() string {
   weave perf    [--runs N]      index timings over time, or N fresh runs
   weave init    [--upgrade]     connect Claude, Cursor, VS Code, opencode
   weave init    --only claude   write only the configs you name (claude,cursor,vscode,opencode)
-  weave init    --hooks         also install the Stop hook that runs the gate
+  weave init    --hooks         also run the gate when the agent stops (Claude Code, opencode)
+  weave init    --no-instructions  leave CLAUDE.md and AGENTS.md alone
   weave forget  <name>          drop a project from the list
   weave mcp                     MCP server on stdio (--all: serve every project)
   weave --version               the release version

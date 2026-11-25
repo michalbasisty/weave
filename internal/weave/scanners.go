@@ -3,7 +3,7 @@ package weave
 import "strings"
 
 // Hand scanners for the patterns RE2 runs ~100x slower than V8 because they start
-// with \b or match nearly every file (docs/GO-MIGRATION.md finding 3). Each one
+// with \b or match nearly every file. Each one
 // reproduces the JavaScript regex it names, including backtracking, and finds the
 // same matches in the same order.
 
