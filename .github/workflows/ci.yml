@@ -23,6 +23,24 @@ jobs:
       - run: go test ./...
       - run: go build ./cmd/weave
 
+  unix-security:
+    name: unix containment security (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Confinement and symlink tests
+        run: >
+          go test ./internal/weave -count=1 -v
+          -run 'TestUnixContainment|TestSaveSpecText|TestSpecText|TestSetSpecTask|TestAppendRepo|TestReadRepo|TestNewSpecChange|TestDeleteSpecChange|TestConfinedIO|TestRepoRel|TestHeldLock|TestConcurrentSpecSaves'
+
   panel:
     name: panel smoke
     runs-on: ubuntu-latest

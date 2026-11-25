@@ -14,13 +14,15 @@ import (
 )
 
 // dirLink points link at target. A symlink is used where the OS allows it; on
-// Windows, where os.Symlink needs a privilege, a directory junction stands in.
+// Windows, where os.Symlink needs a privilege, a directory junction stands in. A
+// Unix test that cannot make its symlink fails instead of skipping: the link is the
+// thing under test there, and a silent skip would hide lost coverage.
 func dirLink(t *testing.T, target, link string) {
 	t.Helper()
 	if err := os.Symlink(target, link); err == nil {
 		return
 	} else if runtime.GOOS != "windows" {
-		t.Skipf("cannot create a symlink: %v", err)
+		t.Fatalf("create a symlink, which this Unix test requires: %v", err)
 	}
 	if out, err := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput(); err != nil {
 		t.Skipf("cannot create a junction: %v: %s", err, strings.TrimSpace(string(out)))
@@ -96,7 +98,7 @@ func TestSaveSpecTextRefusesFinalLink(t *testing.T) {
 		}
 		return
 	} else if runtime.GOOS != "windows" {
-		t.Skipf("cannot create a file symlink: %v", err)
+		t.Fatalf("create a file symlink, which this Unix test requires: %v", err)
 	}
 	keep := filepath.Join(outside, "keep.md")
 	if err := os.WriteFile(keep, []byte(secretText), 0o644); err != nil {
@@ -355,7 +357,10 @@ func TestSetSpecTaskRefusesNonRegularTasksFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(outside, filepath.Join(other, "tasks.md")); err != nil {
-		return // no file-symlink privilege here; the directory case above still covers shape
+		if runtime.GOOS != "windows" {
+			t.Fatalf("create a file symlink, which this Unix test requires: %v", err)
+		}
+		return // no file-symlink privilege on Windows; the directory case above still covers shape
 	}
 	if _, _, err := SetSpecTask(root, "2026-01-01-b", "T1", true); err == nil {
 		t.Error("ticked a task through a final link")

@@ -143,7 +143,7 @@ excludes), so generated clients and build output never show up as modules.
 | `app/routes/api.render.tsx`, `app/routes/api+/health.ts`, `_auth+/t.$team+/_index.tsx` → endpoint (loader/action) or page (default export) | Remix and React Router v7 file routes, flat and `+` folders | exact |
 | `quotes: { list: procedure.query(…) }`, `list: publicProcedure.input(z…).query(…)` → `QUERY /api/trpc/quotes.list` | tRPC routers, across lines | exact |
 | `team: teamRouter` + `find: findTeamsRoute` in other files → `QUERY /api/trpc/team.find` | tRPC routers split across files: aliases, nested objects, imported procedures | exact |
-| `openapi.json` / `swagger.json` / any `.json` with `openapi`+`paths` | any language's spec | exact |
+| `openapi.json` / `swagger.json` / named OpenAPI YAML / any `.json` with `openapi`+`paths` | any language's spec | exact |
 | `@router.get("/items/{id}")` with `APIRouter(prefix=…)` and `include_router(…, prefix=…)` → `GET /items/:id` | FastAPI | exact |
 | `@bp.route("/users/<int:id>", methods=[…])` with `Blueprint(url_prefix=…)` | Flask | exact |
 | `path("api/", include("shop.urls"))`, `re_path(r'^tags/?$', …)`, `router.register(r'orders', …)` → `ANY /api/orders/` and `/api/orders/:pk/` | Django and Django REST framework URLconfs, following `include()` | exact |
@@ -224,12 +224,18 @@ weave check              # no args: git diff against HEAD
 weave check src/a.ts     # explicit files
 weave check --against origin/main
 weave check --strict-tests
+weave check --format json
+weave check --format sarif
 ```
 
 `check` exits **0** when the change is clean, **1** on a broken contract, and **2** when it
 could not run at all. Exit 2 is not a pass: an unreadable `--against` ref, a missing merge
 base, no git for change discovery, or stale JUnit evidence all stop the gate with a
 diagnostic instead of guessing.
+
+JSON includes structured findings and the exit code. SARIF 2.1.0 includes source
+locations where known and reports operational failures as tool execution notifications.
+Text is the default; `--format markdown` and `--markdown` produce the PR report.
 
 The Stop hook runs the same check. On a broken contract it exits 2 with the failing
 `file:line` on stderr, which is what a Claude Code `Stop` hook hands back to the model. When
@@ -386,8 +392,8 @@ renamed route, the Stop hook, explore, wiki, MCP, gain and init.
   (ActiveRecord, Eloquent) are not read yet, Rails `concern`s and `constraints` blocks are read
   through without their own effect, and a Go router mounted through a variable (`r.Mount("/api", api())`) loses its prefix. SvelteKit needs a `.weave/patterns.json` rule (see [Your own patterns](#your-own-patterns)); the coverage block
   names what was skipped.
-- An OpenAPI spec is read in JSON only, up to 4 MB. A YAML spec is named in the coverage
-  block, never guessed at.
+- OpenAPI JSON and named YAML specs are read up to 4 MB. Invalid or unsupported YAML is
+  reported in coverage instead of being guessed at.
 - Importers are one hop deep, and `impact` reads the endpoints those importers call so a
   shared client is not called isolated — it does not walk the full transitive tree.
 - No incremental indexing: a rebuild re-reads every file, fine to ~5k files. `delta`
@@ -409,9 +415,10 @@ renamed route, the Stop hook, explore, wiki, MCP, gain and init.
   those tests skip without it.
 - Spec and task writers serialize on an exclusive `<file>.lock`. A lock is never
   removed automatically: an abandoned lock and a live writer look the same to another
-  process, and stealing a live lock would silently drop its update. If a writer was
-  killed, the write fails after about two seconds naming the lock path to remove by
-  hand; there is no automatic stale-lock recovery.
+  process, and stealing a live lock could silently drop its update. To recover a lock,
+  stop all CLI, panel and MCP writers and prevent them from restarting, then run
+  `weave spec unlock specs/path/to/file.md --confirm-stopped`. The command cannot
+  verify that writers are stopped. Do not use it while any writer may be active.
 - The review ledger is append-only and read as a bounded tail (256 KB) through the
   confined repo handle: only complete trailing lines are parsed, so a history of any
   total length still yields its newest marks instead of reading as empty.

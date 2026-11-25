@@ -169,6 +169,235 @@ func TestCheckFailsOnRenamedRoute(t *testing.T) {
 	}
 }
 
+// --format json and --format sarif are the machine-readable gate: the same run,
+// the same exit code, with findings and locations instead of a sentence.
+func TestCheckJSONFormat(t *testing.T) {
+	root := fixture(t)
+	rel := "packages/backend/src/modules/orders/orders.routes.ts"
+	out, code := run(t, "check", rel, "--format", "json", "--root", root)
+	if code != 0 {
+		t.Fatalf("clean check should exit 0, got %d:\n%s", code, out)
+	}
+	var passed struct {
+		Status   string `json:"status"`
+		ExitCode int    `json:"exitCode"`
+	}
+	if err := json.Unmarshal([]byte(out), &passed); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if passed.Status != "pass" || passed.ExitCode != 0 {
+		t.Fatalf("clean check = %+v\n%s", passed, out)
+	}
+
+	file := filepath.Join(root, filepath.FromSlash(rel))
+	original, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte(strings.Replace(string(original), "router.get('/'", "router.get('/list'", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defer os.WriteFile(file, original, 0o644)
+
+	out, code = run(t, "check", rel, "--format", "json", "--root", root)
+	if code != 1 {
+		t.Fatalf("broken check should exit 1, got %d:\n%s", code, out)
+	}
+	var failed struct {
+		Status   string `json:"status"`
+		ExitCode int    `json:"exitCode"`
+		Findings []struct {
+			Rule     string `json:"rule"`
+			Severity string `json:"severity"`
+			Message  string `json:"message"`
+			File     string `json:"file"`
+			Line     int    `json:"line"`
+			Endpoint string `json:"endpoint"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal([]byte(out), &failed); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if failed.Status != "fail" || failed.ExitCode != 1 {
+		t.Fatalf("broken check = %+v\n%s", failed, out)
+	}
+	for _, f := range failed.Findings {
+		if f.Rule != "removed-endpoint-still-called" {
+			continue
+		}
+		if f.Severity != "error" || f.File == "" || f.Line == 0 || f.Endpoint == "" {
+			t.Fatalf("finding has no location: %+v", f)
+		}
+		return
+	}
+	t.Fatalf("no removed-endpoint finding:\n%s", out)
+}
+
+// SARIF carries the same failure to code scanning: version 2.1.0, the rule, an
+// encoded URI and the caller's line.
+func TestCheckSARIFFormat(t *testing.T) {
+	root := fixture(t)
+	rel := "packages/backend/src/modules/orders/orders.routes.ts"
+	if out, code := run(t, "index", "--root", root); code != 0 {
+		t.Fatalf("index: %s", out)
+	}
+	file := filepath.Join(root, filepath.FromSlash(rel))
+	original, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file, []byte(strings.Replace(string(original), "router.get('/'", "router.get('/list'", 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defer os.WriteFile(file, original, 0o644)
+
+	out, code := run(t, "check", rel, "--format", "sarif", "--root", root)
+	if code != 1 {
+		t.Fatalf("sarif check should exit 1, got %d:\n%s", code, out)
+	}
+	var doc struct {
+		Version string `json:"version"`
+		Runs    []struct {
+			Tool struct {
+				Driver struct {
+					Name string `json:"name"`
+				} `json:"driver"`
+			} `json:"tool"`
+			Invocations []struct {
+				ExecutionSuccessful bool `json:"executionSuccessful"`
+			} `json:"invocations"`
+			Results []struct {
+				RuleID    string `json:"ruleId"`
+				Level     string `json:"level"`
+				Locations []struct {
+					PhysicalLocation struct {
+						ArtifactLocation struct {
+							URI string `json:"uri"`
+						} `json:"artifactLocation"`
+						Region struct {
+							StartLine int `json:"startLine"`
+						} `json:"region"`
+					} `json:"physicalLocation"`
+				} `json:"locations"`
+			} `json:"results"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("invalid SARIF: %v\n%s", err, out)
+	}
+	if doc.Version != "2.1.0" || len(doc.Runs) != 1 {
+		t.Fatalf("sarif header: %+v\n%s", doc, out)
+	}
+	srun := doc.Runs[0]
+	if srun.Tool.Driver.Name != "weave" || len(srun.Invocations) != 1 || !srun.Invocations[0].ExecutionSuccessful {
+		t.Fatalf("sarif run: %+v", srun)
+	}
+	for _, r := range srun.Results {
+		if r.RuleID != "removed-endpoint-still-called" || r.Level != "error" {
+			continue
+		}
+		if len(r.Locations) != 1 {
+			t.Fatalf("result has no location: %+v", r)
+		}
+		loc := r.Locations[0].PhysicalLocation
+		if !strings.Contains(loc.ArtifactLocation.URI, "Orders.tsx") || loc.Region.StartLine == 0 {
+			t.Fatalf("location = %+v", loc)
+		}
+		return
+	}
+	t.Fatalf("no SARIF result for the removed endpoint:\n%s", out)
+}
+
+// A gate that could not read its input is an invocation, never a code-scanning
+// finding: exit 2 stays visible without blaming the diff.
+func TestCheckSARIFOperationalIsAnInvocation(t *testing.T) {
+	root := fixture(t)
+	out, code := runBoth(t, "check", "packages/backend/src/modules/orders/orders.routes.ts",
+		"--against", "no-such-ref", "--format", "sarif", "--root", root)
+	if code != 2 {
+		t.Fatalf("operational SARIF should exit 2, got %d:\n%s", code, out)
+	}
+	var doc struct {
+		Runs []struct {
+			Invocations []struct {
+				ExecutionSuccessful        bool `json:"executionSuccessful"`
+				ToolExecutionNotifications []struct {
+					Level   string `json:"level"`
+					Message struct {
+						Text string `json:"text"`
+					} `json:"message"`
+				} `json:"toolExecutionNotifications"`
+			} `json:"invocations"`
+			Results []json.RawMessage `json:"results"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("invalid SARIF: %v\n%s", err, out)
+	}
+	if len(doc.Runs) != 1 || len(doc.Runs[0].Results) != 0 {
+		t.Fatalf("operational run carried results:\n%s", out)
+	}
+	inv := doc.Runs[0].Invocations[0]
+	if inv.ExecutionSuccessful || len(inv.ToolExecutionNotifications) != 1 {
+		t.Fatalf("invocation = %+v", inv)
+	}
+	if note := inv.ToolExecutionNotifications[0]; note.Level != "error" || !strings.Contains(note.Message.Text, "could not read no-such-ref") {
+		t.Fatalf("notification = %+v", note)
+	}
+}
+
+// A format typo is rejected before the gate reindexes or writes anything.
+func TestCheckRejectsUnknownFormatBeforeSideEffects(t *testing.T) {
+	root := t.TempDir()
+	out, code := runBoth(t, "check", "--format", "yaml", "--root", root)
+	if code != 2 {
+		t.Fatalf("unknown format should exit 2, got %d:\n%s", code, out)
+	}
+	if !strings.Contains(out, `unknown format "yaml"`) {
+		t.Fatalf("error did not name the format:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".weave")); !os.IsNotExist(err) {
+		t.Fatalf("check wrote side effects before rejecting the format: %v", err)
+	}
+}
+
+// --markdown is the old spelling of --format markdown. Using both is refused
+// rather than silently letting one win, and it is refused before any side effect.
+func TestCheckRejectsMarkdownWithFormatBeforeSideEffects(t *testing.T) {
+	orders := [][]string{
+		{"check", "--markdown", "--format", "json"},
+		{"check", "--format", "json", "--markdown"},
+	}
+	for _, args := range orders {
+		root := t.TempDir()
+		full := append(append([]string{}, args...), "--root", root)
+		out, code := runBoth(t, full...)
+		if code != 2 {
+			t.Fatalf("%v should exit 2, got %d:\n%s", args, code, out)
+		}
+		if !strings.Contains(out, "--markdown and --format cannot be combined") {
+			t.Fatalf("%v did not name the conflict:\n%s", args, out)
+		}
+		if _, err := os.Stat(filepath.Join(root, ".weave")); !os.IsNotExist(err) {
+			t.Fatalf("%v wrote side effects before rejecting the flags: %v", args, err)
+		}
+	}
+}
+
+// Each individual spelling still works: --format markdown renders the comment
+// the Action posts, exactly like --markdown does.
+func TestCheckFormatMarkdownStillRendersTheComment(t *testing.T) {
+	root := fixture(t)
+	out, code := run(t, "check", "packages/backend/src/modules/orders/orders.routes.ts",
+		"--format", "markdown", "--root", root)
+	if code != 0 {
+		t.Fatalf("markdown check should exit 0, got %d:\n%s", code, out)
+	}
+	if !strings.HasPrefix(out, "<!-- weave-check -->") || !strings.Contains(out, "passed") {
+		t.Fatalf("--format markdown did not render the PR comment:\n%s", out)
+	}
+}
+
 // runBoth captures stdout and stderr together: a hook writes its failure to stderr,
 // which is exactly what the agent reads back.
 func runBoth(t *testing.T, args ...string) (string, int) {

@@ -74,8 +74,8 @@ func Walk(root string) []SourceFile {
 			}
 			if st.IsDir() {
 				visit(abs, r)
-			} else if (st.Size() <= MaxBytes && code[Ext(name)]) || (specFile(r) && st.Size() <= SpecMaxBytes) {
-				b, err := os.ReadFile(abs)
+			} else if limit := sourceLimit(name, r, st.Size()); limit > 0 {
+				b, err := readSourceFile(abs, limit)
 				if err != nil {
 					continue
 				}
@@ -86,6 +86,35 @@ func Walk(root string) []SourceFile {
 	}
 	visit(root, "")
 	return out
+}
+
+// sourceLimit is the byte cap Walk applies to one entry, or 0 when the entry is not
+// a source file or is already over its cap. A code extension gets MaxBytes and a
+// spec path gets SpecMaxBytes; a spec .md file matches both, so the larger cap wins,
+// as it did when one condition admitted either branch.
+func sourceLimit(name, rel string, size int64) int64 {
+	var limit int64
+	if code[Ext(name)] && size <= MaxBytes {
+		limit = MaxBytes
+	}
+	if specFile(rel) && size <= SpecMaxBytes && SpecMaxBytes > limit {
+		limit = SpecMaxBytes
+	}
+	return limit
+}
+
+// readSourceFile opens abs without blocking on a FIFO and reads at most max bytes
+// through the checked handle. The walk follows symlinks, as statSync does, and the
+// open keeps that; the handle's own type and size check then refuses a FIFO, a
+// device or a file that grew past the walk's cap instead of waiting on it or
+// reading it whole.
+func readSourceFile(abs string, max int64) ([]byte, error) {
+	f, err := os.OpenFile(abs, os.O_RDONLY|nonblockOpen, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return readRegularLimited(f, max)
 }
 
 // FileInfo is a file the walk would read, without reading it. Mtime is UnixNano.
@@ -122,7 +151,7 @@ func WalkInfo(root string) []FileInfo {
 			}
 			if st.IsDir() {
 				visit(abs, r)
-			} else if (st.Size() <= MaxBytes && code[Ext(name)]) || (specFile(r) && st.Size() <= SpecMaxBytes) {
+			} else if sourceLimit(name, r, st.Size()) > 0 {
 				out = append(out, FileInfo{Rel: r, Abs: abs, Size: st.Size(), Mtime: st.ModTime().UnixNano()})
 			}
 		}

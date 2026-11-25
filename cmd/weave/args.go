@@ -25,7 +25,7 @@ var boolFlags = map[string]bool{
 	"--strict-tests": true, "--markdown": true, "--all": true, "--check": true,
 	"--clear": true, "--hooks": true, "--manager": true, "--new-token": true,
 	"--no-delta": true, "--no-open": true, "--prune": true, "--regex": true,
-	"--upgrade": true, "--help": true, "--version": true,
+	"--upgrade": true, "--help": true, "--version": true, "--confirm-stopped": true,
 }
 
 // commands is every subcommand main dispatches. Validating it before pickRoot

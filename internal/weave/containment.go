@@ -119,20 +119,32 @@ func SpecSubdirs(root, rel string) ([]string, error) {
 	return names, nil
 }
 
-// readFileAt opens name inside r, checks the handle, and reads at most max bytes
-// from that same handle. A file swapped for another file or a link after the open
-// cannot change what is read, and growth during the read cannot outrun the limit.
-func readFileAt(r *os.Root, name string, max int64) ([]byte, error) {
-	f, err := r.Open(name)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
+// checkRegular reports the handle's info when its target is a regular file. The
+// check is on the open handle, not on the name, so a target swapped between the
+// open and the check cannot pass it, and a FIFO is rejected after a non-blocking
+// open instead of being waited on.
+func checkRegular(f *os.File) (fs.FileInfo, error) {
 	info, err := f.Stat()
 	if err != nil {
 		return nil, err
 	}
-	if !info.Mode().IsRegular() || info.Size() > max {
+	if !info.Mode().IsRegular() {
+		return nil, ErrUnreadable
+	}
+	return info, nil
+}
+
+// readRegularLimited reads at most max bytes from an open handle, after checking
+// that the handle names a regular file no larger than max. Type, size and content
+// all come from the same handle: a FIFO is refused instead of waited on, a name
+// swapped after the open cannot redirect the read, and a file that grew cannot
+// outrun the limit.
+func readRegularLimited(f *os.File, max int64) ([]byte, error) {
+	info, err := checkRegular(f)
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > max {
 		return nil, ErrUnreadable
 	}
 	raw, err := io.ReadAll(io.LimitReader(f, max+1))
@@ -145,23 +157,61 @@ func readFileAt(r *os.Root, name string, max int64) ([]byte, error) {
 	return raw, nil
 }
 
+// readFileAt opens name inside r without blocking on a FIFO, checks the handle,
+// and reads at most max bytes from that same handle. A file swapped for another
+// file or a link after the open cannot change what is read, and growth during the
+// read cannot outrun the limit.
+func readFileAt(r *os.Root, name string, max int64) ([]byte, error) {
+	f, err := r.OpenFile(name, os.O_RDONLY|nonblockOpen, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return readRegularLimited(f, max)
+}
+
+// openCheckedAt opens name inside r without blocking on a FIFO and returns a handle
+// the caller may read. The handle's target must be a regular file, and the name
+// itself must still be that same regular file: a final symlink or a name swapped
+// for another file between the open and the check is refused. One handle serves both
+// the check and the read, so a link planted after an earlier Lstat cannot redirect
+// the content, and a FIFO cannot block the open.
+func openCheckedAt(r *os.Root, name string) (*os.File, error) {
+	f, err := r.OpenFile(name, os.O_RDONLY|nonblockOpen, 0)
+	if err != nil {
+		return nil, err
+	}
+	info, err := checkRegular(f)
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	nameInfo, err := r.Lstat(name)
+	if err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	if nameInfo.Mode()&os.ModeSymlink != 0 || !nameInfo.Mode().IsRegular() || !os.SameFile(nameInfo, info) {
+		_ = f.Close()
+		return nil, ErrUnreadable
+	}
+	return f, nil
+}
+
 // readFileTailAt opens name inside r and returns at most max bytes from its end,
 // through the same handle. When the file is longer than max the read starts at a
 // line boundary: the first, possibly partial, line is dropped so every returned line
 // is complete. Reading a tail keeps a long append-only file useful without holding
 // all of it in memory, and a file swapped after the open cannot change the result.
 func readFileTailAt(r *os.Root, name string, max int64) ([]byte, error) {
-	f, err := r.Open(name)
+	f, err := r.OpenFile(name, os.O_RDONLY|nonblockOpen, 0)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	info, err := f.Stat()
+	info, err := checkRegular(f)
 	if err != nil {
 		return nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, ErrUnreadable
 	}
 	size := info.Size()
 	if size <= max {
@@ -266,9 +316,13 @@ func appendFileAt(r *os.Root, name string, b []byte, perm fs.FileMode) error {
 			return err
 		}
 	}
-	f, err := r.OpenFile(name, os.O_APPEND|os.O_CREATE|os.O_WRONLY, perm)
+	f, err := r.OpenFile(name, os.O_APPEND|os.O_CREATE|os.O_WRONLY|nonblockOpen, perm)
 	if err != nil {
 		return err
+	}
+	if _, err := checkRegular(f); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("append %s: %w", name, err)
 	}
 	if _, err := f.Write(b); err != nil {
 		_ = f.Close()
@@ -306,14 +360,14 @@ func appendLineAt(r *os.Root, name string, b []byte, perm fs.FileMode) error {
 			return err
 		}
 	}
-	f, err := r.OpenFile(name, os.O_RDWR|os.O_APPEND|os.O_CREATE, perm)
+	f, err := r.OpenFile(name, os.O_RDWR|os.O_APPEND|os.O_CREATE|nonblockOpen, perm)
 	if err != nil {
 		return err
 	}
-	info, err := f.Stat()
+	info, err := checkRegular(f)
 	if err != nil {
 		_ = f.Close()
-		return err
+		return fmt.Errorf("append %s: %w", name, err)
 	}
 	if size := info.Size(); size > 0 {
 		if _, err := f.Seek(size-1, io.SeekStart); err != nil {
@@ -371,13 +425,13 @@ func SpecFileSize(root, rel string) (int64, error) {
 		return 0, ErrUnreadable
 	}
 	defer specs.Close()
-	f, err := specs.Open(sub)
+	f, err := specs.OpenFile(sub, os.O_RDONLY|nonblockOpen, 0)
 	if err != nil {
 		return 0, ErrUnreadable
 	}
 	defer f.Close()
-	info, err := f.Stat()
-	if err != nil || !info.Mode().IsRegular() {
+	info, err := checkRegular(f)
+	if err != nil {
 		return 0, ErrUnreadable
 	}
 	return info.Size(), nil
@@ -407,12 +461,14 @@ func openSpecDir(root, rel string) (*os.Root, string, error) {
 	return parent, base, nil
 }
 
-// newTempAt creates an exclusive temp file next to the target, like CreateTemp but
-// through the pinned handle. The name never comes from the caller.
+// newTempAt creates an exclusive private temp file next to the target, like
+// CreateTemp but through the pinned handle. The name never comes from the caller,
+// and the file starts owner-only: it is chmodded to the target's mode only after
+// the text is written, so no partial document is ever readable by others.
 func newTempAt(parent *os.Root, hint string) (string, *os.File, error) {
 	for attempt := 0; attempt < 100; attempt++ {
 		name := ".spec-" + randName() + ".tmp"
-		f, err := parent.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+		f, err := parent.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if errors.Is(err, fs.ErrExist) {
 			continue
 		}
@@ -486,10 +542,21 @@ func saveFileAt(parent *os.Root, base, text string) error {
 	return replaceFileAt(parent, base, text)
 }
 
-// replaceFileAt writes text to an exclusive temp file in the pinned directory and
-// renames it over base. The caller holds the lock, so concurrent writers serialize
-// and a reader never sees a truncated document.
+// replaceFileAt writes text to an exclusive private temp file in the pinned
+// directory and renames it over base, keeping base's permission bits. The caller
+// holds the lock, so concurrent writers serialize and a reader never sees a
+// truncated document. The mode is read from the target under that lock and applied
+// through the temp file's handle; a chmod failure is reported rather than leaving a
+// file whose mode silently changed.
 func replaceFileAt(parent *os.Root, base, text string) error {
+	info, err := parent.Lstat(base)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: not a regular file", ErrSpecTarget)
+	}
+	perm := info.Mode().Perm()
 	name, tmp, err := newTempAt(parent, base)
 	if err != nil {
 		return err
@@ -499,10 +566,11 @@ func replaceFileAt(parent *os.Root, base, text string) error {
 		_ = parent.Remove(name)
 		return err
 	}
-	// Mode 0644 is what os.CreateTemp did not set and the old writer chmodded in;
-	// through the handle there is no path to follow. A failure here leaves the
-	// umask's stricter mode, as before.
-	_ = tmp.Chmod(0o644)
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		_ = parent.Remove(name)
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		_ = parent.Remove(name)
 		return err

@@ -3,6 +3,7 @@ package weave
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"regexp"
@@ -106,16 +107,17 @@ func SetSpecTask(root, change, task string, done bool) (name string, changed boo
 	}
 	defer unlock()
 
-	// tasks.md must be a regular file: a link or junction is not the record this
-	// writer owns, and replacing it would leave the change unreadable.
-	info, err := dir.Lstat("tasks.md")
+	// tasks.md must be a regular file, and the bytes must come from that file: the
+	// handle is opened and checked once, so a link or a different file swapped in
+	// after an earlier Lstat can neither supply the text this writer edits nor make
+	// the read wait on a FIFO. A final link stays refused: a link is not the record
+	// this writer owns, and replacing it would leave the change unreadable.
+	f, err := openCheckedAt(dir, "tasks.md")
 	if err != nil {
-		return name, false, err
+		return name, false, fmt.Errorf("specs/changes/%s/tasks.md: %w", name, err)
 	}
-	if !info.Mode().IsRegular() {
-		return name, false, fmt.Errorf("specs/changes/%s/tasks.md is not a regular file", name)
-	}
-	raw, err := dir.ReadFile("tasks.md")
+	raw, err := io.ReadAll(f)
+	_ = f.Close()
 	if err != nil {
 		return name, false, err
 	}

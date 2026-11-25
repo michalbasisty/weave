@@ -1613,7 +1613,7 @@ func CoverageLines(g *Graph, full bool) []string {
 		out = append(out, "  openapi       "+itoa(c.OpenAPI.Found)+"/"+itoa(c.OpenAPI.Files)+" specs produced endpoints ("+pct(c.OpenAPI.Found, c.OpenAPI.Files)+"%)")
 	}
 	if c.OpenAPI != nil && len(c.OpenAPI.Ignored) != 0 {
-		out = append(out, "  openapi       "+itoa(len(c.OpenAPI.Ignored))+" YAML spec(s) not read — JSON only:")
+		out = append(out, "  openapi       "+itoa(len(c.OpenAPI.Ignored))+" spec(s) not read:")
 		out = append(out, indent("    ", c.OpenAPI.Ignored)...)
 	}
 	if c.Patterns != nil && *c.Patterns != 0 {

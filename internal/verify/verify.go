@@ -25,6 +25,9 @@ type Result struct {
 	// a git range, the change set). They are not contract failures: the run could
 	// not judge the change at all, so it must never render as a pass.
 	Operational []string
+	// Findings is the same result as structured data, captured at detection time.
+	// JSON and SARIF read it; Text and Markdown keep their own rendering.
+	Findings []Finding
 	// Broken lists each removed endpoint that something still calls, with the
 	// screens that reach the caller. Pages and Endpoints are what the change touches.
 	Broken    []Broken
@@ -55,10 +58,10 @@ func (r Result) Passed() bool {
 
 // Broken is one removed endpoint that a live call site still names.
 type Broken struct {
-	Endpoint string
-	Caller   string
-	Screens  []string
-	Closest  string // the route the call most likely meant, "" when none is near
+	Endpoint string   `json:"endpoint"`
+	Caller   string   `json:"caller"`
+	Screens  []string `json:"screens,omitempty"`
+	Closest  string   `json:"closest,omitempty"` // the route the call most likely meant, "" when none is near
 }
 
 // Text renders the result the way `weave check` prints it: one scope line, then
@@ -97,20 +100,16 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 		// option; a control character has no place in a ref. Everything else,
 		// including Unicode, is left for git to accept or reject.
 		if problem := baseline.RefProblem(against); problem != "" {
-			return Result{
-				Scope:       "the change set could not be read",
-				Operational: []string{fmt.Sprintf("could not read %s — not a usable git ref (%s)", against, problem)},
-			}
+			return OperationalResult("the change set could not be read",
+				fmt.Sprintf("could not read %s — not a usable git ref (%s)", against, problem))
 		}
 		// `against...HEAD` is only meaningful at a merge base. A ref from an
 		// unrelated history has none, so no diff can be read and no removal can be
 		// judged. That is operational even when files are named explicitly: the ref
 		// was a promise to gate against it, never a pass.
 		if problem := mergeBaseProblem(root, against); problem != "" {
-			return Result{
-				Scope:       "the change set could not be read",
-				Operational: []string{fmt.Sprintf("could not read %s — %s", against, problem)},
-			}
+			return OperationalResult("the change set could not be read",
+				fmt.Sprintf("could not read %s — %s", against, problem))
 		}
 	}
 
@@ -122,10 +121,7 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 		changed, err := discoverChanges(root, against)
 		if err != nil {
 			if against != "" || gitMissing() || inWorkTree(root) {
-				return Result{
-					Scope:       "the change set could not be read",
-					Operational: []string{err.Error()},
-				}
+				return OperationalResult("the change set could not be read", err.Error())
 			}
 			// No git work tree: the last local index is all there is, exactly as
 			// before this command learned to read git status directly.
@@ -155,12 +151,11 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 			// An explicit ref is a promise the gate can judge the change against it.
 			// Falling back to the local index here could hide a removal and show a
 			// pass, so the run is operational instead.
-			return Result{
-				Scope:       fmt.Sprintf("%d file(s) named vs %s", len(files), against),
-				Changes:     files,
-				Warnings:    warnings,
-				Operational: []string{fmt.Sprintf("could not read %s — refusing to gate a change without its baseline", against)},
-			}
+			msg := fmt.Sprintf("could not read %s — refusing to gate a change without its baseline", against)
+			res := OperationalResult(fmt.Sprintf("%d file(s) named vs %s", len(files), against), msg)
+			res.Changes = files
+			res.Warnings = warnings
+			return res
 		}
 		baseGraph = base
 		prev = endpointNames(base)
@@ -256,6 +251,23 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 			screensOf[file] = screens
 		}
 		res.Broken = append(res.Broken, Broken{b.gone, locNode(b.call), screens, renamedTo(g, b.gone, added)})
+		find := Finding{
+			Rule:     RuleRemovedEndpointCalled,
+			Severity: SeverityError,
+			Message:  "removed endpoint " + b.gone + " still called from " + locNode(b.call),
+			Endpoint: b.gone,
+			Caller:   locNode(b.call),
+		}
+		if b.call.File != nil {
+			find.File = *b.call.File
+		}
+		if b.call.Line != nil {
+			find.Line = *b.call.Line
+		}
+		if c := res.Broken[len(res.Broken)-1].Closest; c != "" {
+			find.Message += " (closest now: " + c + ")"
+		}
+		res.Findings = append(res.Findings, find)
 	}
 	if len(broken) > 0 {
 		var parts []string
@@ -277,6 +289,14 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 			shown = shown[:4]
 		}
 		warnings = append(warnings, fmt.Sprintf("removed %d endpoint(s), no live caller: %s", len(removed), strings.Join(shown, ", ")))
+		for _, e := range removed {
+			res.Findings = append(res.Findings, Finding{
+				Rule:     RuleRemovedNoCaller,
+				Severity: SeverityWarning,
+				Message:  "removed endpoint " + e + " has no live caller",
+				Endpoint: e,
+			})
+		}
 	}
 
 	if f != nil {
@@ -289,19 +309,72 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 				shown = append(shown, o)
 			}
 			errors = append(errors, fmt.Sprintf("call site(s) in changed files match no endpoint: %s", strings.Join(shown, ", ")))
+			for _, o := range f.Orphans {
+				msg := "call site " + o + " matches no endpoint"
+				if c := weave.Closest(g, o); c != "" {
+					msg += " (closest: " + c + ")"
+				}
+				find := Finding{
+					Rule:     RuleOrphanCallSite,
+					Severity: SeverityError,
+					Message:  msg,
+					Endpoint: o,
+				}
+				if n := findNode(g, weave.KindCall, o); n != nil {
+					if n.File != nil {
+						find.File = *n.File
+					}
+					if n.Line != nil {
+						find.Line = *n.Line
+					}
+				}
+				res.Findings = append(res.Findings, find)
+			}
 		}
 		if len(f.Suspect) > 0 {
 			warnings = append(warnings, fmt.Sprintf("requirement text changed, code not re-checked: %s", strings.Join(head(f.Suspect, 4), ", ")))
+			for _, req := range f.Suspect {
+				res.Findings = append(res.Findings, Finding{
+					Rule:        RuleSuspectRequirement,
+					Severity:    SeverityWarning,
+					Message:     "requirement " + req + " text changed; code not re-checked",
+					Requirement: req,
+				})
+			}
 		}
 		if len(f.Changes) == 0 {
 			warnings = append(warnings, "no spec change record names these files")
+			res.Findings = append(res.Findings, Finding{
+				Rule:     RuleNoChangeRecord,
+				Severity: SeverityWarning,
+				Message:  "no spec change record names these files",
+			})
 		}
 		if len(f.Untested) > 0 {
 			msg := fmt.Sprintf("%d touched endpoint(s) have no direct test", len(f.Untested))
+			severity := SeverityWarning
 			if strict {
 				errors = append(errors, msg)
+				severity = SeverityError
 			} else {
 				warnings = append(warnings, msg)
+			}
+			for _, ep := range f.Untested {
+				find := Finding{
+					Rule:     RuleUntestedEndpoint,
+					Severity: severity,
+					Message:  "endpoint " + ep + " has no direct test",
+					Endpoint: ep,
+				}
+				if n := findNode(g, weave.KindEndpoint, ep); n != nil {
+					if n.File != nil {
+						find.File = *n.File
+					}
+					if n.Line != nil {
+						find.Line = *n.Line
+					}
+				}
+				res.Findings = append(res.Findings, find)
 			}
 		}
 
@@ -311,9 +384,16 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 				// A report older than the changed source is not evidence: neither a
 				// failure nor a pass may be read out of it. The gate cannot judge the
 				// requirement, so this is operational, not a green run.
-				res.Operational = append(res.Operational, fmt.Sprintf(
+				msg := fmt.Sprintf(
 					"JUnit report %s predates the changed source (newest %s) — evidence is stale; rerun the tests",
-					relPath(root, report.Path), newest.Format("2006-01-02 15:04")))
+					relPath(root, report.Path), newest.Format("2006-01-02 15:04"))
+				res.Operational = append(res.Operational, msg)
+				res.Findings = append(res.Findings, Finding{
+					Rule:     RuleStaleEvidence,
+					Severity: SeverityOperational,
+					Message:  msg,
+					File:     relPath(root, report.Path),
+				})
 			} else {
 				ev := weave.EvidenceFacts(g, report.Cases, f.Reqs)
 				var failing, unverified []weave.ReqEvidence
@@ -338,6 +418,18 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 						parts = append(parts, fmt.Sprintf("%s (%s)", e.ID, test))
 					}
 					errors = append(errors, "requirement test failing: "+strings.Join(parts, "; "))
+					for _, e := range failing {
+						msg := "requirement " + e.ID + " test failing"
+						if len(e.Tests) > 0 {
+							msg += " (" + e.Tests[0] + ")"
+						}
+						res.Findings = append(res.Findings, Finding{
+							Rule:        RuleRequirementTestFailed,
+							Severity:    SeverityError,
+							Message:     msg,
+							Requirement: e.ID,
+						})
+					}
 				}
 				if len(unverified) > 0 {
 					var ids []string
@@ -348,10 +440,24 @@ func Run(g *weave.Graph, root, against string, strict bool, files []string) Resu
 						ids = append(ids, e.ID)
 					}
 					warnings = append(warnings, "implemented but never tested: "+strings.Join(ids, ", "))
+					for _, e := range unverified {
+						res.Findings = append(res.Findings, Finding{
+							Rule:        RuleUnverifiedRequirement,
+							Severity:    SeverityWarning,
+							Message:     "requirement " + e.ID + " implemented but never tested",
+							Requirement: e.ID,
+						})
+					}
 				}
 			}
 		} else if len(f.Reqs) > 0 {
-			warnings = append(warnings, fmt.Sprintf("%d requirement(s) linked but no JUnit report — evidence not checked", len(f.Reqs)))
+			msg := fmt.Sprintf("%d requirement(s) linked but no JUnit report — evidence not checked", len(f.Reqs))
+			warnings = append(warnings, msg)
+			res.Findings = append(res.Findings, Finding{
+				Rule:     RuleMissingEvidence,
+				Severity: SeverityWarning,
+				Message:  msg,
+			})
 		}
 		res.Commands = f.Commands
 		for _, p := range f.Pages {
@@ -603,6 +709,17 @@ func locNode(n *weave.GNode) string {
 		return fmt.Sprintf("%s:%d", file, *n.Line)
 	}
 	return file
+}
+
+// findNode returns the graph node a detection names, so a finding can carry its
+// file and line instead of only a sentence.
+func findNode(g *weave.Graph, kind, name string) *weave.GNode {
+	for _, n := range g.Nodes {
+		if n.Kind == kind && n.Name == name {
+			return n
+		}
+	}
+	return nil
 }
 
 func head[T any](list []T, n int) []T {

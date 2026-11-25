@@ -22,6 +22,14 @@ func main() {
 		fmt.Fprintf(os.Stderr, "weave: unknown command %q\nweave --help for usage\n", c)
 		os.Exit(2)
 	}
+	if c == "check" {
+		// A report the gate cannot render, or two spellings of one, must not
+		// reindex the tree or register the project on its way to an error.
+		if problem := checkFormatProblem(); problem != "" {
+			fmt.Fprintf(os.Stderr, "weave: %s\n", problem)
+			os.Exit(2)
+		}
+	}
 	pos = p
 	r, code := pickRoot()
 	if code != 0 {
@@ -162,6 +170,7 @@ func helpText() string {
   weave recall  [file...]       notes for these files
   weave memory                  all notes (--prune drops ownership notes and repeats, --clear drops all)
   weave check   [file...]       fail when a change breaks a contract (exit 1), or cannot run (exit 2; no args: git diff)
+                [--format text|markdown|json|sarif]  a report for a person, a PR, a script or code scanning
   weave hook                    check for an agent hook: exit 2 broken, exit 1 could not run
   weave serve   [--port N]      host the map, the wiki and the actions on 127.0.0.1, and open it
   weave live                    the same server, opened on the live map: your change lights up as you edit

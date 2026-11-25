@@ -229,7 +229,7 @@ the commit it describes; `weave wiki --check` fails when the pages are stale.
 
 | | |
 |---|---|
-| **Back ends** | Express, Fastify, NestJS, Next.js route handlers (app and pages), Remix / React Router v7 resource routes, tRPC (routers across files), GraphQL (SDL, NestJS resolvers, Pothos, Nexus), OpenAPI JSON |
+| **Back ends** | Express, Fastify, NestJS, Next.js route handlers (app and pages), Remix / React Router v7 resource routes, tRPC (routers across files), GraphQL (SDL, NestJS resolvers, Pothos, Nexus), OpenAPI JSON and YAML |
 | **Python, Go, Ruby and PHP back ends** | FastAPI, Flask, Django and Django REST framework; gin, echo, chi, gorilla and net/http; Rails and Laravel routes. The RealWorld React front end matches 18 of 18 calls against each of the Gin, Flask, Django, Rails and Laravel back ends |
 | **Front ends** | React Router `<Route>` tables (lazy imports too), Next.js and Remix file routes; `fetch`, axios and any HTTP-like client, tRPC hooks, `gql` documents |
 | **Data** | Prisma, Drizzle, TypeORM, SQLAlchemy, Django models, GORM |
@@ -280,6 +280,10 @@ containment, and the panel's search, review, editing and check states. The brows
 smoke test builds weave and exercises a temporary fixture; it does not require a
 running server. Set `CHROME` to the browser executable if it is not found
 automatically. See [`test/ui/panel.mjs`](test/ui/panel.mjs) for screenshot options.
+
+For machine-readable check results, use `weave check --format json` or
+`weave check --format sarif`. Both preserve the usual exit codes: 0 for a pass,
+1 for a broken contract, and 2 when the check could not run.
 
 ## License
 

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/michalbasisty/weave/internal/weave"
@@ -29,12 +31,14 @@ func cmdSpec() int {
 		if len(rest) >= 2 && (rest[0] == "done" || rest[0] == "reopen") {
 			return specTaskSet(rest[1:], rest[0] == "done")
 		}
+	case "unlock":
+		return specUnlock(rest)
 	}
 	fmt.Fprintln(os.Stderr, specUsage)
 	return 2
 }
 
-const specUsage = "usage: weave spec new <name> [--title …] | weave spec rm <change> | weave spec task done|reopen <change> <T1>"
+const specUsage = "usage: weave spec new <name> [--title …] | weave spec rm <change> | weave spec task done|reopen <change> <T1> | weave spec unlock <spec-relative.md> --confirm-stopped"
 
 func specNew(args []string) int {
 	if len(args) == 0 {
@@ -87,5 +91,49 @@ func specTaskSet(args []string, done bool) int {
 		return 0
 	}
 	fmt.Printf("%s %s %s in specs/changes/%s/tasks.md\n", verb, name, task, name)
+	return 0
+}
+
+// specUnlock removes one legacy lock marker as an explicit operator action. It
+// never runs automatically, cannot prove the marker's owner is dead, and refuses
+// to touch anything without --confirm-stopped after the operator has stopped every
+// writer.
+func specUnlock(args []string) int {
+	confirmed := hasFlag("confirm-stopped")
+	rel := ""
+	for _, a := range args {
+		if a == "--confirm-stopped" {
+			confirmed = true
+			continue
+		}
+		if strings.HasPrefix(a, "-") {
+			fmt.Fprintf(os.Stderr, "unknown option %s\n", a)
+			return 2
+		}
+		if rel != "" {
+			fmt.Fprintln(os.Stderr, "usage: weave spec unlock <spec-relative.md> --confirm-stopped")
+			return 2
+		}
+		rel = a
+	}
+	if rel == "" {
+		fmt.Fprintln(os.Stderr, "usage: weave spec unlock <spec-relative.md> --confirm-stopped")
+		return 2
+	}
+	fmt.Fprintln(os.Stderr, weave.SpecUnlockWarning)
+	if !confirmed {
+		fmt.Fprintln(os.Stderr, "refusing: stop every writer, then pass --confirm-stopped")
+		return 2
+	}
+	lock, err := weave.UnlockSpecLock(root, rel)
+	if errors.Is(err, weave.ErrNoLockMarker) {
+		fmt.Printf("no lock marker at %s; nothing to remove\n", lock)
+		return 0
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	fmt.Printf("removed %s\n", lock)
 	return 0
 }

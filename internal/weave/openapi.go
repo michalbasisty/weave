@@ -6,25 +6,30 @@ import (
 
 	"github.com/michalbasisty/weave/internal/jsjson"
 	"github.com/michalbasisty/weave/internal/jsstr"
+	"github.com/michalbasisty/weave/internal/yamljson"
 )
 
 // OpenAPI is the one contract that exists regardless of language, so it is the
 // cheapest way out of "we only understand Express + Next + tRPC".
 
 var (
-	reSpecFile  = regexp.MustCompile(`(?i)(^|/)(openapi|swagger)(\.\d+)?\.json$`)
-	reSpecYAML  = regexp.MustCompile(`(?i)(^|/)(openapi|swagger|api[-_.]?spec|spec)(\.\d+)?\.ya?ml$`)
-	reBraceParm = regexp.MustCompile(`\{([^}]+)\}`)
-	reEndSlash  = regexp.MustCompile(`/$`)
-	apiMethods  = []string{"get", "post", "put", "patch", "delete", "head", "options"}
+	reSpecFile    = regexp.MustCompile(`(?i)(^|/)(openapi|swagger)(\.\d+)?\.json$`)
+	reSpecYAML    = regexp.MustCompile(`(?i)(^|/)(openapi|swagger|api[-_.]?spec|spec)(\.\d+)?\.ya?ml$`)
+	reSpecYAMLAPI = regexp.MustCompile(`(?i)(^|/)(openapi|swagger)(\.\d+)?\.ya?ml$`)
+	// A top-level OpenAPI/Swagger key, used when the YAML cannot be parsed. Quoted
+	// keys are legal; indented ones are allowed because this only proves intent.
+	reYAMLSpecMarker = regexp.MustCompile(`(?m)^[ \t]*(?:"(?:openapi|swagger)"|'(?:openapi|swagger)'|(?:openapi|swagger))[ \t]*:`)
+	reBraceParm      = regexp.MustCompile(`\{([^}]+)\}`)
+	reEndSlash       = regexp.MustCompile(`/$`)
+	apiMethods       = []string{"get", "post", "put", "patch", "delete", "head", "options"}
 )
 
 // SpecMaxBytes is the size a spec may reach: the general 512 KB cap would drop the
 // large generated specs (Stripe, GitHub), and a dropped spec is a silent gap.
 const SpecMaxBytes = 4 << 20
 
-// specFile is a file named like an API spec, in a format this build may not read.
-// The walk admits it so the gap can be reported instead of assumed absent.
+// specFile is a file named like an API spec. The walk admits it so the spec can
+// be read, or its gap reported, instead of assuming no contract is there.
 func specFile(rel string) bool { return reSpecFile.MatchString(rel) || reSpecYAML.MatchString(rel) }
 
 // isSpecText is the cheap test that lets a spec be recognised by its content, not
@@ -113,8 +118,26 @@ func opDesc(op jsjson.Value) string {
 	return ""
 }
 
-// ExtractOpenAPI reads OpenAPI/Swagger JSON specs, wherever they are named, and
-// names the YAML specs it cannot read so the gap is not silent.
+// isSpecDoc reports whether a parsed document declares itself an OpenAPI or
+// Swagger document. A spec.yaml is a common name for other tools' files, so a
+// YAML file that parses but makes no such claim is not a gap in the API map.
+func isSpecDoc(v jsjson.Value) bool {
+	for _, k := range []string{"openapi", "swagger"} {
+		if x, ok := prop(v, k); truthy(x, ok) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasYAMLSpecMarker finds the same claim in text that did not parse, so a broken
+// OpenAPI spec is still reported while another tool's broken YAML is not.
+func hasYAMLSpecMarker(t string) bool {
+	return reYAMLSpecMarker.MatchString(strings.TrimPrefix(t, "\uFEFF"))
+}
+
+// ExtractOpenAPI reads OpenAPI/Swagger JSON and YAML specs, wherever they are
+// named, and reports a spec it cannot parse as a silent file instead of a gap.
 func ExtractOpenAPI(files []SourceFile, b *Builder) ExtractStats {
 	st := ExtractStats{Silent: []string{}}
 	for i := range files {
@@ -122,19 +145,35 @@ func ExtractOpenAPI(files []SourceFile, b *Builder) ExtractStats {
 		if len(f.Text) > SpecMaxBytes {
 			continue
 		}
+		var spec jsjson.Value
 		switch {
 		case reSpecFile.MatchString(f.Rel), strings.HasSuffix(f.Rel, ".json") && isSpecText(f.Text):
-			// a spec
-		case reSpecYAML.MatchString(f.Rel) && strings.Contains(f.Text, "paths:"):
-			st.Ignored = append(st.Ignored, f.Rel)
-			continue
+			// A `.json` spec is still read as JSON, not through the looser YAML
+			// grammar, so malformed JSON is reported rather than quietly accepted.
+			st.Files++
+			v, err := jsjson.Parse([]byte(f.Text))
+			if err != nil {
+				st.Silent = append(st.Silent, f.Rel)
+				continue
+			}
+			spec = v
+		case reSpecYAML.MatchString(f.Rel):
+			v, err := yamljson.Parse([]byte(f.Text))
+			if err != nil {
+				// A generic spec.yaml may belong to another tool; only a clear
+				// OpenAPI name or its own marker makes a parse failure a gap.
+				if reSpecYAMLAPI.MatchString(f.Rel) || hasYAMLSpecMarker(f.Text) {
+					st.Files++
+					st.Silent = append(st.Silent, f.Rel)
+				}
+				continue
+			}
+			if !isSpecDoc(v) {
+				continue
+			}
+			st.Files++
+			spec = v
 		default:
-			continue
-		}
-		st.Files++
-		spec, err := jsjson.Parse([]byte(f.Text))
-		if err != nil {
-			st.Silent = append(st.Silent, f.Rel)
 			continue
 		}
 		paths, _ := prop(spec, "paths")

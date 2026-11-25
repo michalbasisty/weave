@@ -68,8 +68,9 @@ type FileStats struct {
 	Files  int      `json:"files"`
 	Found  int      `json:"found"`
 	Silent []string `json:"silent"`
-	// Ignored is a contract this build cannot read (an OpenAPI spec in YAML), named
-	// so the gap is reported rather than assumed absent.
+	// Ignored is a spec a graph written before YAML support could not read. New
+	// builds report unreadable specs as Silent; the field stays so old graphs
+	// still decode.
 	Ignored []string `json:"ignored,omitempty"`
 }
 
