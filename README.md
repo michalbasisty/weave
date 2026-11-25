@@ -8,7 +8,9 @@ map. Rename a route, delete a tRPC procedure or drop a GraphQL field, and `weave
 with the exact `file:line` that still calls it. It runs in a Stop hook, a pre-commit hook or a
 pull-request check.
 
-One static Go binary. No server, no account, no network.
+One Go binary, no account and no cloud service. `weave serve` runs a local
+server on `127.0.0.1`. The optional `weave ask` command makes a network request
+when configured with a model API key.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/img/screens/documenso-dark.png">
@@ -20,11 +22,12 @@ One static Go binary. No server, no account, no network.
 ## Try it
 
 ```bash
-go install github.com/michalbasisty/weave/cmd/weave@latest   # or grab a binary from Releases
+go install github.com/michalbasisty/weave/cmd/weave@latest   # Go 1.25+, or grab a release binary
 cd your-app
-weave check          # what the uncommitted change breaks; exit 1 if anything
+weave check          # what the uncommitted change breaks (exit 1 broke, 2 couldn't run)
 weave serve          # the map in your browser, every project you use in one dropdown
-weave init --hooks   # wire it into Claude Code, Cursor, VS Code, opencode
+weave init           # configure MCP for supported agents
+weave init --hooks   # also install the Claude Code Stop hook
 ```
 
 Binaries for macOS, Linux and Windows are on
@@ -55,10 +58,11 @@ posts the same report, with the screens that lose their data:
 
 <img src="docs/img/chart-gate.svg" alt="Renaming each of the 15 routes the RealWorld front end calls, one at a time: weave check failed and named the caller 14 times." width="100%">
 
-Three things fail the gate, nothing else: a **removed endpoint that is still called**, a
-**call that matches no endpoint**, and a **requirement whose test fails** (when you link
-them). Untested endpoints and stale specs are warnings, because a gate that cries wolf gets
-switched off in a week.
+By default, three things fail the gate: a **removed endpoint that is still called**, a
+**call that matches no endpoint**, and a **requirement whose test fails** when linked to a
+fresh JUnit report. `--strict-tests` also fails on touched endpoints without direct tests.
+If the requested baseline or test evidence cannot be used, the check exits 2 rather than
+reporting a pass. Untested endpoints are otherwise warnings.
 
 ## Why not grep and read the files?
 
@@ -128,15 +132,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with: { fetch-depth: 0 }   # required: --against needs the merge base
       - uses: michalbasisty/weave@main
         with: { against: origin/main }
 ```
 
 **The panel.** `weave serve` hosts the map on `127.0.0.1`: an overview with the gate's
 verdict, every screen, endpoint, module and table drawn on its line, the checks, your specs
-and a generated wiki. A dropdown switches between every repo weave has indexed. Every
-`file:line` opens in VS Code or Cursor. Light and dark follow your system.
+and a generated wiki. Search the map, edit spec Markdown, tick tasks and mark a review
+baseline from the panel. Inferred connections are labeled, and a stale map verdict offers
+to refresh the map. A dropdown switches between indexed repos. File references can open in
+VS Code or Cursor. Light and dark follow your system.
 
 <img src="docs/img/screens/documenso-overview.png" alt="The panel's overview on documenso: the contract gate passes, 119 screens, 327 endpoints, 103 modules and 55 tables, all 312 frontend calls matched, and the next tests worth writing." width="100%">
 
@@ -168,7 +174,8 @@ of trusting a confident wrong answer.
 
 - It reads source, it does not run it. A URL assembled at runtime from configuration is
   reported as unknowable, not guessed.
-- JavaScript and TypeScript only. Python, Go, Ruby and PHP back ends are not read yet.
+- Source extraction covers JavaScript and TypeScript. Back ends in other languages can
+  supply an OpenAPI JSON file; OpenAPI YAML is detected but not yet parsed.
 - Whether `context` changes what an agent does over a whole task is not measured yet; the
   protocol is in [`docs/EVAL.md`](docs/EVAL.md). The numbers above are about weave's answers,
   not agent outcomes.
@@ -180,10 +187,21 @@ of trusting a confident wrong answer.
 - [`docs/AGENTS.md`](docs/AGENTS.md): what agents actually call, from a month of logs.
 - [`bench/`](bench/): the benchmark, rerunnable: `bench/fetch.sh && node bench/run.mjs && node bench/charts.mjs`.
 
+## Run the tests
+
+Go 1.25 or later is required. From the repository root:
+
 ```bash
-go test ./...                 # unit, golden and integration suites
-node test/ui/panel.mjs        # browser smoke test of the panel
+go test ./...                 # unit, golden and CLI integration tests
+go vet ./...                  # Go static checks
+node test/ui/panel.mjs        # browser smoke test; requires Node 22+ and Chrome, Chromium or Edge
 ```
+
+The tests cover gate outcomes, missing baselines, stale test evidence, file and spec
+containment, and the panel's search, review, editing and check states. The browser
+smoke test builds weave and exercises a temporary fixture; it does not require a
+running server. Set `CHROME` to the browser executable if it is not found
+automatically. See [`test/ui/panel.mjs`](test/ui/panel.mjs) for screenshot options.
 
 ## License
 

@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Status is a test result.
@@ -65,18 +66,58 @@ func FindJUnitFile(root string) (string, bool) {
 	return hits[0].path, true
 }
 
-// Load reads the newest JUnit report under root. It returns nil when the project
-// has written none, so a gate can say the evidence was not checked.
-func Load(root string) []Case {
+// Report is a JUnit file the project wrote, with the facts that let a gate judge
+// whether it still describes the tree it is read against.
+type Report struct {
+	Path    string
+	ModTime time.Time
+	Cases   []Case
+}
+
+// LoadReport finds and parses the newest JUnit report under root. The second
+// result is false when there is none (or it cannot be read).
+func LoadReport(root string) (Report, bool) {
 	p, ok := FindJUnitFile(root)
 	if !ok {
-		return nil
+		return Report{}, false
+	}
+	info, err := os.Stat(p)
+	if err != nil {
+		return Report{}, false
 	}
 	text, err := os.ReadFile(p)
 	if err != nil {
+		return Report{}, false
+	}
+	return Report{Path: p, ModTime: info.ModTime(), Cases: Parse(string(text))}, true
+}
+
+// Load reads the newest JUnit report under root. It returns nil when the project
+// has written none, so a gate can say the evidence was not checked.
+func Load(root string) []Case {
+	r, ok := LoadReport(root)
+	if !ok {
 		return nil
 	}
-	return Parse(string(text))
+	return r.Cases
+}
+
+// Stale reports whether the report predates the newest of sources, using file
+// mtimes as a coarse freshness heuristic. A report written before a source file
+// changed cannot prove or disprove that file, so the gate must not read a pass or
+// a fail out of it. The second result is the newest source mtime.
+func (r Report) Stale(sources []string) (bool, time.Time) {
+	var newest time.Time
+	for _, p := range sources {
+		info, err := os.Stat(p)
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(newest) {
+			newest = info.ModTime()
+		}
+	}
+	return !newest.IsZero() && r.ModTime.Before(newest), newest
 }
 
 // Parse reads the test cases out of a JUnit document. A malformed document keeps

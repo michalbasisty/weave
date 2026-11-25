@@ -192,19 +192,31 @@ func handle(line string, src GraphSource, multi, manager bool, invalidate func()
 			reply(toolResult{Content: []content{{Type: "text", Text: "weave error: " + err.Error()}}, IsError: true})
 			return
 		}
+		finish := func(text string, isErr bool) {
+			elapsed := float64(time.Since(started).Milliseconds())
+			runtime.calls++
+			runtime.ms = append(runtime.ms, elapsed)
+			if len(runtime.ms) > 200 {
+				runtime.ms = runtime.ms[1:]
+			}
+			tokens := int(math.Ceil(float64(len(text)) / 4))
+			usage.Record(g.Root, name, tokens, elapsed)
+			reply(toolResult{Content: []content{{Type: "text", Text: text + "\n" + receipt(g, text)}}, IsError: isErr})
+		}
+		// verify is the one tool whose result is a verdict, not just an answer: a
+		// broken contract or a gate that could not run must surface as an MCP error
+		// result, with the text saying which of the two it is.
+		if name == "verify" {
+			res := verify.Run(g, g.Root, strAt(args, "against"), truthy(args["strict"]), filesArg(args))
+			finish(res.Text(), !res.Passed())
+			return
+		}
 		text, rerr := callTool(name, args, g, invalidate)
 		if rerr != nil {
 			fail(rerr.Code, rerr.Message)
 			return
 		}
-		runtime.calls++
-		runtime.ms = append(runtime.ms, float64(time.Since(started).Milliseconds()))
-		if len(runtime.ms) > 200 {
-			runtime.ms = runtime.ms[1:]
-		}
-		tokens := int(math.Ceil(float64(len(text)) / 4))
-		usage.Record(g.Root, name, tokens, float64(time.Since(started).Milliseconds()))
-		reply(toolResult{Content: []content{{Type: "text", Text: text + "\n" + receipt(g, text)}}})
+		finish(text, false)
 	default:
 		method := msg.Method
 		if method == "" {
@@ -355,8 +367,6 @@ func callTool(name string, a map[string]any, g *weave.Graph, invalidate func()) 
 			return "", &rpcError{-32602, "cannot read " + ref}
 		}
 		return delta.Delta(g, base, name, truthy(a["all"])), nil
-	case "verify":
-		return verify.Run(g, g.Root, strAt(a, "against"), truthy(a["strict"]), filesArg(a)).Text(), nil
 	case "status":
 		return weave.Doctor(g) + "\n" + runtimeLine(g), nil
 	default:

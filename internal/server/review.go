@@ -4,9 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -18,6 +16,17 @@ import (
 // done: "what changed since I last looked, and is it proved?" The baseline is a mark
 // the person leaves, because a branch comparison is empty on a repo that commits to
 // main, and comparing with HEAD goes empty the moment the work is committed.
+
+// reviewLog is the ledger's path inside the repo. Reads and appends go through
+// weave's os.Root helpers, so a .weave directory or log file swapped for a link out
+// of the repo is refused instead of read or appended to.
+const reviewLog = ".weave/reviews.log"
+
+// reviewsTail bounds one read of the ledger. The ledger is append-only, so only its
+// end matters; 256 KB holds well over a thousand marks. A longer history is read as
+// a bounded tail rather than treated as unreadable, so the newest mark survives any
+// total length.
+const reviewsTail = 256 << 10
 
 type reviewMarks struct {
 	Marks []mark `json:"marks"`
@@ -32,8 +41,6 @@ type mark struct {
 	Dirty string `json:"dirty,omitempty"`
 }
 
-func reviewsPath(root string) string { return filepath.Join(root, ".weave", "reviews.log") }
-
 // dirtySig fingerprints everything uncommitted, tracked or not.
 func dirtySig(root string) string {
 	out := gitOut(root, "status", "--porcelain")
@@ -45,7 +52,7 @@ func dirtySig(root string) string {
 }
 
 func readMarks(root string) []mark {
-	raw, err := os.ReadFile(reviewsPath(root))
+	raw, err := weave.ReadRepoFileTail(root, reviewLog, reviewsTail)
 	if err != nil {
 		return nil
 	}
@@ -63,17 +70,10 @@ func readMarks(root string) []mark {
 }
 
 func appendMark(root, ref string) error {
-	if err := os.MkdirAll(filepath.Join(root, ".weave"), 0o755); err != nil {
-		return err
-	}
 	b, _ := json.Marshal(mark{At: time.Now().UTC().Format(time.RFC3339), Ref: ref, Dirty: dirtySig(root)})
-	fh, err := os.OpenFile(reviewsPath(root), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer fh.Close()
-	_, err = fh.Write(append(b, '\n'))
-	return err
+	// AppendRepoLine repairs a final line a dead writer left without a newline, so
+	// this mark is a record of its own and readMarks sees it as the newest.
+	return weave.AppendRepoLine(root, reviewLog, append(b, '\n'), 0o644)
 }
 
 func gitOut(root string, args ...string) string {

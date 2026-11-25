@@ -108,6 +108,43 @@ func TestFindJUnitFile(t *testing.T) {
 	}
 }
 
+// A report older than the source it is read against cannot assert a pass or a
+// fail: the gate needs the mtime comparison to say "evidence not checked".
+func TestReportStale(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "src", "calc.ts")
+	reportPath := filepath.Join(root, "junit.xml")
+	for _, p := range []string{src, reportPath} {
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old := time.Now().Add(-2 * time.Hour)
+	newer := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(reportPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(src, newer, newer); err != nil {
+		t.Fatal(err)
+	}
+	r := Report{Path: reportPath, ModTime: old}
+	if stale, newest := r.Stale([]string{src}); !stale || !newest.Equal(newer) {
+		t.Errorf("stale = %v, newest = %v; want stale at %v", stale, newest, newer)
+	}
+	// A report written after the source is not stale.
+	r.ModTime = time.Now()
+	if stale, _ := r.Stale([]string{src}); stale {
+		t.Error("fresh report reported stale")
+	}
+	// Missing sources cannot make a report stale.
+	if stale, _ := r.Stale([]string{filepath.Join(root, "missing.ts")}); stale {
+		t.Error("missing source reported stale")
+	}
+}
+
 func TestReqsInCase(t *testing.T) {
 	c := Case{Name: "adds REQ-1 and NFR-22, not FR-3x or BAD-4", Suite: "FR-3-ABC"}
 	got := ReqsInCase(c)

@@ -236,6 +236,39 @@ func TestVerifyOverMCP(t *testing.T) {
 	if !regexp.MustCompile(`\x{2014} \d+ tokens · graph \d+s old`).MatchString(text) {
 		t.Fatalf("receipt missing: %s", text)
 	}
+	if isErr, _ := msgs[0]["result"].(map[string]any)["isError"].(bool); isErr {
+		t.Fatalf("a passing verify was marked isError: %v", msgs[0])
+	}
+}
+
+// A contract failure and a gate that could not run both surface as MCP error
+// results; the text keeps the FAIL/error distinction from the CLI.
+func TestVerifyOverMCPSignalsFailures(t *testing.T) {
+	root := filepath.Join("..", "..", "test", "fixture")
+	g := weave.BuildGraph(root)
+	src := func(string) (*weave.Graph, error) { return g, nil }
+	msgs, _ := replay(t, "", src, strings.Join([]string{
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"verify","arguments":{"files":["packages/backend/src/modules/orders/orders.routes.ts"],"strict":true}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"verify","arguments":{"files":["packages/backend/src/modules/orders/orders.routes.ts"],"against":"no-such-ref"}}}`,
+	}, "\n")+"\n")
+
+	contract := msgs[0]["result"].(map[string]any)
+	if isErr, _ := contract["isError"].(bool); !isErr {
+		t.Fatalf("contract failure was not isError: %v", contract)
+	}
+	ctext := contract["content"].([]any)[0].(map[string]any)["text"].(string)
+	if !strings.Contains(ctext, "FAIL ") {
+		t.Fatalf("contract text = %s", ctext)
+	}
+
+	operational := msgs[1]["result"].(map[string]any)
+	if isErr, _ := operational["isError"].(bool); !isErr {
+		t.Fatalf("operational failure was not isError: %v", operational)
+	}
+	otext := operational["content"].([]any)[0].(map[string]any)["text"].(string)
+	if !strings.Contains(otext, "  error ") || !strings.Contains(otext, "no-such-ref") {
+		t.Fatalf("operational text = %s", otext)
+	}
 }
 
 // A change is created and removed over MCP; the destructive tool needs confirm, and

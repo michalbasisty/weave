@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/michalbasisty/weave/internal/grep"
+	"github.com/michalbasisty/weave/internal/junit"
 	"github.com/michalbasisty/weave/internal/weave"
 )
 
@@ -119,8 +121,8 @@ func cmdDoctor() int {
 }
 
 func cmdEvidence() int {
-	cases := loadCases()
-	if len(cases) == 0 {
+	report, ok := junit.LoadReport(root)
+	if !ok || len(report.Cases) == 0 {
 		fmt.Printf("no JUnit report found under %s\n  run your tests with a JUnit reporter, then retry (see: weave init)\n", root)
 		return 0
 	}
@@ -128,6 +130,36 @@ func cmdEvidence() int {
 	if g == nil {
 		return code
 	}
-	fmt.Println(weave.Evidence(g, cases, pos))
+	if stale, newest := report.Stale(graphSources(g)); stale {
+		fmt.Printf("evidence: JUnit report %s predates the newest source (%s) — evidence is stale; rerun the tests\n",
+			relToRoot(report.Path), newest.Format("2006-01-02 15:04"))
+		return 2
+	}
+	fmt.Println(weave.Evidence(g, report.Cases, pos))
 	return 0
+}
+
+// graphSources is every source file the index knows, for the freshness check.
+func graphSources(g *weave.Graph) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(g.Nodes))
+	for _, n := range g.Nodes {
+		if n.Kind != weave.KindFile || n.Name == "" || seen[n.Name] {
+			continue
+		}
+		seen[n.Name] = true
+		if filepath.IsAbs(n.Name) {
+			out = append(out, n.Name)
+		} else {
+			out = append(out, filepath.Join(root, n.Name))
+		}
+	}
+	return out
+}
+
+func relToRoot(p string) string {
+	if rel, err := filepath.Rel(root, p); err == nil {
+		return rel
+	}
+	return p
 }

@@ -224,6 +224,16 @@ try {
   check('screen link points at the map node', await page.eval(
     `[...document.querySelectorAll('.wviewtable .wvname a')].some(a => a.getAttribute('href').startsWith('#node/page'))`));
 
+  // Global search must leave both full-width places, not render behind them.
+  for (const hash of ['#specs', '#wiki']) {
+    await go(hash);
+    await page.eval(`(() => { const q=document.querySelector('#q'); q.value='orders'; q.dispatchEvent(new Event('input',{bubbles:true})); })()`);
+    check('search reveals map from ' + hash, await page.waitFor(
+      `location.hash === '#search' && !document.querySelector('#main').classList.contains('wfull') && document.querySelectorAll('#list .row').length > 0`));
+  }
+  await go('#specs');
+  await page.waitFor(`!!document.querySelector('.wcaps a.wcname')`);
+
   await page.eval(`document.querySelector('.wcaps a.wcname').click()`);
   check('capability opens as a page', await page.waitFor(`!!document.querySelector('.specdoc h1')`));
   check('spec page has its title', await page.eval(`document.querySelector('.specdoc h1').textContent.includes('Capability: orders')`));
@@ -236,8 +246,43 @@ try {
   await page.eval(`[...document.querySelectorAll('.wspecbar .wopen')].find(b => b.textContent === 'edit').click()`);
   check('edit opens the Markdown', await page.waitFor(`!!document.querySelector('.wspecedit')`));
   await page.eval(`(() => {
+    window.__confirms=0; window.confirm=()=>{window.__confirms++;return false};
+    const t=document.querySelector('.wspecedit'); t.value+='\\nDraft'; t.dispatchEvent(new Event('input',{bubbles:true}));
+  })()`);
+  check('editor marks unsaved changes', await page.eval(`document.querySelector('.wspecstatus').textContent.includes('Unsaved')`));
+  const draftRoute = await page.eval(`location.hash`);
+  const remainsDraft = `!!document.querySelector('.wspecedit') && document.querySelector('.wspecedit').value.endsWith('Draft') && location.hash===${JSON.stringify(draftRoute)} && document.activeElement===document.querySelector('.wspecedit')`;
+  for (const [name, action] of [
+    ['Cancel', `document.querySelector('.wspecbar .wopen').click()`],
+    ['sidebar', `document.querySelector('#tabs a[href="#today"]').click()`],
+    ['hash', `location.hash='#checks'`],
+    ['search', `(() => {const q=document.querySelector('#q');q.value='orders';q.dispatchEvent(new Event('input',{bubbles:true}));})()`],
+  ]) {
+    const before = await page.eval(`window.__confirms`);
+    await page.eval(action);
+    await sleep(200);
+    check('declined ' + name + ' preserves draft, route and focus', await page.eval(remainsDraft));
+    check(name + ' asks only once', await page.eval(`window.__confirms===${before + 1}`));
+  }
+  check('dirty editor protects beforeunload', await page.eval(`(() => { const e=new Event('beforeunload',{cancelable:true});window.dispatchEvent(e);return e.defaultPrevented; })()`));
+  // Replace the current entry with a prior map route, then push the editor route;
+  // exercise a real history traversal rather than only assigning the hash.
+  await page.eval(`history.replaceState(null,'','#today');history.pushState(null,'',${JSON.stringify(draftRoute)});history.back()`);
+  await sleep(350);
+  check('declined history back restores editor route', await page.eval(remainsDraft));
+  await page.eval(`history.forward()`);
+  await sleep(250);
+  check('history forward keeps protected draft', await page.eval(remainsDraft));
+  // A second option simulates a registered project without navigating outside the fixture.
+  await page.eval(`(() => {
+    const p=document.querySelector('#proj');p.innerHTML='<option value="0" selected>Current</option><option value="1">Other</option>';
+    p.value='1';p.dispatchEvent(new Event('change',{bubbles:true}));
+  })()`);
+  check('declined project switch restores selector and draft', await page.eval(`document.querySelector('#proj').value==='0' && (${remainsDraft})`));
+  await page.eval(`(() => {
     const t = document.querySelector('.wspecedit');
     t.value += '\\n## Smoke\\n\\nEdited in the panel.\\n';
+    t.dispatchEvent(new Event('input',{bubbles:true}));
     document.querySelector('.wspecbar .wmark').click();
     return 'ok';
   })()`);
@@ -245,6 +290,7 @@ try {
     `!!document.querySelector('.specdoc') && document.querySelector('.specdoc').innerText.includes('Edited in the panel.')`));
   const specFile = fs.readFileSync(path.join(root, 'specs', 'capabilities', 'orders', 'spec.md'), 'utf8');
   check('save writes spec.md', specFile.includes('Edited in the panel.'));
+  check('saved editor no longer protects beforeunload', await page.eval(`(() => {const e=new Event('beforeunload',{cancelable:true});window.dispatchEvent(e);return !e.defaultPrevented;})()`));
   if (shots) await page.shot(path.join(outDir || tmp, 'spec-edited.png'));
 
   await page.eval(`document.querySelector('.wback').click()`);
@@ -255,6 +301,62 @@ try {
   check('Check shows the gate verdict', await page.waitFor(
     `[...document.querySelectorAll('.wpane')].some(p => p.dataset.on === '1' && /Exit \\d/.test(p.innerText))`));
   check('Check opens the dock', await page.eval(`document.querySelector('.wdialog').open`));
+  await page.eval(`document.querySelector('#tabs a[href="#today"]').click()`);
+  check('returning Overview neutralizes stale static verdict', await page.waitFor(
+    `!!document.querySelector('#detail .wmapstale') && !document.querySelector('#detail .hero .status') && [...document.querySelectorAll('.wmapstale button')].some(b=>b.textContent==='Refresh map')`));
+  await page.eval(`location.hash='#checks'`);
+  check('Checks labels its static verdict stale', await page.waitFor(
+    `!!document.querySelector('#detail .wmapstale') && (!document.querySelector('[data-snapshot-gate]') || document.querySelector('[data-snapshot-gate]').textContent.includes('Stale snapshot verdict'))`));
+  // Refresh uses the same discard guard; decline must not silently reload the editor.
+  await page.eval(`location.hash='#specs/orders'`);
+  await page.waitFor(`!!document.querySelector('.specdoc')`);
+  await page.eval(`[...document.querySelectorAll('.wspecbar .wopen')].find(b=>b.textContent==='edit').click()`);
+  await page.eval(`(() => {const t=document.querySelector('.wspecedit');t.value+='\\nRefresh draft';t.dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('.wmapstale button').click();})()`);
+  check('Refresh map respects dirty editor', await page.eval(`!!document.querySelector('.wspecedit') && document.querySelector('.wspecedit').value.endsWith('Refresh draft')`));
+  await page.eval(`window.confirm=()=>true;document.querySelector('.wspecbar .wopen').click()`);
+  check('accepted discard returns to spec', await page.waitFor(`!!document.querySelector('.specdoc') && !document.querySelector('.wspecedit')`));
+
+  // Exercise the quiet no-baseline state independently of the fixture's git history.
+  await page.eval(`(() => {
+    const original=window.fetch; window.__marked=false;window.__markFail=true;
+    window.fetch=(url,options)=>{
+      if(String(url)==='api/review')return Promise.resolve({json:()=>Promise.resolve({files:0,commits:0,mark:window.__marked?'abcdef1234':''})});
+      if(String(url)==='api/review/mark'){
+        if(window.__markFail)return Promise.reject(new Error('offline'));
+        window.__marked=true;return Promise.resolve({json:()=>Promise.resolve({marked:true})});
+      }
+      return original(url,options);
+    };
+    location.hash='#checks';
+  })()`);
+  await sleep(150);
+  await page.eval(`location.hash='#today'`);
+  check('quiet baseline offers Mark reviewed', await page.waitFor(`!!document.querySelector('.wreviewslot .wmark')`));
+  await page.eval(`document.querySelector('.wreviewslot .wmark').click()`);
+  check('failed baseline mark is retryable', await page.waitFor(`!!document.querySelector('.wreviewslot .wmark:not(:disabled)') && document.querySelector('.wreviewslot .wmark').textContent.includes('retry')`));
+  await page.eval(`window.__markFail=false;document.querySelector('.wreviewslot .wmark').click()`);
+  check('baseline mark succeeds', await page.waitFor(`window.__marked && document.querySelector('.wreviewslot').textContent.includes('nothing new since abcdef1')`));
+
+  // Confidence is tested in-memory: the source fixture intentionally stays exact.
+  await page.eval(`(() => {
+    const edge=D.projects[0].edges.find(e=>e[2]==='calls' && e[0]==='page:/orders');
+    window.__inferredEdge=edge.slice();edge[3]='inferred';load(0);location.hash=enc(edge[0]);
+  })()`);
+  check('inferred edge labels diagram refs and transitive reach', await page.waitFor(
+    `(() => {const api=document.querySelector('.stop[data-lane="api"]');const module=document.querySelector('.stop[data-lane="module"]');return api?.textContent.includes('inferred') && module?.textContent.includes('inferred');})()`));
+  check('confidence retained in direct refs', await page.eval(`ref(window.__inferredEdge[1]).includes('inferred')`));
+  await page.eval(`(() => {
+    const s=D.projects[0],a=window.__inferredEdge;
+    const module=s.edges.find(e=>e[0]===a[1] && e[2]==='in_module')[1];
+    const b='endpoint:GET /synthetic-exact';
+    s.nodes.push({i:b,k:'endpoint',n:'GET /synthetic-exact'});
+    s.edges.push([a[0],b,'calls','exact'],[b,module,'in_module','exact']);
+    load(0);location.hash=enc(a[0]);
+  })()`);
+  check('shared module does not make inferred direct call exact', await page.waitFor(
+    `(() => {const a=document.querySelector('.stop[data-lane="api"] a[data-go="'+window.__inferredEdge[1]+'"]');return a?.textContent.includes('inferred');})()`));
+  check('valid exact downstream alternative wins for shared module', await page.eval(
+    `!document.querySelector('.stop[data-lane="module"]').textContent.includes('inferred')`));
 
   // ---- File: a path chip opens a window in the same dock
   await page.eval(`document.querySelector('.wdialog').close()`);
@@ -286,6 +388,35 @@ try {
   const tasksFile = fs.readFileSync(path.join(root, 'specs', 'changes', '2026-01-01-orders', 'tasks.md'), 'utf8');
   check('tick rewrites tasks.md', new RegExp(`- \\[x\\] ${taskID}\\b`).test(tasksFile), tasksFile.trim());
   if (shots) await page.shot(path.join(outDir || tmp, 'specs.png'));
+
+  // Even the initial automatic check must not leave a contradictory fresh hero.
+  await page.send('Page.addScriptToEvaluateOnNewDocument', { source: `
+    const originalFetch=window.fetch;
+    const checkExit=Number(new URL(location.href).searchParams.get('mockCheckExit') ?? 1);
+    window.fetch=(url,options)=>String(url)==='api/check'
+      ? Promise.resolve({json:()=>Promise.resolve({exit:checkExit,output:'Synthetic check exit '+checkExit})})
+      : originalFetch(url,options);
+  ` });
+  await go('#today');
+  check('initial failed check neutralizes generated gate verdict', await page.waitFor(
+    `document.querySelector('#wgate-text').textContent==='contract broken' && !!document.querySelector('.wmapstale') && !document.querySelector('.hero .status')`));
+
+  for (const [code, pill, verdict] of [
+    [0, 'checked ', 'every call matches an endpoint.'],
+    [1, 'contract broken', 'the contract is broken.'],
+    [2, 'check could not run', 'check could not run.'],
+  ]) {
+    await page.send('Page.navigate', { url: base + '&mockCheckExit=' + code + '#today' });
+    check('initial check exit ' + code + ' has correct status', await page.waitFor(
+      `document.querySelector('#wgate-text')?.textContent.startsWith(${JSON.stringify(pill)})`));
+    await page.eval(`document.querySelector('.wgate').click()`);
+    check('check exit ' + code + ' has correct dock verdict', await page.waitFor(
+      `document.querySelector('.wdialog').open && document.querySelector('.wpane[data-on="1"] p')?.textContent===${JSON.stringify('Exit ' + code + ' — ' + verdict)}`));
+    check('check exit ' + code + ' preserves stale map messaging', await page.eval(
+      `!!document.querySelector('.wmapstale') && !document.querySelector('.hero .status')`));
+    if (code === 2) check('exit 2 is not presented as a contract failure', await page.eval(
+      `!document.querySelector('.wpane[data-on="1"]').textContent.includes('contract is broken') && !document.querySelector('#wdot').classList.contains('bad')`));
+  }
 
   if (page.errors.length) {
     failures++;

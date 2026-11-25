@@ -54,6 +54,12 @@ func TestConcurrentTicksAllLand(t *testing.T) {
 	if _, err := os.Stat(path + ".lock"); err == nil {
 		t.Error("the lock outlived the writers")
 	}
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".tmp") || strings.HasSuffix(e.Name(), ".lock") {
+			t.Errorf("leftover %s after concurrent ticks", e.Name())
+		}
+	}
 }
 
 func TestNewAndDeleteSpecChange(t *testing.T) {
@@ -84,6 +90,10 @@ func TestNewAndDeleteSpecChange(t *testing.T) {
 	}
 	if _, _, err := SetSpecTask(root, "../escape", "T1", true); err == nil {
 		t.Error("a change outside specs/changes should fail")
+	}
+	// An unambiguous short name still resolves to the dated directory.
+	if name, changed, err := SetSpecTask(root, "billing-retry", "T1", true); err != nil || !changed || name != slug {
+		t.Fatalf("short-name tick: %q %v %v", name, changed, err)
 	}
 
 	if name, err := DeleteSpecChange(root, slug); err != nil || name != slug {

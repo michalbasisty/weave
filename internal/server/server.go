@@ -11,11 +11,13 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -239,22 +241,16 @@ func Handler(c Config) http.Handler {
 	// the renderer escapes before it adds a tag. text is the source the editor starts
 	// from.
 	mux.HandleFunc("/api/spec", func(w http.ResponseWriter, r *http.Request) {
-		rel, abs, ok := specFile(c.Root, r.URL.Query().Get("path"))
+		rel, ok := specRel(r.URL.Query().Get("path"))
 		if !ok {
 			writeJSON(w, 400, map[string]string{"error": "a path under specs/ ending .md"})
 			return
 		}
-		info, err := os.Stat(abs)
-		if err != nil || info.Size() > 512*1024 {
-			writeJSON(w, 400, map[string]string{"error": "unreadable or larger than 512 KB"})
-			return
-		}
-		raw, err := os.ReadFile(abs)
+		md, err := weave.ReadSpecText(c.Root, rel, 512*1024)
 		if err != nil {
-			writeJSON(w, 400, map[string]string{"error": err.Error()})
+			writeJSON(w, 400, map[string]string{"error": weave.ErrUnreadable.Error()})
 			return
 		}
-		md := string(raw)
 		writeJSON(w, 200, map[string]any{"path": rel, "title": specTitle(md), "text": md, "html": renderSpecMD(md)})
 	})
 
@@ -270,13 +266,13 @@ func Handler(c Config) http.Handler {
 			writeJSON(w, 400, map[string]string{"error": "path and text are required"})
 			return
 		}
-		rel, abs, ok := specFile(c.Root, body.Path)
+		rel, ok := specRel(body.Path)
 		if !ok {
 			writeJSON(w, 400, map[string]string{"error": "a path under specs/ ending .md"})
 			return
 		}
-		if info, err := os.Stat(abs); err != nil || info.Size() > 512*1024 {
-			writeJSON(w, 400, map[string]string{"error": "unreadable or larger than 512 KB"})
+		if size, err := weave.SpecFileSize(c.Root, rel); err != nil || size > 512*1024 {
+			writeJSON(w, 400, map[string]string{"error": weave.ErrUnreadable.Error()})
 			return
 		}
 		if len(body.Text) > 512*1024 {
@@ -284,6 +280,10 @@ func Handler(c Config) http.Handler {
 			return
 		}
 		if err := weave.SaveSpecText(c.Root, rel, body.Text); err != nil {
+			if errors.Is(err, weave.ErrSpecTarget) {
+				writeJSON(w, 400, map[string]string{"error": weave.ErrUnreadable.Error()})
+				return
+			}
 			writeJSON(w, 500, map[string]string{"error": err.Error()})
 			return
 		}
@@ -370,23 +370,11 @@ func Handler(c Config) http.Handler {
 			writeJSON(w, 400, map[string]string{"error": "path is required"})
 			return
 		}
-		full := filepath.Join(c.Root, filepath.FromSlash(rel))
-		abs, err := filepath.Abs(full)
-		rootAbs, _ := filepath.Abs(c.Root)
-		if err != nil || !strings.HasPrefix(abs, rootAbs) {
-			writeJSON(w, 400, map[string]string{"error": "outside the repo"})
-			return
-		}
 		if strings.Contains(rel, "node_modules/") || strings.HasPrefix(filepath.Base(rel), ".") {
 			writeJSON(w, 400, map[string]string{"error": "not served"})
 			return
 		}
-		info, err := os.Stat(abs)
-		if err != nil || info.Size() > 512*1024 {
-			writeJSON(w, 400, map[string]string{"error": "unreadable or larger than 512 KB"})
-			return
-		}
-		raw, err := os.ReadFile(abs)
+		raw, err := weave.ReadRepoFile(c.Root, rel, 512*1024)
 		if err != nil {
 			writeJSON(w, 400, map[string]string{"error": err.Error()})
 			return
@@ -420,19 +408,20 @@ func Handler(c Config) http.Handler {
 // specs/changes.
 var nameOK = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
-// specFile resolves a browser-supplied Markdown path to a file under specs/. No
-// traversal, no separator, no other extension.
-func specFile(root, path string) (string, string, bool) {
-	rel := filepath.ToSlash(strings.TrimSpace(strings.TrimPrefix(path, "./")))
+// specRel checks the shape of a browser-supplied Markdown path and normalizes it
+// under specs/. Containment is not decided here: weave's readers and writers pin
+// the specs directory with os.Root, so a link planted under specs/ is resolved per
+// operation and refused when it leaves, even if it appears after this check.
+func specRel(p string) (string, bool) {
+	rel := filepath.ToSlash(strings.TrimSpace(strings.TrimPrefix(p, "./")))
 	if !strings.HasPrefix(rel, "specs/") || !strings.HasSuffix(rel, ".md") || strings.Contains(rel, "..") || strings.Contains(rel, `\`) {
-		return "", "", false
+		return "", false
 	}
-	abs, err := filepath.Abs(filepath.Join(root, filepath.FromSlash(rel)))
-	rootAbs, _ := filepath.Abs(root)
-	if err != nil || !strings.HasPrefix(abs, rootAbs+string(os.PathSeparator)) {
-		return "", "", false
+	rel = path.Clean(rel)
+	if !strings.HasPrefix(rel, "specs/") {
+		return "", false
 	}
-	return rel, abs, true
+	return rel, true
 }
 
 type panelTask struct {
@@ -533,21 +522,18 @@ type capSpec struct {
 }
 
 func capabilitySpecs(root string) []capSpec {
-	entries, err := os.ReadDir(filepath.Join(root, "specs", "capabilities"))
+	names, err := weave.SpecSubdirs(root, "specs/capabilities")
 	if err != nil {
 		return nil
 	}
 	out := []capSpec{}
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		rel := "specs/capabilities/" + e.Name() + "/spec.md"
-		raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+	for _, name := range names {
+		rel := "specs/capabilities/" + name + "/spec.md"
+		md, err := weave.ReadSpecText(root, rel, 512*1024)
 		if err != nil {
 			continue
 		}
-		out = append(out, capSpec{name: e.Name(), file: rel, md: string(raw)})
+		out = append(out, capSpec{name: name, file: rel, md: md})
 	}
 	return out
 }

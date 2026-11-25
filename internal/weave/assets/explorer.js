@@ -59,7 +59,7 @@ function load(i){
     const a=e[0],b=e[1],k=e[2];
     if(!out.has(a))out.set(a,[]);
     if(!inn.has(b))inn.set(b,[]);
-    out.get(a).push([b,k]);inn.get(b).push([a,k]);
+    out.get(a).push([b,k,e[3]]);inn.get(b).push([a,k,e[3]]);
   }
   const proj=$('#proj');
   if(D.projects.length>1){
@@ -213,13 +213,17 @@ function nm(id){
 }
 // A path breaks after / . - and _, never inside a word.
 function brk(s){return esc(s).replace(/([\/.\-_])/g,'$1<wbr>')}
-function ref(id){
+function ref(id,inferred=null){
   const k=kindOf(id);
-  return '<a class="ref'+(LANE_OF[k]||k==='call'||k==='file'||k==='test'?' code':'')+'" data-go="'+esc(id)+'" href="'+enc(id)+'">'+ring(k)+'<span>'+nm(id)+'</span></a>';
+  if(inferred===null&&sel){
+    const edges=[...(out.get(sel)||[]),...(inn.get(sel)||[])].filter(e=>e[0]===id);
+    inferred=edges.length>0&&edges.every(e=>e[2]==='inferred');
+  }
+  return '<a class="ref'+(LANE_OF[k]||k==='call'||k==='file'||k==='test'?' code':'')+'" data-go="'+esc(id)+'" href="'+enc(id)+'">'+ring(k)+'<span>'+nm(id)+(inferred?' <span class="hint" title="Inferred connection — a lead, not a fact">inferred</span>':'')+'</span></a>';
 }
-function refList(ids,limit){
+function refList(ids,limit,inferred){
   const cap=limit||SHOW;
-  let h='<ul class="refs">'+ids.map((id,i)=>'<li'+(i>=cap?' class="extra"':'')+'>'+ref(id)+'</li>').join('')+'</ul>';
+  let h='<ul class="refs">'+ids.map((id,i)=>'<li'+(i>=cap?' class="extra"':'')+'>'+ref(id,inferred?inferred.has(id):null)+'</li>').join('')+'</ul>';
   if(ids.length>cap)h+=moreBtn(ids.length);
   return h;
 }
@@ -340,7 +344,7 @@ function checksList(){
   // heading counts everything the place lists, or it contradicts the rows below it.
   let h=lhead('Checks',nb+gapsN,'<span class="lh">'+nb+' broken · '+gapsN+' gaps in proof</span>');
   h+=grp('Broken',nb?cnt(nb,'item'):'nothing',nb?'bad':'');
-  if(!nb)h+='<p class="calm">'+ICON.check+'<span>Nothing <code>weave check</code> would fail: every frontend call matches an endpoint.</span></p>';
+  if(!nb)h+='<p class="calm" data-snapshot-gate>'+ICON.check+'<span>Nothing <code>weave check</code> would fail: every frontend call matches an endpoint.</span></p>';
   h+=broken.map(id=>row(id,'',['matches no endpoint · '+esc(where(id))])).join('');
   h+=gone.map(x=>'<div class="row gone">'+ring('endpoint')+'<span class="rn"><s>'+esc(x.n)+'</s></span><span class="rl">removed since '+esc(S.delta.ref)+', still called by '+cnt(x.c,'file')+'</span></div>').join('');
 
@@ -668,13 +672,28 @@ function stationLabel(k,l,n){
 }
 function diagram(id){
   const L=chain(id),k=kindOf(id),here=LANE_OF[k];
+  // An exact alternative path wins. Otherwise carry uncertainty through the line.
+  const allowed=new Set(Object.values(L).flat()),exact=new Set([id]);
+  const rank={page:0,endpoint:1,module:2,table:3};
+  for(const direction of [-1,1]){
+    const queue=[id],seen=new Set([id]),links=direction===1?out:inn;
+    for(let i=0;i<queue.length;i++){
+      const from=queue[i],r=rank[kindOf(from)];
+      const relation=['calls','in_module','uses'][direction===1?r:r-1];
+      for(const e of links.get(from)||[]){
+        if(e[1]!==relation||rank[kindOf(e[0])]!==r+direction||e[2]==='inferred'||!allowed.has(e[0])||seen.has(e[0]))continue;
+        seen.add(e[0]);exact.add(e[0]);queue.push(e[0]);
+      }
+    }
+  }
+  const inferred=new Set([...allowed].filter(x=>!exact.has(x)));
   let h='<section class="trace" aria-label="Where it sits on the line"><ol>';
   for(const l of LANES){
     const ids=L[l.lane],me=l.lane===here;
     h+='<li class="stop" data-lane="'+l.lane+'"'+(me?' data-here="1"':'')+'><span class="track" aria-hidden="true"><span class="stn"></span></span>';
     if(me){h+='<h3>This '+esc(l.one)+'</h3><p class="here">'+nm(id)+'</p>'}
     else if(!ids.length)h+='<h3 class="none">No '+esc(l.name.toLowerCase())+'</h3>';
-    else h+='<h3>'+esc(stationLabel(k,l.lane,ids.length))+'</h3>'+refList(ids);
+    else h+='<h3>'+esc(stationLabel(k,l.lane,ids.length))+'</h3>'+refList(ids,SHOW,inferred);
     h+='</li>';
   }
   return h+'</ol></section>';

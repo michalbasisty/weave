@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 )
 
 // The change-record writers. The CLI, the panel and the MCP server run them, so a
-// record has one implementation and one lock.
+// record has one implementation and one lock. Every operation goes through an
+// os.Root pinned at the repository or at specs/, so a directory swapped for a link
+// between the name check and the write cannot move the write outside the repo.
 
 var datePrefix = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}-`)
 
@@ -32,20 +33,36 @@ func NewSpecChange(root, name, title string, now time.Time) (string, error) {
 	if title == "" {
 		title = slug
 	}
-	dir := filepath.Join(root, "specs", "changes", slug)
-	if isDir(dir) {
-		return "", fmt.Errorf("%s already exists", filepath.Join("specs", "changes", slug))
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	dir := "specs/changes/" + slug
+	repo, err := openRoot(root)
+	if err != nil {
 		return "", err
 	}
+	defer repo.Close()
+	if err := repo.MkdirAll("specs/changes", 0o755); err != nil {
+		return "", err
+	}
+	// Create the leaf exclusively. A directory, file, link or junction that appeared
+	// between any earlier check and this write cannot be reused: the change record is
+	// created once and never overwrites an existing one.
+	if err := repo.Mkdir(dir, 0o755); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return "", fmt.Errorf("%s already exists", dir)
+		}
+		return "", err
+	}
+	leaf, err := repo.OpenRoot(dir)
+	if err != nil {
+		return "", err
+	}
+	defer leaf.Close()
 	files := []struct{ name, body string }{
 		{"proposal.md", "# Proposal: " + title + "\n\n## Why\n\n## What changes\n\n## Risks\n"},
 		{"tasks.md", "# Tasks: " + title + "\n\n- [ ] T1 First task. Evidence: `path/to/file`\n"},
 		{"spec-delta.md", "# Delta: " + title + "\n\n### ADDED REQ-" + strings.ToUpper(slugBase(slug)) + "-1 — " + title + "\n\nWHEN … THE system SHALL …\n"},
 	}
 	for _, f := range files {
-		if err := os.WriteFile(filepath.Join(dir, f.name), []byte(f.body), 0o644); err != nil {
+		if err := leaf.WriteFile(f.name, []byte(f.body), 0o644); err != nil {
 			return "", err
 		}
 	}
@@ -55,11 +72,16 @@ func NewSpecChange(root, name, title string, now time.Time) (string, error) {
 // DeleteSpecChange removes one change record and its three files. It is the only
 // destructive writer, so the caller has to ask for it explicitly.
 func DeleteSpecChange(root, change string) (string, error) {
-	dir, name, err := changeDir(root, change)
+	specs, err := openSpecsRoot(root)
 	if err != nil {
 		return "", err
 	}
-	if err := os.RemoveAll(dir); err != nil {
+	defer specs.Close()
+	name, err := findChange(specs, change)
+	if err != nil {
+		return "", err
+	}
+	if err := specs.RemoveAll("changes/" + name); err != nil {
 		return "", err
 	}
 	return name, nil
@@ -73,18 +95,27 @@ func SetSpecTask(root, change, task string, done bool) (name string, changed boo
 	if !specTaskOK.MatchString(task) {
 		return "", false, fmt.Errorf("task is an id like T1")
 	}
-	dir, name, err := changeDir(root, change)
+	dir, name, err := changeRoot(root, change)
 	if err != nil {
 		return "", false, err
 	}
-	path := filepath.Join(dir, "tasks.md")
-	unlock, err := lockFile(path)
+	defer dir.Close()
+	unlock, err := lockAt(dir, "tasks.md.lock")
 	if err != nil {
 		return name, false, err
 	}
 	defer unlock()
 
-	raw, err := os.ReadFile(path)
+	// tasks.md must be a regular file: a link or junction is not the record this
+	// writer owns, and replacing it would leave the change unreadable.
+	info, err := dir.Lstat("tasks.md")
+	if err != nil {
+		return name, false, err
+	}
+	if !info.Mode().IsRegular() {
+		return name, false, fmt.Errorf("specs/changes/%s/tasks.md is not a regular file", name)
+	}
+	raw, err := dir.ReadFile("tasks.md")
 	if err != nil {
 		return name, false, err
 	}
@@ -111,89 +142,105 @@ func SetSpecTask(root, change, task string, done bool) (name string, changed boo
 	if next == text {
 		return name, false, nil
 	}
-	if err := os.WriteFile(path, []byte(next), 0o644); err != nil {
+	if err := replaceFileAt(dir, "tasks.md", next); err != nil {
 		return name, false, err
 	}
 	return name, true, nil
 }
 
 // SaveSpecText replaces one spec file. The lock keeps two editors from writing over
-// each other and the temp file keeps a reader from seeing half a document.
+// each other and the temp file keeps a reader from seeing half a document. The
+// parent directory is opened once as an os.Root, and the lock, temp file, chmod and
+// rename all use that handle, so nothing is reopened by pathname after the check.
 func SaveSpecText(root, rel, text string) error {
-	path := filepath.Join(root, filepath.FromSlash(rel))
-	unlock, err := lockFile(path)
+	parent, base, err := openSpecDir(root, rel)
 	if err != nil {
 		return err
 	}
-	defer unlock()
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".spec-*.tmp")
+	defer parent.Close()
+	return saveFileAt(parent, base, text)
+}
+
+// changeRoot pins one directory under specs/changes and returns its base name.
+func changeRoot(root, change string) (*os.Root, string, error) {
+	specs, err := openSpecsRoot(root)
+	if err != nil {
+		return nil, "", err
+	}
+	defer specs.Close()
+	name, err := findChange(specs, change)
+	if err != nil {
+		return nil, "", err
+	}
+	dir, err := specs.OpenRoot("changes/" + name)
+	if err != nil {
+		return nil, "", err
+	}
+	return dir, name, nil
+}
+
+// errNotAChange says an entry exists but is not a change-record directory: a file,
+// a symlink or a junction. The record writers refuse it rather than follow it.
+var errNotAChange = errors.New("not a change record")
+
+// checkChange reports whether rel is a real directory directly under
+// specs/changes. A link is refused even when it points at another record: the
+// writer must own the directory it edits, deletes or ticks. Errors other than the
+// two sentinels are real traversal or I/O failures and are propagated.
+func checkChange(specs *os.Root, rel string) error {
+	info, err := specs.Lstat(rel)
 	if err != nil {
 		return err
 	}
-	name := tmp.Name()
-	if _, err := tmp.WriteString(text); err != nil {
-		_ = tmp.Close()
-		_ = os.Remove(name)
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(name)
-		return err
-	}
-	_ = os.Chmod(name, 0o644)
-	if err := os.Rename(name, path); err != nil {
-		_ = os.Remove(name)
-		return err
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("%w: %s", errNotAChange, rel)
 	}
 	return nil
 }
 
-// changeDir resolves a slug, or an unambiguous short name, to a directory directly
-// under specs/changes and returns its base name.
-func changeDir(root, change string) (string, string, error) {
+// findChange resolves a slug, or an unambiguous short name, to a real directory
+// directly under specs/changes. The directory is read through the specs Root, so a
+// name that is a link out of specs is resolved by os.Root and refused. A traversal
+// error is reported as one, never as "no change".
+func findChange(specs *os.Root, change string) (string, error) {
 	if !specNameOK.MatchString(change) {
-		return "", "", fmt.Errorf("change is a slug like 2026-10-22-billing-retry")
+		return "", fmt.Errorf("change is a slug like 2026-10-22-billing-retry")
 	}
-	dir := filepath.Join(root, "specs", "changes", change)
-	if !isDir(dir) {
-		matches, _ := filepath.Glob(filepath.Join(root, "specs", "changes", "*"+change+"*"))
-		if len(matches) != 1 || !isDir(matches[0]) {
-			return "", "", fmt.Errorf("no change %q under specs/changes", change)
-		}
-		dir = matches[0]
+	exact := "changes/" + change
+	err := checkChange(specs, exact)
+	if err == nil {
+		return change, nil
 	}
-	return dir, filepath.Base(dir), nil
-}
-
-// lockFile keeps two writers from reading the same tasks.md and each writing the
-// other's tick away. The lock is a file created with O_EXCL, removed on release; a
-// lock older than 5s is stale, because a crashed writer leaves its file behind.
-func lockFile(path string) (func(), error) {
-	lock := path + ".lock"
-	deadline := time.Now().Add(2 * time.Second)
-	var last error
-	for {
-		f, err := os.OpenFile(lock, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
-		if err == nil {
-			_ = f.Close()
-			return func() { _ = os.Remove(lock) }, nil
-		}
-		last = err
-		if errors.Is(err, fs.ErrExist) {
-			// A crashed writer leaves its file behind; a lock older than 5s is stale.
-			if info, statErr := os.Stat(lock); statErr == nil && time.Since(info.ModTime()) > 5*time.Second {
-				_ = os.Remove(lock)
-				continue
-			}
-		}
-		// On Windows a lock that is being removed surfaces as access denied, so every
-		// error is retried until the deadline rather than failing the write.
-		if time.Now().After(deadline) {
-			return nil, fmt.Errorf("tasks.md is locked by another writer: %w", last)
-		}
-		time.Sleep(20 * time.Millisecond)
+	if !errors.Is(err, errNotAChange) && !errors.Is(err, fs.ErrNotExist) {
+		return "", fmt.Errorf("cannot read %s: %w", exact, err)
 	}
+	entries, err := fs.ReadDir(specs.FS(), "changes")
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", fmt.Errorf("no change %q under specs/changes", change)
+		}
+		return "", fmt.Errorf("cannot read specs/changes: %w", err)
+	}
+	var matches []string
+	for _, e := range entries {
+		if !strings.Contains(e.Name(), change) {
+			continue
+		}
+		rel := "changes/" + e.Name()
+		cerr := checkChange(specs, rel)
+		if cerr == nil {
+			matches = append(matches, e.Name())
+			continue
+		}
+		if errors.Is(cerr, errNotAChange) || errors.Is(cerr, fs.ErrNotExist) {
+			continue
+		}
+		return "", fmt.Errorf("cannot read %s: %w", rel, cerr)
+	}
+	if len(matches) != 1 {
+		return "", fmt.Errorf("no change %q under specs/changes", change)
+	}
+	return matches[0], nil
 }
 
 // slugBase makes a requirement id from the slug: 2026-11-03-billing-retry -> BILLING_RETRY.
@@ -221,8 +268,3 @@ var (
 	specNameOK   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 	specTaskOK   = regexp.MustCompile(`^[A-Za-z0-9.]+$`)
 )
-
-func isDir(p string) bool {
-	s, err := os.Stat(p)
-	return err == nil && s.IsDir()
-}

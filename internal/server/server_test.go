@@ -5,7 +5,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -100,6 +102,114 @@ func TestFileWindowAndGuards(t *testing.T) {
 		}
 	}
 	_ = root
+}
+
+// An absolute path, the POSIX root-relative form and a NUL byte are refused even
+// when they name a real file: the window only serves repo-relative paths. An
+// absolute path inside the repo is refused too, so no spelling widens the window.
+func TestFileRefusesAbsoluteAndNULPaths(t *testing.T) {
+	h, root := testHandler(t)
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "secret.ts")
+	const secretText = "secret payload\n"
+	if err := os.WriteFile(secret, []byte(secretText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	refused := func(rel string) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, get("/api/file?path="+url.QueryEscape(rel)))
+		if rec.Code == 200 {
+			t.Errorf("%q was served: %s", rel, rec.Body.String())
+		}
+		if strings.Contains(rec.Body.String(), "secret payload") {
+			t.Errorf("%q leaked the file: %s", rel, rec.Body.String())
+		}
+	}
+	refused(secret)
+	refused(filepath.Join(root, "a.ts"))
+	refused("/etc/passwd")
+	refused("a\x00.ts")
+	if os.PathSeparator == '\\' {
+		refused(`C:\Windows\win.ini`)
+	}
+}
+
+// A sibling directory whose name starts with the repo's name is not part of the
+// repo, and a symlink inside the repo must not reach a file outside it. The old
+// prefix check let both through.
+func TestFileRefusesSiblingAndSymlinkEscapes(t *testing.T) {
+	h, root := testHandler(t)
+
+	nested := filepath.Join(root, "sub", "b.ts")
+	if err := os.MkdirAll(filepath.Dir(nested), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(nested, []byte("export const b = 2;\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, get("/api/file?path=sub/b.ts"))
+	if rec.Code != 200 {
+		t.Fatalf("a file inside the repo must still be served: %d %s", rec.Code, rec.Body.String())
+	}
+
+	// root's name plus a suffix shares root's prefix: the old check accepted it.
+	sibling := filepath.Join(filepath.Dir(root), filepath.Base(root)+"-sibling")
+	if err := os.MkdirAll(sibling, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sibling, "secret.ts"), []byte("secret\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rel := "../" + filepath.Base(sibling) + "/secret.ts"
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, get("/api/file?path="+url.QueryEscape(rel)))
+	if rec.Code == 200 {
+		t.Fatalf("sibling path %q leaked: %s", rel, rec.Body.String())
+	}
+}
+
+// A symlink or junction planted inside the repo, to a file or to a directory,
+// resolves outside root and is refused. Windows needs a privilege for symlinks, so
+// a directory junction stands in when os.Symlink is not allowed.
+func TestFileRefusesSymlinkEscapes(t *testing.T) {
+	h, root := testHandler(t)
+
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret.ts"), []byte("secret\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	refused := func(rel string) {
+		t.Helper()
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, get("/api/file?path="+url.QueryEscape(rel)))
+		if rec.Code == 200 {
+			t.Errorf("link %q escaped the repo: %s", rel, rec.Body.String())
+		}
+	}
+
+	made := false
+	if err := os.Symlink(filepath.Join(outside, "secret.ts"), filepath.Join(root, "link.ts")); err == nil {
+		made = true
+		refused("link.ts")
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "outdir")); err == nil {
+		made = true
+	} else if err := junction(outside, filepath.Join(root, "outdir")); err == nil {
+		made = true
+	}
+	if !made {
+		t.Skip("cannot create a symlink or junction here")
+	}
+	refused("outdir/secret.ts")
+}
+
+// junction makes a directory junction, which Windows allows without the symlink
+// privilege os.Symlink needs.
+func junction(target, link string) error {
+	return exec.Command("cmd", "/c", "mklink", "/J", link, target).Run()
 }
 
 func TestStatusReportsCounts(t *testing.T) {

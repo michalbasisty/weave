@@ -8,6 +8,46 @@
     body: body === undefined ? undefined : JSON.stringify(body),
   }).then(r => r.json());
 
+  let editor = null;
+  let currentHash = location.hash;
+  const dirtyEditor = () => editor && editor.area.value !== editor.saved;
+  const discardEditor = () => {
+    if (dirtyEditor() && !window.confirm('Discard unsaved Markdown changes?')) {
+      editor.area.focus();
+      return false;
+    }
+    editor = null;
+    return true;
+  };
+  window.addEventListener('beforeunload', e => {
+    if (dirtyEditor()) { e.preventDefault(); e.returnValue = ''; }
+  });
+  // Capture before the explorer's listeners mutate its selection or render.
+  window.addEventListener('hashchange', e => {
+    if (location.hash === currentHash) return;
+    if (!discardEditor()) {
+      history.replaceState(null, '', location.pathname + location.search + currentHash);
+      e.stopImmediatePropagation();
+      return;
+    }
+    currentHash = location.hash;
+  }, true);
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a[href]');
+    if (!a || !editor) return;
+    const url = new URL(a.href, location.href);
+    if (url.href === location.href) return;
+    if (!discardEditor()) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  document.addEventListener('change', e => {
+    if (e.target.id !== 'proj' || !editor) return;
+    if (!discardEditor()) {
+      const selected = [...e.target.options].find(o => o.defaultSelected);
+      if (selected) e.target.value = selected.value;
+      e.stopImmediatePropagation();
+    }
+  }, true);
+
   // One panel, every project: the explorer's own switcher swaps embedded data, but
   // here each project has its own server-side checks, specs and wiki, so a choice
   // navigates to that project's panel instead.
@@ -18,7 +58,7 @@
     proj.hidden = false;
     for (const p of projects) {
       const o = document.createElement('option');
-      o.value = p.href; o.textContent = p.name; o.selected = !!p.current;
+      o.value = p.href; o.textContent = p.name; o.defaultSelected = !!p.current;
       proj.append(o);
     }
     proj.addEventListener('change', () => {
@@ -147,6 +187,28 @@
 
   /* ---------------------------------------------------------------- the gate */
   let checkedAt = 0;
+  let mapStale = false;
+  const markMapStale = () => {
+    if (!mapStale) return;
+    for (const verdict of document.querySelectorAll('[data-snapshot-gate]')) {
+      if (verdict.dataset.stale) continue;
+      verdict.dataset.stale = '1';
+      verdict.className = 'hint';
+      verdict.textContent = 'Stale snapshot verdict — use the live gate above.';
+    }
+    const detail = document.getElementById('detail');
+    if (!detail || detail.querySelector('.wmapstale')) return;
+    // Generated map facts are a snapshot, not the result of the latest live check.
+    const notice = el('p', { class: 'whint wmapstale' }, [
+      document.createTextNode('Map snapshot is stale. Use the live gate for the current verdict. '),
+      el('button', { type: 'button', class: 'wopen', text: 'Refresh map', onclick: () => {
+        if (discardEditor()) location.reload();
+      } }),
+    ]);
+    detail.prepend(notice);
+    const verdict = detail.querySelector('.hero .status');
+    if (verdict) verdict.replaceWith(el('p', { class: 'whint', text: 'Contract verdict belongs to the stale map snapshot; see the live gate above.' }));
+  };
   const setGate = (kind, text) => {
     const dot = document.getElementById('wdot');
     if (dot) dot.className = 'wdot ' + kind;
@@ -154,20 +216,29 @@
     if (t) t.textContent = text;
   };
   const runCheck = show => {
+    if (checkedAt) { mapStale = true; markMapStale(); }
     setGate('busy', 'checking…');
     const t0 = Date.now();
     api('api/check', {}).then(r => {
       checkedAt = Date.now();
-      const bad = r.exit !== 0;
-      setGate(bad ? 'bad' : 'ok', bad ? 'contract broken' : 'checked ' + Math.round((Date.now() - t0) / 100) / 10 + 's');
+      const ok = r.exit === 0, broken = r.exit === 1;
+      if (!ok) { mapStale = true; markMapStale(); }
+      setGate(ok ? 'ok' : broken ? 'bad' : '', ok ? 'checked ' + Math.round((Date.now() - t0) / 100) / 10 + 's' : broken ? 'contract broken' : 'check could not run');
       const pre = el('pre', {});
       pre.append(linkify(r.output || '(no output)'));
+      const exit = Number.isInteger(r.exit) ? 'Exit ' + r.exit + ' — ' : '';
       setPane('check', [
-        el('p', { class: bad ? 'wbad' : 'wok', text: bad ? 'Exit ' + r.exit + ' — the contract is broken.' : 'Exit 0 — every call matches an endpoint.' }),
+        el('p', { class: ok ? 'wok' : broken ? 'wbad' : 'whint', text: ok ? 'Exit 0 — every call matches an endpoint.' : exit + (broken ? 'the contract is broken.' : 'check could not run.') }),
         pre,
       ]);
       if (show) showPanel('check');
-    }).catch(() => setGate('bad', 'check failed'));
+    }).catch(() => {
+      mapStale = true;
+      markMapStale();
+      setGate('', 'check could not run');
+      setPane('check', [el('p', { class: 'whint', text: 'Check could not run. Try again.' })]);
+      if (show) showPanel('check');
+    });
   };
   gatePill.addEventListener('click', () => runCheck(true));
 
@@ -191,6 +262,20 @@
   let specsDirty = false;
   let specsFocus = '';
   let specsHost = null;
+  document.getElementById('q')?.addEventListener('input', e => {
+    if (editor && !discardEditor()) {
+      e.target.value = '';
+      e.stopImmediatePropagation();
+      return;
+    }
+    if (activeFull) {
+      activeFull = '';
+      hideFull();
+      history.replaceState(null, '', location.pathname + location.search + '#search');
+      currentHash = '#search';
+      ensureTabs();
+    }
+  }, true);
 
   const fail = output => {
     setPane('check', [el('pre', { text: output })]);
@@ -374,6 +459,11 @@
     const area = el('textarea', { class: 'wspecedit', spellcheck: 'false', 'aria-label': 'Spec Markdown' });
     area.value = text;
     const status = el('span', { class: 'wspecstatus', text: 'Markdown — Ctrl+S saves' });
+    editor = { area, saved: text };
+    area.addEventListener('input', () => {
+      status.textContent = dirtyEditor() ? 'Unsaved changes — Ctrl+S saves' : 'Markdown — Ctrl+S saves';
+      status.className = 'wspecstatus';
+    });
     const save = el('button', { type: 'button', class: 'wmark', text: 'Save' });
     const cancel = el('button', { type: 'button', class: 'wopen', text: 'Cancel' });
     const bar = el('div', { class: 'wspecbar' }, [
@@ -382,14 +472,23 @@
       status, cancel, save,
     ]);
     const saveIt = () => {
+      if (save.disabled) return;
+      const submitted = area.value;
       save.disabled = true;
-      api('api/spec-save', { path, text: area.value }).then(r => {
+      api('api/spec-save', { path, text: submitted }).then(r => {
         save.disabled = false;
         if (r.error) {
           status.textContent = r.error;
           status.className = 'wspecstatus wbad';
           return;
         }
+        if (!editor || editor.area !== area) return;
+        editor.saved = submitted;
+        if (area.value !== submitted) {
+          status.textContent = 'Saved; newer changes are unsaved';
+          return;
+        }
+        editor = null;
         renderSpecPage(host, name, 'Saved');
       }).catch(() => {
         save.disabled = false;
@@ -398,7 +497,7 @@
       });
     };
     save.addEventListener('click', saveIt);
-    cancel.addEventListener('click', () => renderSpecPage(host, name));
+    cancel.addEventListener('click', () => { if (discardEditor()) renderSpecPage(host, name); });
     area.addEventListener('keydown', e => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveIt(); }
     });
@@ -542,6 +641,17 @@
   /* ------------------------------------------------------- since you reviewed */
   const kindWord = k => ({ endpoint: 'endpoint', page: 'screen', module: 'module', table: 'table' }[k] || k);
   const reviewSection = data => {
+    const markButton = () => {
+      const mark = el('button', { type: 'button', class: 'wmark', text: 'Mark reviewed' });
+      mark.addEventListener('click', () => {
+        mark.disabled = true;
+        api('api/review/mark', {}).then(r => {
+          if (r.marked) { mark.textContent = 'Reviewed'; attribute(); }
+          else { mark.disabled = false; mark.textContent = r.error || 'Could not mark — retry'; }
+        }).catch(() => { mark.disabled = false; mark.textContent = 'Could not mark — retry'; });
+      });
+      return mark;
+    };
     const wrap = el('section', { class: 'wreview', 'aria-label': 'Since you last reviewed' });
     wrap.append(el('h2', { text: 'Since you last reviewed' }));
     if (!data || data.error) { wrap.append(el('p', { class: 'whint', text: 'No git history to compare.' })); return wrap; }
@@ -550,6 +660,7 @@
       const quiet = el('p', { class: 'wreview quiet' });
       quiet.append(el('b', { text: 'Since you last reviewed: ' }));
       quiet.append(document.createTextNode(data.mark ? 'nothing new since ' + data.mark.slice(0, 7) + '.' : 'nothing yet. Mark the page reviewed to start a baseline.'));
+      if (!data.mark) quiet.append(document.createTextNode(' '), markButton());
       return quiet;
     }
     const counts = {};
@@ -577,15 +688,7 @@
     if ((data.tasks || []).length) {
       wrap.append(el('p', { class: 'whint', text: data.tasks.length + ' task(s) were ticked in this range.' }));
     }
-    const mark = el('button', { type: 'button', class: 'wmark', text: 'Mark reviewed' });
-    mark.addEventListener('click', () => {
-      mark.disabled = true;
-      api('api/review/mark', {}).then(r => {
-        if (r.marked) { mark.textContent = 'Reviewed'; renderReview(); attribute(); }
-        else { mark.disabled = false; mark.textContent = r.error || 'Could not mark'; }
-      });
-    });
-    wrap.append(mark);
+    wrap.append(markButton());
     return wrap;
   };
 
@@ -656,7 +759,7 @@
     }
   };
 
-  const enhance = () => { addOpeners(); addTaskTicks(); };
+  const enhance = () => { addOpeners(); addTaskTicks(); markMapStale(); };
   enhance();
   // Only the Open buttons and the change-page ticks need the observer; the review
   // sheet has its own slot.

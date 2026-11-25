@@ -10,16 +10,26 @@ import (
 const Marker = "<!-- weave-check -->"
 
 // Markdown renders the result as a pull-request comment: a verdict, what broke
-// and which screens it reaches, then what the change touches.
+// and which screens it reaches, then what the change touches. A gate that could
+// not read its input says so; it never borrows the pass or failure wording.
 func (r Result) Markdown() string {
 	var b strings.Builder
 	b.WriteString(Marker + "\n")
-	if len(r.Errors) > 0 {
+	if len(r.Operational) > 0 {
+		b.WriteString("### ⚠️ weave check could not run\n\n")
+	} else if len(r.Errors) > 0 {
 		fmt.Fprintf(&b, "### ❌ weave check: %d problem(s)\n\n", len(r.Errors))
 	} else {
 		b.WriteString("### ✅ weave check passed\n\n")
 	}
 	fmt.Fprintf(&b, "_%s_\n\n", mdEscape(r.Scope))
+
+	for _, e := range r.Operational {
+		fmt.Fprintf(&b, "- ⚠️ %s\n", mdEscape(e))
+	}
+	if len(r.Operational) > 0 {
+		b.WriteString("\n")
+	}
 
 	if len(r.Broken) > 0 {
 		b.WriteString("**Removed endpoints that are still called**\n\n| endpoint | called from | screens |\n|---|---|---|\n")

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The suite builds the real binary once and drives it exactly as a user would.
@@ -229,6 +230,129 @@ func TestHookFailsOnABrokenContractAndRecordsIt(t *testing.T) {
 	report, rcode := run(t, "fires", "--root", root)
 	if rcode != 0 || !strings.Contains(report, "1 failure") {
 		t.Fatalf("fires should report one failure (code %d):\n%s", rcode, report)
+	}
+}
+
+// A typo must not reindex or register a project before it errors.
+func TestUnknownOptionFailsBeforeSideEffects(t *testing.T) {
+	root := t.TempDir()
+	out, code := runBoth(t, "check", "--bogus", "--root", root)
+	if code != 2 {
+		t.Fatalf("unknown option should exit 2, got %d:\n%s", code, out)
+	}
+	if !strings.Contains(out, "unknown option --bogus") {
+		t.Fatalf("error did not name the option:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".weave")); !os.IsNotExist(err) {
+		t.Fatalf("check wrote side effects before rejecting the option: %v", err)
+	}
+}
+
+func TestUnknownCommandFailsBeforeSideEffects(t *testing.T) {
+	root := t.TempDir()
+	out, code := runBoth(t, "chek", "--root", root)
+	if code != 2 {
+		t.Fatalf("unknown command should exit 2, got %d:\n%s", code, out)
+	}
+	if !strings.Contains(out, `unknown command "chek"`) {
+		t.Fatalf("error did not name the command:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".weave")); !os.IsNotExist(err) {
+		t.Fatalf("unknown command wrote side effects: %v", err)
+	}
+}
+
+// An explicit --against ref the gate cannot read is operational (2), never a
+// contract failure (1) and never a pass (0).
+func TestCheckUnreadableAgainstExitsTwo(t *testing.T) {
+	root := fixture(t)
+	if out, code := run(t, "index", "--root", root); code != 0 {
+		t.Fatalf("index: %s", out)
+	}
+	file := "packages/backend/src/modules/orders/orders.routes.ts"
+	out, code := runBoth(t, "check", file, "--against", "no-such-ref", "--root", root)
+	if code != 2 {
+		t.Fatalf("check should exit 2, got %d:\n%s", code, out)
+	}
+	if !strings.Contains(out, "could not read no-such-ref") || strings.Contains(out, "passed") {
+		t.Fatalf("check did not fail closed:\n%s", out)
+	}
+
+	md, mcode := run(t, "check", file, "--against", "no-such-ref", "--markdown", "--root", root)
+	if mcode != 2 {
+		t.Fatalf("markdown check should exit 2, got %d:\n%s", mcode, md)
+	}
+	if !strings.Contains(md, "could not run") || strings.Contains(md, "passed") {
+		t.Fatalf("markdown borrowed a verdict:\n%s", md)
+	}
+}
+
+// In markdown mode even a reindex error must produce the marker and a diagnosis,
+// because the Action posts and summarizes that file verbatim.
+func TestCheckMarkdownReindexFailureIsMarked(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(root, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, code := runBoth(t, "check", "--markdown", "--root", root)
+	if code != 2 {
+		t.Fatalf("markdown reindex failure should exit 2, got %d:\n%s", code, out)
+	}
+	if !strings.Contains(out, "<!-- weave-check -->") || !strings.Contains(out, "could not run") {
+		t.Fatalf("markdown report was not marked:\n%s", out)
+	}
+}
+
+// A stale report is neither a pass nor a fail: the evidence command is operational.
+func TestEvidenceRefusesStaleReport(t *testing.T) {
+	root := fixture(t)
+	if out, code := run(t, "index", "--root", root); code != 0 {
+		t.Fatalf("index: %s", out)
+	}
+	report := filepath.Join(root, ".weave", "junit.xml")
+	junitXML := `<?xml version="1.0" encoding="UTF-8"?>
+<testsuites><testsuite name="orders">
+  <testcase classname="orders" name="REQ-ORD-1 orders page loads"/>
+</testsuite></testsuites>`
+	if err := os.WriteFile(report, []byte(junitXML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(root, "packages", "backend", "src", "modules", "orders", "orders.routes.ts")
+	old := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(report, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(source, time.Now().Add(-time.Hour), time.Now().Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	out, code := runBoth(t, "evidence", "--root", root)
+	if code != 2 {
+		t.Fatalf("stale evidence should exit 2, got %d:\n%s", code, out)
+	}
+	if !strings.Contains(out, "stale") || strings.Contains(out, "verified") {
+		t.Fatalf("stale evidence was reported as proof:\n%s", out)
+	}
+}
+
+// The hook blocks a broken contract with exit 2, but a gate that could not run
+// exits 1 and records the operational error instead of claiming a broken contract.
+func TestHookOperationalErrorExitsOneAndRecordsIt(t *testing.T) {
+	root := fixture(t)
+	out, code := runBoth(t, "hook", "--against", "no-such-ref", "--root", root)
+	if code != 1 {
+		t.Fatalf("operational hook should exit 1, got %d:\n%s", code, out)
+	}
+	if !strings.Contains(out, "the gate could not run") {
+		t.Fatalf("hook did not explain the operational error:\n%s", out)
+	}
+	raw, err := os.ReadFile(filepath.Join(root, ".weave", "fires.jsonl"))
+	if err != nil {
+		t.Fatalf("no fire recorded: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
+	last := lines[len(lines)-1]
+	if !strings.Contains(last, `"result":"error"`) || !strings.Contains(last, `"error":`) {
+		t.Fatalf("fire did not record the error: %s", last)
 	}
 }
 

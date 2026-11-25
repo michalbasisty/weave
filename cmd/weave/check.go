@@ -9,19 +9,25 @@ import (
 )
 
 func cmdCheck() int {
+	markdown := arg("format", "") == "markdown" || hasFlag("markdown")
 	g, err := weave.Reindex(root)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+		// The graph could not be built: operational, not a contract failure. In
+		// markdown mode the report must still carry the marker and a diagnosis,
+		// because the Action posts and summarizes the file verbatim.
+		res := verify.Result{Scope: "the graph could not be built", Operational: []string{err.Error()}}
+		if markdown {
+			fmt.Print(res.Markdown())
+		} else {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		return 2
 	}
 	res := verify.Run(g, root, arg("against", ""), hasFlag("strict-tests"), pos)
-	if arg("format", "") == "markdown" || hasFlag("markdown") {
+	if markdown {
 		fmt.Print(res.Markdown())
 	} else {
 		fmt.Println(res.Text())
 	}
-	if len(res.Errors) > 0 {
-		return 1
-	}
-	return 0
+	return res.Code()
 }

@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -16,22 +15,37 @@ import (
 	"github.com/michalbasisty/weave/internal/weave"
 )
 
-// okRef is the ref a git command may see: the TypeScript strips every other character.
-var okRef = regexp.MustCompile(`[^A-Za-z0-9_./~^-]`)
+// RefProblem reports why a ref cannot be handed to git verbatim, or "" when it
+// can. A leading dash would read as an option; control characters have no place
+// in a ref. Everything else, including Unicode, is git's to accept or reject —
+// stripping characters would silently compare against a different ref.
+func RefProblem(ref string) string {
+	if strings.TrimSpace(ref) == "" {
+		return "empty"
+	}
+	if strings.HasPrefix(ref, "-") {
+		return "option-like"
+	}
+	for _, r := range ref {
+		if r == 0 || r < 0x20 || r == 0x7f {
+			return "control character"
+		}
+	}
+	return ""
+}
 
 // cacheVersion is bumped when extraction changes in a way that alters a graph for
 // the same commit, so old baselines are not reused.
 const cacheVersion = 1
 
 // GraphAt indexes root at ref in a detached worktree, reusing a cached graph for
-// that commit. It returns nil when git or the index fails; the worktree is always
-// removed.
+// that commit. It returns nil when the ref is unusable or git or the index fails;
+// the worktree is always removed.
 func GraphAt(root, ref string) *weave.Graph {
-	safe := okRef.ReplaceAllString(ref, "")
-	if safe == "" {
+	if RefProblem(ref) != "" {
 		return nil
 	}
-	sha := resolveSHA(root, safe)
+	sha := resolveSHA(root, ref)
 	if sha == "" {
 		return nil
 	}
@@ -58,7 +72,7 @@ func GraphAt(root, ref string) *weave.Graph {
 		_ = git("worktree", "prune")
 	}()
 
-	if err := git("worktree", "add", "--detach", "--quiet", tmp, safe); err != nil {
+	if err := git("worktree", "add", "--detach", "--quiet", tmp, ref); err != nil {
 		return nil
 	}
 	g := weave.BuildGraph(tmp)

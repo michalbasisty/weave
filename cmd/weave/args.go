@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/michalbasisty/weave/internal/junit"
 	"github.com/michalbasisty/weave/internal/registry"
 	"github.com/michalbasisty/weave/internal/weave"
 )
@@ -19,30 +18,82 @@ var valueFlags = map[string]bool{
 	"--root": true, "--project": true, "--limit": true, "--budget": true,
 	"--out": true, "--against": true, "--runs": true, "--file": true,
 	"--note": true, "--from": true, "--since": true, "--depth": true,
-	"--port": true,
+	"--port": true, "--format": true, "--title": true, "--only": true,
 }
 
+var boolFlags = map[string]bool{
+	"--strict-tests": true, "--markdown": true, "--all": true, "--check": true,
+	"--clear": true, "--hooks": true, "--manager": true, "--new-token": true,
+	"--no-delta": true, "--no-open": true, "--prune": true, "--regex": true,
+	"--upgrade": true, "--help": true, "--version": true,
+}
+
+// commands is every subcommand main dispatches. Validating it before pickRoot
+// keeps a typo from reindexing or registering a project on the way to an error.
+var commands = map[string]bool{
+	"index": true, "explore": true, "wiki": true, "serve": true,
+	"projects": true, "list": true, "forget": true, "context": true,
+	"brief": true, "impact": true, "plan": true, "change": true,
+	"search": true, "grep": true, "remember": true, "recall": true,
+	"memory": true, "doctor": true, "status": true, "perf": true,
+	"check": true, "hook": true, "fires": true, "delta": true,
+	"gain": true, "evidence": true, "ask": true, "spec": true,
+	"init": true, "mcp": true, "help": true, "version": true,
+}
+
+func knownCommand(c string) bool { return commands[c] }
+
 var (
-	cmd  string
 	pos  []string
 	root string
 )
 
-func parseArgs(argv []string) (string, []string) {
+// parseArgs reads the command line. Unknown options and missing values are
+// errors rather than silently ignored tokens, and `--` ends option parsing so
+// a file or note that looks like a flag can still be passed.
+func parseArgs(argv []string) (string, []string, error) {
 	var c string
 	var p []string
+	endOpts := false
 	for i := 0; i < len(argv); i++ {
 		a := argv[i]
-		if valueFlags[a] {
-			i++
+		if endOpts {
+			if c == "" {
+				c = a
+			} else {
+				p = append(p, a)
+			}
 			continue
 		}
-		if strings.HasPrefix(a, "-") {
-			if c == "" && (a == "--help" || a == "-h") {
-				c = "help"
+		if a == "--" {
+			endOpts = true
+			continue
+		}
+		if strings.HasPrefix(a, "-") && a != "-" {
+			flag := a
+			switch a {
+			case "-h":
+				flag = "--help"
+			case "-v":
+				flag = "--version"
 			}
-			if c == "" && (a == "--version" || a == "-v") {
-				c = "version"
+			if valueFlags[flag] {
+				if i+1 >= len(argv) || argv[i+1] == "--" || (strings.HasPrefix(argv[i+1], "-") && argv[i+1] != "-") {
+					return "", nil, fmt.Errorf("%s needs a value", a)
+				}
+				i++
+				continue
+			}
+			if !boolFlags[flag] {
+				return "", nil, fmt.Errorf("unknown option %s", a)
+			}
+			if c == "" {
+				switch flag {
+				case "--help":
+					c = "help"
+				case "--version":
+					c = "version"
+				}
 			}
 			continue
 		}
@@ -52,25 +103,35 @@ func parseArgs(argv []string) (string, []string) {
 			p = append(p, a)
 		}
 	}
-	return c, p
+	return c, p, nil
 }
 
 // arg is cli.ts's arg: the value after `--name`, or the fallback.
 func arg(name, fallback string) string {
-	for i, a := range os.Args {
-		if a == "--"+name {
-			if i+1 < len(os.Args) && os.Args[i+1] != "" {
-				return os.Args[i+1]
-			}
+	want := "--" + name
+	for i := 0; i < len(os.Args); i++ {
+		a := os.Args[i]
+		if a == "--" {
 			break
 		}
+		if a != want {
+			continue
+		}
+		if i+1 < len(os.Args) && os.Args[i+1] != "" && os.Args[i+1] != "--" {
+			return os.Args[i+1]
+		}
+		break
 	}
 	return fallback
 }
 
 func hasFlag(name string) bool {
+	want := "--" + name
 	for _, a := range os.Args {
-		if a == "--"+name {
+		if a == "--" {
+			return false
+		}
+		if a == want {
 			return true
 		}
 	}
@@ -79,10 +140,18 @@ func hasFlag(name string) bool {
 
 // flagValues collects a repeatable value flag, like `--file a --file b`.
 func flagValues(name string) []string {
+	want := "--" + name
 	var out []string
-	for i, a := range os.Args {
-		if a == "--"+name && i+1 < len(os.Args) {
+	for i := 0; i < len(os.Args); i++ {
+		if os.Args[i] == "--" {
+			break
+		}
+		if os.Args[i] != want {
+			continue
+		}
+		if i+1 < len(os.Args) && os.Args[i+1] != "--" {
 			out = append(out, os.Args[i+1])
+			i++
 		}
 	}
 	return out
@@ -213,8 +282,4 @@ func graphFor() (*weave.Graph, int) {
 		return nil, 1
 	}
 	return g, 0
-}
-
-func loadCases() []junit.Case {
-	return junit.Load(root)
 }

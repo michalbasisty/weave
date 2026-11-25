@@ -20,6 +20,7 @@ type fire struct {
 	Result string   `json:"result"`
 	Ms     int64    `json:"ms"`
 	Fails  []string `json:"fails,omitempty"`
+	Error  string   `json:"error,omitempty"`
 	Ref    string   `json:"ref,omitempty"`
 }
 
@@ -72,6 +73,18 @@ func failingLines(out string) []string {
 	return fails
 }
 
+// errorLines keeps the gate's operational errors: why it could not run at all.
+func errorLines(out string) []string {
+	var errs []string
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "error ") {
+			errs = append(errs, strings.TrimPrefix(line, "error "))
+		}
+	}
+	return errs
+}
+
 // cmdHook is the entry point for an agent hook: it runs the gate, records the fire,
 // and on a broken contract writes the failure to stderr and exits 2, which is what a
 // Claude Code Stop hook needs to keep the turn going. Success is silent.
@@ -107,18 +120,36 @@ func cmdHook() int {
 		Ms:     time.Since(start).Milliseconds(),
 		Ref:    arg("against", ""),
 	}
-	if code != 0 {
+	switch code {
+	case 0:
+		// pass
+	case 1:
+		// A broken contract is the case the Stop hook exists to block.
 		rec.Result = "fail"
 		rec.Fails = failingLines(text)
+	default:
+		// The gate could not run: record the operational error, but do not tell a
+		// Stop hook the contract is broken. Exit 1 keeps the turn from being blocked.
+		rec.Result = "error"
+		rec.Error = strings.Join(errorLines(text), "; ")
+		if rec.Error == "" {
+			rec.Error = strings.TrimSpace(text)
+		}
 	}
 	appendFire(rec)
 
-	if code != 0 {
+	switch code {
+	case 0:
+		return 0
+	case 1:
 		fmt.Fprint(os.Stderr, strings.TrimSpace(text))
 		fmt.Fprint(os.Stderr, "\n\nweave: this contract is broken. Fix the call site or the endpoint, or say why it is intentional, before finishing.\n")
 		return 2
+	default:
+		fmt.Fprint(os.Stderr, strings.TrimSpace(text))
+		fmt.Fprint(os.Stderr, "\n\nweave: the gate could not run. Fix the input (for example the --against ref), then retry.\n")
+		return 1
 	}
-	return 0
 }
 
 // cmdFires reports what the hook has seen: runs, failures, and the failures
@@ -143,18 +174,26 @@ func cmdFires() int {
 		return 0
 	}
 	var fails []fire
+	var errs []fire
 	var total int64
 	for _, f := range list {
 		total += f.Ms
-		if f.Result == "fail" {
+		switch f.Result {
+		case "fail":
 			fails = append(fails, f)
+		case "error":
+			errs = append(errs, f)
 		}
 	}
 	window := "all time"
 	if since > 0 {
 		window = strconv.Itoa(since) + " day(s)"
 	}
-	fmt.Printf("fires: %d run(s) over %s · %d failure(s) · avg %dms\n", len(list), window, len(fails), total/int64(len(list)))
+	extra := ""
+	if len(errs) > 0 {
+		extra = fmt.Sprintf(" · %d error(s)", len(errs))
+	}
+	fmt.Printf("fires: %d run(s) over %s · %d failure(s)%s · avg %dms\n", len(list), window, len(fails), extra, total/int64(len(list)))
 	last := list[len(list)-1]
 	when, _ := time.Parse(time.RFC3339, last.At)
 	fmt.Printf("  last    %s  %s  %dms\n", when.Format("2006-01-02 15:04"), last.Result, last.Ms)
@@ -166,6 +205,11 @@ func cmdFires() int {
 			what = "(no line captured)"
 		}
 		fmt.Printf("  fail    %s  %s\n", t.Format("2006-01-02 15:04"), what)
+	}
+	for i := len(errs) - 1; i >= 0 && i >= len(errs)-4; i-- {
+		f := errs[i]
+		t, _ := time.Parse(time.RFC3339, f.At)
+		fmt.Printf("  error   %s  %s\n", t.Format("2006-01-02 15:04"), f.Error)
 	}
 	return 0
 }

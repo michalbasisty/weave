@@ -15,7 +15,9 @@ inputs:
     required: false
     default: 'false'
   against:
-    description: Git ref whose endpoint set is compared with this branch (needs fetch-depth 0).
+    description: >-
+      Git ref whose endpoint set is compared with this branch. Needs fetch-depth 0:
+      a shallow checkout has no merge base and the check exits 2.
     required: false
     default: origin/main
 
@@ -71,7 +73,11 @@ runs:
         rc=$?
         cat "$report"
         cat "$report" >> "$GITHUB_STEP_SUMMARY"
-        printf 'report=%s\nfailed=%s\n' "$report" "$([ $rc -ne 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        failed=false
+        operational=false
+        if [ "$rc" -eq 1 ]; then failed=true; fi
+        if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then operational=true; fi
+        printf 'report=%s\nfailed=%s\noperational=%s\n' "$report" "$failed" "$operational" >> "$GITHUB_OUTPUT"
         exit 0
 
     - name: Comment on the pull request
@@ -83,12 +89,13 @@ runs:
         PR: ${{ github.event.pull_request.number }}
         MODE: ${{ inputs.comment }}
         FAILED: ${{ steps.check.outputs.failed }}
+        OPERATIONAL: ${{ steps.check.outputs.operational }}
         REPORT: ${{ steps.check.outputs.report }}
       run: |
         set -uo pipefail
         existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
           --jq '.[] | select(.body | startswith("<!-- weave-check -->")) | .id' 2>/dev/null | head -n1)
-        if [ "$MODE" != "always" ] && [ "$FAILED" != "true" ] && [ -z "$existing" ]; then
+        if [ "$MODE" != "always" ] && [ "$FAILED" != "true" ] && [ "$OPERATIONAL" != "true" ] && [ -z "$existing" ]; then
           echo "check passed, no earlier comment: nothing to post"
           exit 0
         fi
@@ -100,6 +107,13 @@ runs:
           echo "$body" | gh api -X POST "repos/$REPO/issues/$PR/comments" --input - > /dev/null \
             || echo "::warning::weave could not comment on the PR (needs pull-requests: write)"
         fi
+
+    - name: Fail when the gate could not run
+      if: ${{ steps.check.outputs.operational == 'true' }}
+      shell: bash
+      run: |
+        echo "::error::weave check could not run (bad --against ref, git range or change set) — see the report above"
+        exit 1
 
     - name: Fail on problems
       if: ${{ steps.check.outputs.failed == 'true' }}

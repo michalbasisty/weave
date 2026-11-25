@@ -12,7 +12,17 @@ import (
 )
 
 func main() {
-	cmd, pos = parseArgs(os.Args[1:])
+	c, p, err := parseArgs(os.Args[1:])
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "weave: "+err.Error())
+		fmt.Fprintln(os.Stderr, "weave --help for usage")
+		os.Exit(2)
+	}
+	if c != "" && !knownCommand(c) {
+		fmt.Fprintf(os.Stderr, "weave: unknown command %q\nweave --help for usage\n", c)
+		os.Exit(2)
+	}
+	pos = p
 	r, code := pickRoot()
 	if code != 0 {
 		os.Exit(code)
@@ -22,7 +32,7 @@ func main() {
 		registry.Touch(root)
 	}
 
-	switch cmd {
+	switch c {
 	case "index":
 		code = cmdIndex()
 	case "explore":
@@ -145,8 +155,8 @@ func helpText() string {
   weave remember --note "…" <file...>   leave a note for the next session
   weave recall  [file...]       notes for these files
   weave memory                  all notes (--prune drops ownership notes and repeats, --clear drops all)
-  weave check   [file...]       fail when a change breaks a contract (no args: git diff)
-  weave hook                    check for an agent hook: exit 2 and the failure on stderr
+  weave check   [file...]       fail when a change breaks a contract (exit 1), or cannot run (exit 2; no args: git diff)
+  weave hook                    check for an agent hook: exit 2 broken, exit 1 could not run
   weave serve   [--port N]      host the map, the wiki and the actions on 127.0.0.1, and open it
                 [--no-open]     don't open the browser
   weave fires   [--since N]     what the hook has seen: runs, failures, avg time
@@ -161,6 +171,8 @@ func helpText() string {
   weave forget  <name>          drop a project from the list
   weave mcp                     MCP server on stdio (--all: serve every project)
   weave --version               the release version
+
+check exits 0 clean, 1 on a broken contract, 2 when the gate could not run.
 
 --root <dir>        point at a specific checkout
 --project <name>    use a registered project from anywhere
@@ -206,7 +218,7 @@ func home() {
 	fmt.Printf(`
   weave explore          open the map
   weave plan <slug>      the next task of a change
-  weave check            what breaks (exit 1)
+  weave check            what breaks (0 clean, 1 broken, 2 could not run)
   weave evidence         what your tests prove
   weave context <file>   one file, explained
   weave projects         %s

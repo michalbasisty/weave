@@ -19,8 +19,8 @@ weave plan    <change> [T3]
 weave change  [slug]
 weave search  <query>
 weave grep    <text>       # --regex, --limit; graph files rank first
-weave check   [file...]    # no args = git diff; exit 1 on a broken contract (--markdown for a PR comment)
-weave hook                 # for an agent hook: exit 2, failure on stderr
+weave check   [file...]    # no args = git diff; exit 1 broken contract, exit 2 could not run
+weave hook                 # for an agent hook: exit 2 contract, exit 1 gate could not run
 weave fires   [--since N]  # what the hook has seen: runs, failures, average time
 weave delta   [ref]        # what the graph gained or lost
 weave remember --note "…" <file...>
@@ -190,8 +190,15 @@ weave check --against origin/main
 weave check --strict-tests
 ```
 
-The Stop hook runs the same check and, on a broken contract, exits 2 with the failing
-`file:line` on stderr — which is what a Claude Code `Stop` hook hands back to the model:
+`check` exits **0** when the change is clean, **1** on a broken contract, and **2** when it
+could not run at all. Exit 2 is not a pass: an unreadable `--against` ref, a missing merge
+base, no git for change discovery, or stale JUnit evidence all stop the gate with a
+diagnostic instead of guessing.
+
+The Stop hook runs the same check. On a broken contract it exits 2 with the failing
+`file:line` on stderr, which is what a Claude Code `Stop` hook hands back to the model. When
+the gate could not run it exits 1 and records an `error` fire, so a broken input does not
+block the turn as if the contract were broken:
 
 ```json
 { "hooks": { "Stop": [ { "hooks": [ { "type": "command", "command": "\"/abs/weave\" hook --root ." } ] } ] } }
@@ -211,10 +218,13 @@ steps:
     with: { root: '.', strict-tests: 'true', against: origin/main, wiki: 'true' }
 ```
 
+`fetch-depth: 0` is required when `against` is set: a shallow checkout has no merge base,
+so `weave check` exits 2 rather than comparing against an incomplete history. The same
+applies locally to `--against` refs that have not been fetched.
+
 It builds the Go binary, indexes, checks, prints coverage, writes the report to the job
 summary and, on a pull request, comments with each removed endpoint that is still called, the
 line that calls it and the screens that reach that line:
-
 | endpoint | called from | screens |
 |---|---|---|
 | `GET /api/v1/orders` | `packages/web/src/pages/Orders.tsx:9` | `/orders` |
@@ -226,8 +236,16 @@ branch whose committed `docs/wiki` describes an older tree. It exits 1 when:
 
 - a **removed endpoint is still called** — compared with the previous index's endpoint set;
 - a changed file contains a call site that matches no endpoint;
-- a requirement implemented in the changed files has a failing test in the JUnit report;
+- a requirement implemented in the changed files has a failing test in a **fresh** JUnit report;
 - with `--strict-tests`, a touched endpoint has no test at all.
+
+It exits 2 when it cannot judge the change:
+
+- `--against` is unreadable, has unsupported control characters, is option-like, or has no
+  merge base with `HEAD`;
+- git is missing and no explicit files were named;
+- the JUnit report is older than the changed source, so it proves neither a pass nor a fail;
+- the index cannot be written (the markdown report still carries the marker and diagnosis).
 
 It warns, without failing, when a requirement's text changed and the code was not re-checked,
 when no spec change record names the changed files, or when a touched endpoint has no direct
@@ -246,7 +264,9 @@ linked to it is reported as **suspect**.
 
 `weave evidence` reads the JUnit XML your tests already produce and joins it to requirements
 through the `@req` markers, so the answer is "a named test ran and reported a result", not
-"the agent says so".
+"the agent says so". A report older than the newest indexed source is stale: it exits 2 with
+a freshness diagnostic instead of printing pass/fail lines from evidence that no longer
+describes the tree.
 
 ```
 evidence: 2/3 requirement(s) verified, 41 test case(s)
@@ -297,6 +317,10 @@ anything outside the repo.
 
 ## Test
 
+The module requires **Go 1.25 or newer**: spec reads and writes use `os.Root`, which is
+what keeps them inside the repo when a directory is swapped for a link. The CI test job
+reads the version from `go.mod`.
+
 ```bash
 go test ./...                    # unit, golden and integration suites
 go test ./test/integration -v    # the binary, end to end
@@ -322,3 +346,22 @@ renamed route, the Stop hook, explore, wiki, MCP, gain and init.
   count.
 - On Windows, the very first run of a freshly built unsigned binary can take a few seconds
   while antivirus scans it. Linux CI does not see it.
+- The panel's file, spec and review-ledger reads and writes are contained with
+  `os.Root`: a component swapped for a symlink or junction after the check cannot
+  redirect them. `os.Root` follows a relative link that stays inside its root, but
+  refuses an absolute link target and, on Windows, every junction even when it points
+  inside the repo — stricter than the old resolved-path check, so an in-repo layout
+  that relies on such links under `specs/` or `.weave/` is refused, not followed. A
+  save replaces the file with a same-directory rename — atomic on POSIX, but Windows
+  makes no such guarantee, and a handle held open on the target can make the rename
+  fail; the save reports that instead of falling back to an in-place write. Junction
+  escapes are covered by tests on Windows; file symlinks need a privilege there, so
+  those tests skip without it.
+- Spec and task writers serialize on an exclusive `<file>.lock`. A lock is never
+  removed automatically: an abandoned lock and a live writer look the same to another
+  process, and stealing a live lock would silently drop its update. If a writer was
+  killed, the write fails after about two seconds naming the lock path to remove by
+  hand; there is no automatic stale-lock recovery.
+- The review ledger is append-only and read as a bounded tail (256 KB) through the
+  confined repo handle: only complete trailing lines are parsed, so a history of any
+  total length still yields its newest marks instead of reading as empty.
