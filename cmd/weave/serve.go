@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/michalbasisty/weave/internal/registry"
+	"github.com/michalbasisty/weave/internal/rootio"
 	"github.com/michalbasisty/weave/internal/server"
 	"github.com/michalbasisty/weave/internal/weave"
 )
@@ -86,19 +88,30 @@ func cmdServe() int {
 }
 
 // serveToken reuses the token in .weave/serve.token so a restart keeps the URLs people
-// have open; --new-token rotates it. A malformed file is replaced.
+// have open; --new-token rotates it. A malformed file is replaced. The token file is
+// read and written through a root pinned at .weave, so a directory or file swapped for
+// a link out of the repo is neither followed nor trusted; the errors stay swallowed,
+// as they were for the resolved paths, and a token is always returned.
 func serveToken(root string, rotate bool) string {
-	path := filepath.Join(root, ".weave", "serve.token")
-	if !rotate {
-		if raw, err := os.ReadFile(path); err == nil {
-			if t := strings.TrimSpace(string(raw)); validToken(t) {
-				return t
+	dir, err := openRepoDir(root, ".weave")
+	if dir != nil {
+		defer dir.Close()
+	}
+	if !rotate && err == nil {
+		if fh, ferr := rootio.OpenRegular(dir, "serve.token", os.O_RDONLY, 0); ferr == nil {
+			raw, rerr := io.ReadAll(io.LimitReader(fh, 4*1024))
+			_ = fh.Close()
+			if rerr == nil {
+				if t := strings.TrimSpace(string(raw)); validToken(t) {
+					return t
+				}
 			}
 		}
 	}
 	t := server.NewToken()
-	_ = os.MkdirAll(filepath.Dir(path), 0o755)
-	_ = os.WriteFile(path, []byte(t+"\n"), 0o600)
+	if err == nil {
+		_ = rootio.WriteFile(dir, "serve.token", []byte(t+"\n"), 0o600)
+	}
 	return t
 }
 

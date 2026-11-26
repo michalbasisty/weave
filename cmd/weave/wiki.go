@@ -23,6 +23,7 @@ func gitHead(dir string) string {
 
 func cmdWiki() int {
 	out := arg("out", "")
+	explicit := out != ""
 	if out == "" {
 		out = filepath.Join(root, ".weave", "wiki")
 	} else if !filepath.IsAbs(out) {
@@ -50,7 +51,20 @@ func cmdWiki() int {
 	if g == nil {
 		return code
 	}
-	res, err := weave.WriteWiki(g, weave.WikiOptions{OutDir: out, Commit: head})
+	opts := weave.WikiOptions{OutDir: out, Commit: head}
+	if !explicit {
+		// The default site belongs to the repository, so pin .weave/wiki once and
+		// write every page through that handle; a swapped directory cannot redirect
+		// the batch. An explicit --out keeps the arbitrary-directory semantics.
+		dir, err := openRepoDir(root, ".weave/wiki")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		defer dir.Close()
+		opts.Root = dir
+	}
+	res, err := weave.WriteWiki(g, opts)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1

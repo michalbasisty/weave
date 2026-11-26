@@ -1,8 +1,11 @@
 package weave
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -60,5 +63,90 @@ func TestOwnershipNotesAreNoise(t *testing.T) {
 	}
 	if all, _ := ReadNotes(root); len(all) != 1 {
 		t.Fatalf("left %v", all)
+	}
+}
+
+// Reads leave a missing .weave alone, Remember creates it, and the maintenance
+// calls keep their old missing-directory behavior. Every step goes through a pinned
+// root, so the created file lives inside the repository.
+func TestMemoryMissingDirectoryAndCreate(t *testing.T) {
+	root := t.TempDir()
+	if notes, err := ReadNotes(root); err != nil || len(notes) != 0 {
+		t.Fatalf("ReadNotes without .weave = %v, %v", notes, err)
+	}
+	if _, err := ClearMemory(root); err == nil {
+		t.Fatal("ClearMemory created a memory file in a missing .weave")
+	}
+	if n, err := PruneMemory(root); err != nil || n != 0 {
+		t.Fatalf("PruneMemory without .weave = %d, %v", n, err)
+	}
+	if _, err := os.Lstat(filepath.Join(root, ".weave")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("a read or prune created .weave: %v", err)
+	}
+	if n, err := Remember(root, []string{"a.ts"}, "Invoices are immutable once sent", "2026-01-01T00:00:00.000Z"); err != nil || n == nil {
+		t.Fatalf("Remember did not create .weave: n=%v err=%v", n, err)
+	}
+	if _, err := os.Stat(MemoryPath(root)); err != nil {
+		t.Fatalf("memory file missing after Remember: %v", err)
+	}
+	if n, err := ClearMemory(root); err != nil || n != 1 {
+		t.Fatalf("ClearMemory = %d, %v; want 1 note", n, err)
+	}
+	if notes, err := ReadNotes(root); err != nil || len(notes) != 0 {
+		t.Fatalf("memory after ClearMemory = %v, %v", notes, err)
+	}
+}
+
+// A .weave directory linked outside the repo must not receive a note, even though
+// the duplicate check reads through the same pinned root.
+func TestRememberRefusesLinkedWeave(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	dirLink(t, outside, filepath.Join(root, ".weave"))
+
+	n, err := Remember(root, []string{"a.ts"}, "Invoices are immutable once sent", "2026-01-01T00:00:00.000Z")
+	if err == nil || n != nil {
+		t.Fatalf("Remember through a linked .weave: n=%v err=%v", n, err)
+	}
+	if _, err := os.Lstat(filepath.Join(outside, "memory.jsonl")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("outside directory gained memory: %v", err)
+	}
+}
+
+// A final symlink or junction named memory.jsonl must not receive the appended
+// note: the pinned root refuses it and the target keeps its bytes.
+func TestRememberRefusesFinalLink(t *testing.T) {
+	root := t.TempDir()
+	weave := filepath.Join(root, ".weave")
+	if err := os.MkdirAll(weave, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "memory.jsonl")
+	const secretText = `{"at":"2026-01-01T00:00:00.000Z","files":["a.ts"],"note":"outside"}` + "\n"
+	if err := os.WriteFile(secret, []byte(secretText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(weave, "memory.jsonl")
+	if err := os.Symlink(secret, link); err == nil {
+		n, err := Remember(root, []string{"a.ts"}, "Invoices are immutable once sent", "2026-01-02T00:00:00.000Z")
+		if err == nil || n != nil {
+			t.Fatalf("Remember through a final link: n=%v err=%v", n, err)
+		}
+		if raw, _ := os.ReadFile(secret); string(raw) != secretText {
+			t.Errorf("the link's target changed: %q", raw)
+		}
+		return
+	} else if runtime.GOOS != "windows" {
+		t.Fatalf("create a file symlink, which this Unix test requires: %v", err)
+	}
+	// Windows without the symlink privilege: a junction at the same name stands in.
+	dirLink(t, outside, link)
+	n, err := Remember(root, []string{"a.ts"}, "Invoices are immutable once sent", "2026-01-02T00:00:00.000Z")
+	if err == nil || n != nil {
+		t.Fatalf("Remember through a final junction: n=%v err=%v", n, err)
+	}
+	if raw, _ := os.ReadFile(secret); string(raw) != secretText {
+		t.Errorf("the junction's target changed: %q", raw)
 	}
 }

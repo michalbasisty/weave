@@ -1,12 +1,16 @@
 package baseline
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/michalbasisty/weave/internal/weave"
 )
@@ -131,6 +135,153 @@ export default router;
 	}
 	if got := worktreeCount(t, root); got != 1 {
 		t.Errorf("worktree list has %d entries after the failures, want 1", got)
+	}
+}
+
+// TestGraphAtLinkedCacheStaysBestEffort proves the cache is best effort: a
+// baselines directory linked out of the repo cannot receive a baseline, and the
+// freshly built graph is still returned with nothing written outside.
+func TestGraphAtLinkedCacheStaysBestEffort(t *testing.T) {
+	root := gitRepo(t)
+	outside := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".weave"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dirLink(t, outside, filepath.Join(root, ".weave", "baselines"))
+
+	g := GraphAt(root, "HEAD")
+	if g == nil {
+		t.Fatal("GraphAt(HEAD) returned nil with an unwritable cache")
+	}
+	entries, err := os.ReadDir(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("cache written through a linked baselines directory: %v", entries)
+	}
+}
+
+// TestLinkedCacheDirRefused checks reading, writing and pruning through a cache
+// directory linked out of the repo: the outside file is never read and never
+// removed, and the write never lands there.
+func TestLinkedCacheDirRefused(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	valid := (&weave.Graph{Version: weave.GraphVersion, Nodes: []*weave.GNode{}, Edges: []weave.GEdge{}}).MarshalJS()
+	if err := os.WriteFile(filepath.Join(outside, "read-v1.json"), valid, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		name := filepath.Join(outside, "keep"+itoa(i)+".json")
+		if err := os.WriteFile(name, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".weave"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dirLink(t, outside, filepath.Join(root, ".weave", "baselines"))
+
+	if g := loadCache(root, "read-v1.json"); g != nil {
+		t.Errorf("loadCache read through a linked cache directory: %+v", g)
+	}
+	if err := saveCache(root, "new-v1.json", []byte("{}")); err == nil {
+		t.Error("saveCache wrote through a linked cache directory")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "new-v1.json")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("a cache file was written outside the repo: %v", err)
+	}
+
+	prune(root, 1)
+
+	for i := 0; i < 3; i++ {
+		name := filepath.Join(outside, "keep"+itoa(i)+".json")
+		if _, err := os.Stat(name); err != nil {
+			t.Errorf("prune removed %s outside the repo: %v", name, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(outside, "read-v1.json")); err != nil {
+		t.Errorf("prune removed the outside cache file: %v", err)
+	}
+}
+
+// TestPruneKeepsNewestTwenty pins the retention: the twenty newest .json cache
+// files survive and the oldest is removed.
+func TestPruneKeepsNewestTwenty(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".weave", "baselines")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Now().Add(-time.Hour)
+	for i := 0; i < 21; i++ {
+		name := filepath.Join(dir, "g"+itoa(i)+"-v1.json")
+		if err := os.WriteFile(name, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		at := base.Add(time.Duration(i) * time.Minute)
+		if err := os.Chtimes(name, at, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	prune(root, 20)
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 20 {
+		t.Errorf("prune left %d cache files, want 20", len(entries))
+	}
+	if _, err := os.Stat(filepath.Join(dir, "g0-v1.json")); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("oldest cache file survived prune: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "g1-v1.json")); err != nil {
+		t.Errorf("prune removed a file within retention: %v", err)
+	}
+}
+
+// gitRepo makes a one-commit repository with an endpoint and skips when git is
+// missing.
+func gitRepo(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not on PATH")
+	}
+	root := t.TempDir()
+	src := filepath.Join(root, "src")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	routes := `import { Router } from 'express';
+const router = Router();
+router.get('/hello', (_req, res) => res.json({ ok: true }));
+export default router;
+`
+	if err := os.WriteFile(filepath.Join(src, "orders.routes.ts"), []byte(routes), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, root, "init", "-q")
+	run(t, root, "add", "-A")
+	run(t, root, "-c", "user.email=test@example.com", "-c", "user.name=Test", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "one")
+	return root
+}
+
+// dirLink points link at target. A symlink is used where the OS allows it; on
+// Windows, where os.Symlink needs a privilege, a directory junction stands in. A
+// Unix test that cannot make its symlink fails instead of skipping: the link is the
+// thing under test there.
+func dirLink(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err == nil {
+		return
+	} else if runtime.GOOS != "windows" {
+		t.Fatalf("create a symlink, which this Unix test requires: %v", err)
+	}
+	if out, err := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput(); err != nil {
+		t.Skipf("cannot create a junction: %v: %s", err, strings.TrimSpace(string(out)))
 	}
 }
 

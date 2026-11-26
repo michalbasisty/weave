@@ -3,6 +3,7 @@
 package perf
 
 import (
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/michalbasisty/weave/internal/jsjson"
 	"github.com/michalbasisty/weave/internal/jsstr"
+	"github.com/michalbasisty/weave/internal/rootio"
 )
 
 // Record is one index run. PhaseOrder is the order the phases were written in:
@@ -82,23 +84,52 @@ func jsRound(n float64) int { return int(math.Floor(n + 0.5)) }
 func perfPath(root string) string { return filepath.Join(root, ".weave", "perf.jsonl") }
 
 // Append adds one record, rotating the file once it passes 400 kB. Write errors
-// are ignored: a read-only checkout must not fail an index run.
+// are ignored: a read-only checkout must not fail an index run. The write goes
+// through a pinned repository root, so a symlinked .weave or perf.jsonl cannot
+// redirect it. The record is written with O_APPEND on the checked handle; when
+// rotation is due that handle is closed, the file is truncated and reopened
+// inside the same root, so the truncate and the append each stay confined.
+// .weave is not created.
 func Append(root string, record Record) {
-	p := perfPath(root)
-	if fi, err := os.Stat(p); err == nil && fi.Size() > 400_000 {
-		_ = os.WriteFile(p, nil, 0o644)
-	}
-	f, err := os.OpenFile(p, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
+	r, err := os.OpenRoot(root)
 	if err != nil {
 		return
 	}
-	_, _ = f.Write(append(encodeRecord(record), '\n'))
+	defer r.Close()
+	name := filepath.Join(".weave", "perf.jsonl")
+	line := append(encodeRecord(record), '\n')
+	f, err := rootio.OpenRegular(r, name, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
+	if err != nil {
+		return
+	}
+	if info, statErr := f.Stat(); statErr == nil && info.Size() > 400_000 {
+		_ = f.Close()
+		if err := rootio.WriteFile(r, name, nil, 0o644); err != nil {
+			return
+		}
+		_ = rootio.AppendFile(r, name, line, 0o644)
+		return
+	}
+	_, _ = f.Write(line)
 	_ = f.Close()
 }
 
-// Read returns every parseable line; a missing or unreadable file reads as none.
+// Read returns every parseable line; a missing, irregular or unreadable file
+// reads as none. The file is opened inside a pinned repository root without
+// blocking on a FIFO and only a regular file is read, so an external symlink
+// cannot swap the target.
 func Read(root string) []Record {
-	raw, err := os.ReadFile(perfPath(root))
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return []Record{}
+	}
+	defer r.Close()
+	f, err := rootio.OpenRegular(r, filepath.Join(".weave", "perf.jsonl"), os.O_RDONLY, 0)
+	if err != nil {
+		return []Record{}
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(f)
 	if err != nil {
 		return []Record{}
 	}

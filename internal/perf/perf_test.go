@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -140,4 +142,154 @@ func TestReadToleratesMissingAndBadLines(t *testing.T) {
 	if _, err := os.Stat(perfPath(missing)); !os.IsNotExist(err) {
 		t.Errorf("append created a file without .weave: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(missing, ".weave")); !os.IsNotExist(err) {
+		t.Errorf("append created .weave: %v", err)
+	}
+}
+
+// TestAppendDoesNotFollowSymlinks pins the write to the repository root: a link
+// planted at perf.jsonl or at .weave must not receive the record.
+func TestAppendDoesNotFollowSymlinks(t *testing.T) {
+	t.Run("file link", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, ".weave"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		outside := t.TempDir()
+		target := filepath.Join(outside, "perf.jsonl")
+		if err := os.WriteFile(target, []byte("keep\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, filepath.Join(root, ".weave", "perf.jsonl")); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+
+		Append(root, sampleRecords()[0])
+		raw, err := os.ReadFile(target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(raw) != "keep\n" {
+			t.Fatalf("append followed a file link: wrote %q", raw)
+		}
+	})
+
+	t.Run("directory link", func(t *testing.T) {
+		root := t.TempDir()
+		outside := t.TempDir()
+		if err := os.Symlink(outside, filepath.Join(root, ".weave")); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+
+		Append(root, sampleRecords()[0])
+		if _, err := os.Lstat(filepath.Join(outside, "perf.jsonl")); !os.IsNotExist(err) {
+			t.Fatalf("append wrote through a .weave link: %v", err)
+		}
+	})
+}
+
+// TestAppendKeepsExistingFileMode checks the append opens without changing the
+// mode of a file that already exists.
+func TestAppendKeepsExistingFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix permissions")
+	}
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".weave"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(perfPath(root), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	Append(root, sampleRecords()[0])
+	info, err := os.Stat(perfPath(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Fatalf("mode after append = %o, want 600", perm)
+	}
+}
+
+// TestAppendKeepsExistingLines checks the record is appended after the current
+// end, not written over it.
+func TestAppendKeepsExistingLines(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".weave"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(perfPath(root), []byte("existing\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	Append(root, sampleRecords()[0])
+	raw, err := os.ReadFile(perfPath(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(raw), "existing\n") {
+		t.Fatalf("append overwrote existing content: %q", raw)
+	}
+}
+
+// TestConcurrentAppendsKeepWholeLines relies on the O_APPEND write: each record
+// is appended atomically, so no two writers overwrite one another's line.
+func TestConcurrentAppendsKeepWholeLines(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".weave"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	record := sampleRecords()[0]
+	const writers = 32
+	var wg sync.WaitGroup
+	for i := 0; i < writers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			Append(root, record)
+		}()
+	}
+	wg.Wait()
+	if got := Read(root); len(got) != writers {
+		t.Fatalf("read %d records, want %d", len(got), writers)
+	}
+}
+
+// TestReadDoesNotFollowSymlinks pins the read to the repository root: a link
+// planted at perf.jsonl or at .weave must not be read.
+func TestReadDoesNotFollowSymlinks(t *testing.T) {
+	t.Run("file link", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(root, ".weave"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		outside := t.TempDir()
+		target := filepath.Join(outside, "perf.jsonl")
+		line := `{"at":"2026-01-01T00:00:00.000Z","files":1,"nodes":2,"edges":3,"totalMs":4,"phases":{},"heapMb":5}` + "\n"
+		if err := os.WriteFile(target, []byte(line), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, filepath.Join(root, ".weave", "perf.jsonl")); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+
+		if got := Read(root); len(got) != 0 {
+			t.Fatalf("read followed a file link: %+v", got)
+		}
+	})
+
+	t.Run("directory link", func(t *testing.T) {
+		root := t.TempDir()
+		outside := t.TempDir()
+		line := `{"at":"2026-01-01T00:00:00.000Z","files":1,"nodes":2,"edges":3,"totalMs":4,"phases":{},"heapMb":5}` + "\n"
+		if err := os.WriteFile(filepath.Join(outside, "perf.jsonl"), []byte(line), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, filepath.Join(root, ".weave")); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+
+		if got := Read(root); len(got) != 0 {
+			t.Fatalf("read followed a .weave link: %+v", got)
+		}
+	})
 }

@@ -2,11 +2,31 @@ package weave
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+// linkDir points link at target. os.Symlink needs a privilege on Windows that a
+// normal checkout lacks, so fall back to a directory junction there; os.Root refuses
+// both when target is outside the pinned root.
+func linkDir(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err == nil {
+		return
+	}
+	if runtime.GOOS == "windows" {
+		if out, err := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput(); err == nil {
+			return
+		} else {
+			t.Skipf("directory links unavailable: %v: %s", err, out)
+		}
+	}
+	t.Skip("directory links unavailable")
+}
 
 var reHref = regexp.MustCompile(`href="([^"]+)"`)
 
@@ -122,6 +142,62 @@ func TestWikiPagesResolveAndSayWhatTheyAre(t *testing.T) {
 		}
 	}
 	walk(out)
+}
+
+// A pinned output root writes the whole batch inside the directory it pins: the
+// result path still names OutDir, and a page directory swapped for a link out of the
+// site receives nothing.
+func TestWriteWikiPinnedRootStaysInside(t *testing.T) {
+	root := copyFixture(t)
+	g := BuildGraph(root)
+	out := t.TempDir()
+
+	r, err := os.OpenRoot(out)
+	if err != nil {
+		t.Fatalf("OpenRoot: %v", err)
+	}
+	defer r.Close()
+
+	res, err := WriteWiki(g, WikiOptions{OutDir: out, Commit: "0123456789abcdef", Root: r})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Pages < 5 {
+		t.Fatalf("only %d pages written", res.Pages)
+	}
+	if got := ReadWikiStamp(out); got != "0123456789abcdef" {
+		t.Fatalf("stamp through pinned root: got %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(out, "index.html")); err != nil {
+		t.Fatalf("pinned batch has no index: %v", err)
+	}
+}
+
+func TestWriteWikiPinnedRootRefusesEscapingPageDir(t *testing.T) {
+	root := copyFixture(t)
+	g := BuildGraph(root)
+	out := t.TempDir()
+	outside := t.TempDir()
+
+	linkDir(t, outside, filepath.Join(out, "e"))
+	r, err := os.OpenRoot(out)
+	if err != nil {
+		t.Fatalf("OpenRoot: %v", err)
+	}
+	defer r.Close()
+
+	// Page errors are swallowed per page, so the batch itself succeeds; the linked
+	// section directory must gain nothing.
+	if _, err := WriteWiki(g, WikiOptions{OutDir: out, Commit: "0123456789abcdef", Root: r}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("pinned wiki wrote %d entr(ies) outside the site", len(entries))
+	}
 }
 
 func TestSlugIsAStableFileName(t *testing.T) {

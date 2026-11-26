@@ -2,9 +2,11 @@ package weave
 
 import (
 	"bytes"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -220,4 +222,89 @@ func copyTree(t *testing.T, from, to string) {
 
 func clip(b []byte, i int) string {
 	return string(b[max(0, i-40):min(len(b), i+40)])
+}
+
+// A .weave directory linked outside the repo must not receive the index: the write
+// goes through one pinned root, which refuses the escaping link.
+func TestSaveGraphRefusesLinkedWeave(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	dirLink(t, outside, filepath.Join(root, ".weave"))
+
+	if _, err := SaveGraph(root, &Graph{}); err == nil {
+		t.Fatal("SaveGraph wrote through a linked .weave directory")
+	}
+	if _, err := os.Lstat(filepath.Join(outside, "graph.json")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("outside directory gained an index: %v", err)
+	}
+}
+
+// A .weave directory linked inside the repo is refused as well, and the error names
+// the directory to fix instead of only os.Root's "path escapes from parent" text.
+func TestSaveGraphRefusesInRepoWeaveLinkWithRepairHint(t *testing.T) {
+	root := t.TempDir()
+	inRepo := filepath.Join(root, "weave-real")
+	if err := os.Mkdir(inRepo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dirLink(t, inRepo, filepath.Join(root, ".weave"))
+
+	_, err := SaveGraph(root, &Graph{})
+	if err == nil {
+		t.Fatal("SaveGraph wrote through an in-repo .weave link")
+	}
+	for _, want := range []string{
+		"path escapes from parent",
+		filepath.Join(root, ".weave"),
+		"junction",
+		"absolute symlink",
+		"real directory",
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("SaveGraph error %q does not mention %q", err, want)
+		}
+	}
+	if _, statErr := os.Lstat(filepath.Join(inRepo, "graph.json")); !errors.Is(statErr, fs.ErrNotExist) {
+		t.Errorf("the linked in-repo directory received an index: %v", statErr)
+	}
+
+	// The read path reports the same refusal with the same repair.
+	if _, loadErr := LoadGraph(root); loadErr == nil || !strings.Contains(loadErr.Error(), "real directory") {
+		t.Errorf("LoadGraph error is not actionable: %v", loadErr)
+	}
+}
+
+// A final symlink or junction named graph.json must not be written through: the
+// pinned root refuses it and the link's target keeps its bytes.
+func TestSaveGraphRefusesFinalLink(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".weave"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "graph.json")
+	const secretText = `{"version":3,"outside":true}`
+	if err := os.WriteFile(secret, []byte(secretText), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, ".weave", "graph.json")
+	if err := os.Symlink(secret, link); err == nil {
+		if _, err := SaveGraph(root, &Graph{}); err == nil {
+			t.Fatal("SaveGraph wrote through a final link")
+		}
+		if raw, _ := os.ReadFile(secret); string(raw) != secretText {
+			t.Errorf("the link's target changed: %q", raw)
+		}
+		return
+	} else if runtime.GOOS != "windows" {
+		t.Fatalf("create a file symlink, which this Unix test requires: %v", err)
+	}
+	// Windows without the symlink privilege: a junction at the same name stands in.
+	dirLink(t, outside, link)
+	if _, err := SaveGraph(root, &Graph{}); err == nil {
+		t.Fatal("SaveGraph wrote through a final junction")
+	}
+	if raw, _ := os.ReadFile(secret); string(raw) != secretText {
+		t.Errorf("the junction's target changed: %q", raw)
+	}
 }

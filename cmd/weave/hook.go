@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/michalbasisty/weave/internal/rootio"
 )
 
 // A fire is one run of the gate by a hook. It is the only honest measure of whether
@@ -24,27 +25,31 @@ type fire struct {
 	Ref    string   `json:"ref,omitempty"`
 }
 
-func firesPath() string { return filepath.Join(root, ".weave", "fires.jsonl") }
-
 func appendFire(f fire) {
-	p := firesPath()
-	if os.MkdirAll(filepath.Dir(p), 0o755) != nil {
+	dir, err := openRepoDir(root, ".weave")
+	if err != nil {
 		return
 	}
+	defer dir.Close()
 	b, err := json.Marshal(f)
 	if err != nil {
 		return
 	}
-	fh, err := os.OpenFile(p, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	defer fh.Close()
-	_, _ = fh.Write(append(b, '\n'))
+	_ = rootio.AppendFile(dir, "fires.jsonl", append(b, '\n'), 0o644)
 }
 
 func readFires() []fire {
-	fh, err := os.Open(firesPath())
+	repo, err := openRepoRoot(root)
+	if err != nil {
+		return nil
+	}
+	defer repo.Close()
+	dir, err := repo.OpenRoot(".weave")
+	if err != nil {
+		return nil
+	}
+	defer dir.Close()
+	fh, err := rootio.OpenRegular(dir, "fires.jsonl", os.O_RDONLY, 0)
 	if err != nil {
 		return nil
 	}

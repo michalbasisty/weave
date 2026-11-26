@@ -3,11 +3,13 @@ package weave
 import (
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/michalbasisty/weave/internal/rootio"
 	"github.com/michalbasisty/weave/internal/runners"
 )
 
@@ -22,6 +24,12 @@ type WikiOptions struct {
 	OutDir string
 	Commit string
 	Ref    string
+
+	// Root, when set, pins the output directory for the whole batch: every file is
+	// written through this handle, and OutDir is used only for the result path. A
+	// caller that writes the default site inside the repository opens it at
+	// .weave/wiki, so a directory swapped for a link cannot redirect the pages.
+	Root *os.Root
 }
 
 // WikiResult is what was written.
@@ -76,17 +84,19 @@ func WriteWiki(g *Graph, opt WikiOptions) (*WikiResult, error) {
 		}
 	}
 	w := &wikiWriter{ix: NewIndex(g), g: g, opt: opt, repo: filepath.Base(g.Root)}
-	if err := os.MkdirAll(opt.OutDir, 0o755); err != nil {
-		return nil, err
+	if opt.Root == nil {
+		if err := os.MkdirAll(opt.OutDir, 0o755); err != nil {
+			return nil, err
+		}
 	}
 	for name, body := range map[string]string{"wiki.css": wikiCSS, "wiki.js": wikiJS} {
-		if err := os.WriteFile(filepath.Join(opt.OutDir, name), []byte(body), 0o644); err != nil {
+		if err := w.writeTop(name, []byte(body)); err != nil {
 			return nil, err
 		}
 	}
 	// One shared search index, loaded as a script so it works from file:// and is
 	// cached once instead of being inlined into 488 pages.
-	if err := os.WriteFile(filepath.Join(opt.OutDir, "search.js"), []byte("window.W="+w.searchIndex("")+";\n"), 0o644); err != nil {
+	if err := w.writeTop("search.js", []byte("window.W="+w.searchIndex("")+";\n")); err != nil {
 		return nil, err
 	}
 
@@ -206,7 +216,30 @@ func (w *wikiWriter) link(from, id string) string {
 	return esc(label)
 }
 
+// writeTop writes one of the site's top-level files, either through the pinned
+// output root or at OutDir for a caller that supplied an arbitrary directory.
+func (w *wikiWriter) writeTop(name string, body []byte) error {
+	if w.opt.Root != nil {
+		return rootio.WriteFile(w.opt.Root, filepath.FromSlash(name), body, 0o644)
+	}
+	return os.WriteFile(filepath.Join(w.opt.OutDir, name), body, 0o644)
+}
+
 func (w *wikiWriter) write(rel, body string) {
+	if w.opt.Root != nil {
+		// The root is pinned once for the batch; the per-page error stays swallowed,
+		// as it was for the resolved-path writer, so one unwritable page does not
+		// discard the pages already written.
+		if dir := path.Dir(rel); dir != "." {
+			if w.opt.Root.MkdirAll(filepath.FromSlash(dir), 0o755) != nil {
+				return
+			}
+		}
+		if rootio.WriteFile(w.opt.Root, filepath.FromSlash(rel), []byte(body), 0o644) == nil && strings.HasSuffix(rel, ".html") {
+			w.pages = append(w.pages, rel)
+		}
+		return
+	}
 	p := filepath.Join(w.opt.OutDir, filepath.FromSlash(rel))
 	if os.MkdirAll(filepath.Dir(p), 0o755) != nil {
 		return
@@ -749,7 +782,7 @@ func (w *wikiWriter) writeStamp() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(w.opt.OutDir, "stamp.json"), append(b, '\n'), 0o644)
+	return w.writeTop("stamp.json", append(b, '\n'))
 }
 
 // ReadWikiStamp is the recorded commit of a generated wiki, or "" when there is none.

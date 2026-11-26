@@ -3,6 +3,8 @@
 package baseline
 
 import (
+	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/michalbasisty/weave/internal/jsjson"
 	"github.com/michalbasisty/weave/internal/jsstr"
+	"github.com/michalbasisty/weave/internal/rootio"
 	"github.com/michalbasisty/weave/internal/weave"
 )
 
@@ -38,6 +41,9 @@ func RefProblem(ref string) string {
 // the same commit, so old baselines are not reused.
 const cacheVersion = 1
 
+// cacheDir is the baseline cache directory, relative to the repository root.
+var cacheDir = filepath.Join(".weave", "baselines")
+
 // GraphAt indexes root at ref in a detached worktree, reusing a cached graph for
 // that commit. It returns nil when the ref is unusable or git or the index fails;
 // the worktree is always removed.
@@ -49,8 +55,8 @@ func GraphAt(root, ref string) *weave.Graph {
 	if sha == "" {
 		return nil
 	}
-	cache := filepath.Join(root, ".weave", "baselines", sha+"-v"+itoa(cacheVersion)+".json")
-	if g := GraphFromFile(cache); g != nil {
+	name := sha + "-v" + itoa(cacheVersion) + ".json"
+	if g := loadCache(root, name); g != nil {
 		g.Root = root
 		return g
 	}
@@ -80,9 +86,8 @@ func GraphAt(root, ref string) *weave.Graph {
 		return nil
 	}
 	g.Root = root
-	if os.MkdirAll(filepath.Dir(cache), 0o755) == nil {
-		_ = os.WriteFile(cache, g.MarshalJS(), 0o644)
-		prune(filepath.Dir(cache), 20)
+	if saveCache(root, name, g.MarshalJS()) == nil {
+		prune(root, 20)
 	}
 	return g
 }
@@ -111,10 +116,75 @@ func itoa(n int) string {
 	return string(b[i:])
 }
 
+// openCache pins <root>/.weave/baselines. The repository root is pinned first and
+// the cache directory is reached through it, so a .weave or baselines component
+// swapped for a link out of the repository is refused rather than followed. With
+// create, the directory is made through the same pinned root first. The caller
+// closes the returned root.
+func openCache(root string, create bool) (*os.Root, error) {
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := os.OpenRoot(abs)
+	if err != nil {
+		return nil, err
+	}
+	defer repo.Close()
+	if create {
+		if err := repo.MkdirAll(cacheDir, 0o755); err != nil {
+			return nil, err
+		}
+	}
+	return repo.OpenRoot(cacheDir)
+}
+
+// loadCache reads one cached graph through the pinned cache directory. A missing
+// directory or file, a path linked out of the repository, an irregular file or
+// invalid content is a miss, so the caller rebuilds.
+func loadCache(root, name string) *weave.Graph {
+	dir, err := openCache(root, false)
+	if err != nil {
+		return nil
+	}
+	defer dir.Close()
+	f, err := rootio.OpenRegular(dir, name, os.O_RDONLY, 0)
+	if err != nil {
+		return nil
+	}
+	raw, err := io.ReadAll(f)
+	closeErr := f.Close()
+	if err != nil || closeErr != nil {
+		return nil
+	}
+	return decodeGraph(raw)
+}
+
+// saveCache writes one graph to the pinned cache directory, creating it when it
+// is absent. It is best effort at the call site: a cache that cannot be pinned is
+// left alone and the freshly built graph is still returned.
+func saveCache(root, name string, data []byte) error {
+	dir, err := openCache(root, true)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	return rootio.WriteFile(dir, name, data, 0o644)
+}
+
 // prune keeps the newest n cache files, so a long-lived checkout does not grow
-// without bound.
-func prune(dir string, n int) {
-	entries, err := os.ReadDir(dir)
+// without bound. Listing and removal both go through the pinned cache directory:
+// a baselines directory swapped for a link out of the repository is refused, so a
+// prune cannot list or delete files outside it. Only regular .json files count as
+// cache entries; a link or directory planted in the cache is neither aged nor
+// removed.
+func prune(root string, n int) {
+	dir, err := openCache(root, false)
+	if err != nil {
+		return
+	}
+	defer dir.Close()
+	entries, err := fs.ReadDir(dir.FS(), ".")
 	if err != nil {
 		return
 	}
@@ -124,11 +194,11 @@ func prune(dir string, n int) {
 	}
 	var files []file
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+		if !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
 		info, err := e.Info()
-		if err != nil {
+		if err != nil || !info.Mode().IsRegular() {
 			continue
 		}
 		files = append(files, file{e.Name(), info.ModTime()})
@@ -138,17 +208,13 @@ func prune(dir string, n int) {
 	}
 	sort.Slice(files, func(i, j int) bool { return files[i].at.After(files[j].at) })
 	for _, f := range files[n:] {
-		_ = os.Remove(filepath.Join(dir, f.name))
+		_ = dir.Remove(f.name)
 	}
 }
 
-// GraphFromFile reads a saved graph.json. It returns nil for an unreadable file,
-// invalid JSON, or a graph written by another version.
-func GraphFromFile(path string) *weave.Graph {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
+// decodeGraph parses a marshalled graph. It returns nil for invalid JSON, a
+// non-object, or a graph written by another version.
+func decodeGraph(raw []byte) *weave.Graph {
 	v, err := jsjson.Parse([]byte(jsstr.DecodeUTF8(raw)))
 	if err != nil {
 		return nil
@@ -166,4 +232,15 @@ func GraphFromFile(path string) *weave.Graph {
 		return nil
 	}
 	return g
+}
+
+// GraphFromFile reads a saved graph.json from any path the caller names, such as
+// the --from flag; only the baseline cache path is pinned. It returns nil for an
+// unreadable file, invalid JSON, or a graph written by another version.
+func GraphFromFile(path string) *weave.Graph {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	return decodeGraph(raw)
 }

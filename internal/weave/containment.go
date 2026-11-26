@@ -22,12 +22,18 @@ import (
 // operation. That replaces the resolved-once checks the panel used to make, which
 // lost the race between EvalSymlinks and the open that followed it.
 //
-// A Root follows a relative link that stays inside it and refuses one that leaves.
-// Two refusals are stricter than the old resolved-path check, and deliberate:
-// os.Root does not accept an absolute link target, and on Windows it refuses every
-// junction and other reparse point (a junction's target is absolute) even when that
-// target is inside the root. A repo that relies on an absolute in-repo link under
-// specs/ or in a file path is therefore refused, not followed.
+// A Root follows a relative link whose target stays inside it and refuses one that
+// leaves. Two refusals are stricter than the old resolved-path check, and
+// deliberate: os.Root does not accept an absolute link target, and a Windows
+// junction stores its target as an absolute path, so a junction reached inside the
+// repo is refused even when it points back into the repo. An absolute in-repo link
+// under specs/ is refused for the same reason, not followed.
+//
+// Both refusals carry os.Root's unexported error, whose text is "path escapes from
+// parent". That text describes the unresolved target, not a real escape: a
+// junction or absolute symlink that stays inside the repo produces it too, so it
+// must not be read as evidence that a path left the repo (rootio.PathEscapes
+// reports only that the resolution was refused).
 
 var (
 	// ErrOutsideRoot refuses a path that leaves the pinned directory.
@@ -91,9 +97,10 @@ func specDirSub(rel string) (string, error) {
 }
 
 // SpecSubdirs lists the real directory names directly under one directory in specs,
-// through the pinned specs root. An entry that is a link is not listed: os.Root
-// refuses an absolute target (and every Windows junction) even when it points
-// inside the repo, and the panel reads only the record trees it pins.
+// through the pinned specs root. An entry that is a link is skipped rather than
+// followed, so the listing shows only real record trees: os.Root would refuse an
+// absolute target or a junction, and a relative in-repo link is skipped too because
+// a record tree must be a real directory.
 func SpecSubdirs(root, rel string) ([]string, error) {
 	sub, err := specDirSub(rel)
 	if err != nil {

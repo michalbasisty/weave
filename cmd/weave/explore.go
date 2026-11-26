@@ -13,6 +13,7 @@ import (
 	"github.com/michalbasisty/weave/internal/delta"
 	"github.com/michalbasisty/weave/internal/jsstr"
 	"github.com/michalbasisty/weave/internal/registry"
+	"github.com/michalbasisty/weave/internal/rootio"
 	"github.com/michalbasisty/weave/internal/weave"
 )
 
@@ -28,6 +29,9 @@ func joinParts(parts []string) string { return strings.Join(parts, "  ") }
 func cmdExplore() int {
 	all := hasFlag("all")
 	out := arg("out", "")
+	// Only the default inside the repository is pinned; an explicit --out, and the
+	// home default with --all, keep writing wherever they point.
+	repoDefault := out == "" && !all
 	if out == "" {
 		if all {
 			out = filepath.Join(registry.HomeDir(), "explore.html")
@@ -80,13 +84,26 @@ func cmdExplore() int {
 		}
 	}
 	html := weave.RenderExplore(picked)
-	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
-	}
-	if err := os.WriteFile(out, []byte(html), 0o644); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		return 1
+	if repoDefault {
+		dir, err := openRepoDir(root, ".weave")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		defer dir.Close()
+		if err := rootio.WriteFile(dir, "explore.html", []byte(html), 0o644); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+	} else {
+		if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
+		if err := os.WriteFile(out, []byte(html), 0o644); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 1
+		}
 	}
 	kb := int(math.Round(float64(jsstr.Len(html)) / 1024))
 	fmt.Printf("explore: %s (%d KB, %d project(s))\n", out, kb, len(picked))

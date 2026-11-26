@@ -140,8 +140,15 @@ func cmdIndex() int {
 	// yesterday's tree. Committed sites (docs/wiki) are explicit: `weave wiki --out`.
 	localWiki := filepath.Join(root, ".weave", "wiki")
 	if weave.ReadWikiStamp(localWiki) != "" || pathExists(filepath.Join(localWiki, "index.html")) {
-		if res, err := weave.WriteWiki(g, weave.WikiOptions{OutDir: localWiki, Commit: gitHead(root)}); err == nil {
-			fmt.Printf("wiki: %d page(s) refreshed in %s\n", res.Pages, localWiki)
+		// Refreshing the default site goes through the same pinned .weave/wiki root
+		// an explicit `weave wiki` uses; a failure stays silent, as it was for the
+		// resolved path, so an index run is never failed by the wiki.
+		if dir, err := openRepoDir(root, ".weave/wiki"); err == nil {
+			res, err := weave.WriteWiki(g, weave.WikiOptions{OutDir: localWiki, Commit: gitHead(root), Root: dir})
+			_ = dir.Close()
+			if err == nil {
+				fmt.Printf("wiki: %d page(s) refreshed in %s\n", res.Pages, localWiki)
+			}
 		}
 	}
 	return 0

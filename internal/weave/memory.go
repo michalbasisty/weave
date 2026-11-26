@@ -10,6 +10,7 @@ import (
 
 	"github.com/michalbasisty/weave/internal/jsjson"
 	"github.com/michalbasisty/weave/internal/jsstr"
+	"github.com/michalbasisty/weave/internal/rootio"
 )
 
 // Notes an agent (or a person) leaves next to files: a decision, a gotcha, the reason
@@ -34,7 +35,23 @@ func normNote(p string) string {
 
 // ReadNotes is every well-formed note, oldest first. A missing file is no notes.
 func ReadNotes(root string) ([]Note, error) {
-	raw, err := os.ReadFile(MemoryPath(root))
+	r, err := openRoot(root)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return []Note{}, nil
+		}
+		return nil, err
+	}
+	defer r.Close()
+	return readNotesAt(r)
+}
+
+// readNotesAt reads and parses the memory file through an already pinned root, so
+// the duplicate check, recall and maintenance all read inside that handle. A FIFO
+// at the name is refused by rootio instead of waited on, and the whole file is read
+// without an arbitrary cap.
+func readNotesAt(r *os.Root) ([]Note, error) {
+	raw, err := readWeaveFileAt(r, ".weave/memory.jsonl")
 	if errors.Is(err, os.ErrNotExist) {
 		return []Note{}, nil
 	}
@@ -85,9 +102,16 @@ func Remember(root string, files []string, note, now string) (*Note, error) {
 	if list.size() == 0 || text == "" || Derivable(text) {
 		return nil, nil
 	}
+	// One pinned root serves the duplicate check, the directory creation and the
+	// append, so a .weave swapped for a link between them cannot redirect the write.
+	r, err := writableRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
 	// The same note on the same files again is noise, not news: an agent that
 	// remembers on every turn would otherwise fill recall with copies.
-	if old, err := ReadNotes(root); err == nil {
+	if old, err := readNotesAt(r); err == nil {
 		for _, n := range old {
 			if sameNote(n.Note, text) && sameFiles(n.Files, list.items()) {
 				return nil, nil
@@ -98,22 +122,17 @@ func Remember(root string, files []string, note, now string) (*Note, error) {
 		now = isoNow()
 	}
 	entry := &Note{At: now, Files: list.items(), Note: text}
-	if err := os.MkdirAll(filepath.Join(root, ".weave"), 0o755); err != nil {
+	if err := r.MkdirAll(".weave", 0o755); err != nil {
 		return nil, err
 	}
 	w := objWriter{}
 	w.str("at", entry.At)
 	w.strs("files", entry.Files)
 	w.str("note", entry.Note)
-	fh, err := os.OpenFile(MemoryPath(root), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
+	if err := rootio.AppendFile(r, ".weave/memory.jsonl", append(w.end(), '\n'), 0o644); err != nil {
 		return nil, err
 	}
-	if _, err := fh.Write(append(w.end(), '\n')); err != nil {
-		fh.Close()
-		return nil, err
-	}
-	return entry, fh.Close()
+	return entry, nil
 }
 
 // matching is the notes naming any of files (every note when files is empty),
@@ -190,11 +209,16 @@ func RecallText(root string, files []string) (string, error) {
 
 // ClearMemory empties the memory file and returns how many notes it held.
 func ClearMemory(root string) (int, error) {
-	notes, err := ReadNotes(root)
+	r, err := openRoot(root)
 	if err != nil {
 		return 0, err
 	}
-	return len(notes), os.WriteFile(MemoryPath(root), nil, 0o644)
+	defer r.Close()
+	notes, err := readNotesAt(r)
+	if err != nil {
+		return 0, err
+	}
+	return len(notes), rootio.WriteFile(r, ".weave/memory.jsonl", nil, 0o644)
 }
 
 // A note that only says who owns a file restates CODEOWNERS or the map:
@@ -217,7 +241,15 @@ func Derivable(note string) bool {
 // PruneMemory drops ownership notes and repeats from the memory file, keeping the
 // newest copy of each note, and returns how many it dropped.
 func PruneMemory(root string) (int, error) {
-	notes, err := ReadNotes(root)
+	r, err := openRoot(root)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	defer r.Close()
+	notes, err := readNotesAt(r)
 	if err != nil || len(notes) == 0 {
 		return 0, err
 	}
@@ -246,7 +278,7 @@ func PruneMemory(root string) (int, error) {
 		w.str("note", keep[i].Note)
 		buf = append(append(buf, w.end()...), '\n')
 	}
-	return len(notes) - len(keep), os.WriteFile(MemoryPath(root), buf, 0o644)
+	return len(notes) - len(keep), rootio.WriteFile(r, ".weave/memory.jsonl", buf, 0o644)
 }
 
 func sameNote(a, b string) bool {

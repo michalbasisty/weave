@@ -3,6 +3,7 @@
 package usage
 
 import (
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/michalbasisty/weave/internal/jsjson"
 	"github.com/michalbasisty/weave/internal/jsstr"
+	"github.com/michalbasisty/weave/internal/rootio"
 )
 
 // Entry is one JSON line of the ledger.
@@ -27,12 +29,20 @@ type Entry struct {
 func Path(root string) string { return filepath.Join(root, ".weave", "usage.jsonl") }
 
 // Record appends one tool call to the ledger. A read-only checkout must not fail
-// a tool call, so write errors are swallowed; WEAVE_NO_USAGE=1 disables it.
+// a tool call, so write errors are swallowed; WEAVE_NO_USAGE=1 disables it. The
+// directory and file are created inside a pinned repository root, so a symlinked
+// .weave or usage.jsonl cannot redirect the write; the directory is created only
+// when missing and an existing file keeps its mode.
 func Record(root, tool string, tokens int, ms float64) {
 	if os.Getenv("WEAVE_NO_USAGE") == "1" {
 		return
 	}
-	if err := os.MkdirAll(filepath.Join(root, ".weave"), 0o755); err != nil {
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return
+	}
+	defer r.Close()
+	if err := r.MkdirAll(".weave", 0o755); err != nil {
 		return
 	}
 	o := &jsjson.Object{}
@@ -42,17 +52,25 @@ func Record(root, tool string, tokens int, ms float64) {
 	o.Set("ms", jsjson.Num(jsRound(ms)))
 	line := append(jsjson.Marshal(jsjson.Obj(o)), '\n')
 
-	f, err := os.OpenFile(Path(root), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return
-	}
-	_, _ = f.Write(line)
-	_ = f.Close()
+	_ = rootio.AppendFile(r, filepath.Join(".weave", "usage.jsonl"), line, 0o644)
 }
 
-// Read returns the last 5000 ledger entries, skipping torn lines.
+// Read returns the last 5000 ledger entries, skipping torn lines. The file is
+// opened inside a pinned repository root without blocking on a FIFO and only a
+// regular file is read, so an external symlink cannot swap the target; a missing,
+// irregular or unreadable file reads as none.
 func Read(root string) []Entry {
-	raw, err := os.ReadFile(Path(root))
+	r, err := os.OpenRoot(root)
+	if err != nil {
+		return []Entry{}
+	}
+	defer r.Close()
+	f, err := rootio.OpenRegular(r, filepath.Join(".weave", "usage.jsonl"), os.O_RDONLY, 0)
+	if err != nil {
+		return []Entry{}
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(f)
 	if err != nil {
 		return []Entry{}
 	}
