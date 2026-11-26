@@ -36,10 +36,31 @@ inputs:
     required: false
     default: ${{ github.token }}
 
+  sarif:
+    description: >-
+      Upload `weave check --format sarif` to GitHub code scanning. Off by default;
+      enabling it runs `weave check` twice, once for the markdown report and once for
+      SARIF. An upload needs `security-events: write`, a nonempty `against` (fetch-depth 0),
+      `root: '.'` (or an equivalent `./`), and a gate that ran (exit 0 or 1). A fork pull
+      request (read-only token), a missing `against`, a different root, or exit 2 skips
+      the upload with a warning. The upload step is continue-on-error: a missing
+      `security-events: write`, a failed upload, or an empty/invalid SARIF report adds a
+      warning only and never masks the markdown report, PR comment or the gate's failing
+      exit code. The `sarif-file` output names the report whenever one is produced.
+    required: false
+    default: 'false'
+
   wiki:
     description: Fail when the committed wiki (docs/wiki) no longer describes this tree. Run `weave wiki --out docs/wiki` locally first.
     required: false
     default: 'false'
+
+outputs:
+  sarif-file:
+    description: >-
+      Path to the SARIF 2.1.0 report when `sarif` is enabled and the run is uploadable;
+      empty when the upload was skipped.
+    value: ${{ steps.check.outputs.sarif }}
 
 runs:
   using: composite
@@ -61,16 +82,24 @@ runs:
 
     - name: Index
       shell: bash
-      run: '"$WEAVE_BIN" index --root "${{ inputs.root }}"'
+      env:
+        ROOT: ${{ inputs.root }}
+      run: '"$WEAVE_BIN" index --root "$ROOT"'
 
     - name: Check
       id: check
       shell: bash
+      env:
+        ROOT: ${{ inputs.root }}
+        AGAINST: ${{ inputs.against }}
+        STRICT_TESTS: ${{ inputs.strict-tests }}
+        SARIF: ${{ inputs.sarif }}
+        FORK: ${{ github.event.pull_request.head.repo.fork }}
       run: |
         set -uo pipefail
-        args=(check --root "${{ inputs.root }}")
-        if [ -n "${{ inputs.against }}" ]; then args+=(--against "${{ inputs.against }}"); fi
-        if [ "${{ inputs.strict-tests }}" = "true" ]; then args+=(--strict-tests); fi
+        args=(check --root "$ROOT")
+        if [ -n "$AGAINST" ]; then args+=(--against "$AGAINST"); fi
+        if [ "$STRICT_TESTS" = "true" ]; then args+=(--strict-tests); fi
         report="$RUNNER_TEMP/weave-check.md"
         "$WEAVE_BIN" "${args[@]}" --markdown > "$report"
         rc=$?
@@ -82,8 +111,55 @@ runs:
         if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then operational=true; fi
         reaches=false
         if grep -q '^```mermaid' "$report"; then reaches=true; fi
-        printf 'report=%s\nfailed=%s\noperational=%s\nreaches=%s\n' "$report" "$failed" "$operational" "$reaches" >> "$GITHUB_OUTPUT"
+        sarif_file=""
+        root_is_repo=false
+        case "$ROOT" in
+          ''|/*|*[!./]*) ;;
+          *..*) ;;
+          *.*) root_is_repo=true ;;
+        esac
+        if [ "$SARIF" = "true" ]; then
+          if [ "$operational" = "true" ]; then
+            echo "::warning::weave SARIF upload skipped: the gate could not run (exit $rc)"
+          elif [ -z "$AGAINST" ]; then
+            echo "::warning::weave SARIF upload skipped: against must name a git ref (fetch-depth 0)"
+          elif [ "$root_is_repo" != "true" ]; then
+            echo "::warning::weave SARIF upload skipped: root must be '.' or './' so SARIF paths match the repository"
+          elif [ "$FORK" = "true" ]; then
+            echo "::warning::weave SARIF upload skipped: pull requests from forks get a read-only token"
+          else
+            sarif_file="$RUNNER_TEMP/weave.sarif"
+            "$WEAVE_BIN" "${args[@]}" --format sarif > "$sarif_file"
+            sarif_rc=$?
+            if [ "$sarif_rc" -ne 0 ] && [ "$sarif_rc" -ne 1 ]; then
+              echo "::warning::weave SARIF report could not be rendered (exit $sarif_rc); skipping the upload"
+              rm -f "$sarif_file"
+              sarif_file=""
+            elif [ ! -s "$sarif_file" ] \
+              || ! grep -Eq '"version"[[:space:]]*:[[:space:]]*"2\.1\.0"' "$sarif_file" \
+              || ! grep -Eq '"runs"[[:space:]]*:[[:space:]]*\[' "$sarif_file"; then
+              echo "::warning::weave SARIF report is empty or invalid (exit $sarif_rc); skipping the upload"
+              rm -f "$sarif_file"
+              sarif_file=""
+            fi
+          fi
+        fi
+        printf 'report=%s\nfailed=%s\noperational=%s\nreaches=%s\nrc=%s\nsarif=%s\n' "$report" "$failed" "$operational" "$reaches" "$rc" "$sarif_file" >> "$GITHUB_OUTPUT"
         exit 0
+
+    - name: Upload SARIF to code scanning
+      id: sarif
+      if: ${{ steps.check.outputs.sarif != '' }}
+      continue-on-error: true
+      uses: github/codeql-action/upload-sarif@v4
+      with:
+        sarif_file: ${{ steps.check.outputs.sarif }}
+
+    - name: Warn when the SARIF upload failed
+      if: ${{ steps.sarif.outcome == 'failure' }}
+      shell: bash
+      run: |
+        echo "::warning::weave could not upload SARIF to code scanning (needs security-events: write; fork pull requests are read-only). The gate verdict and comment are unaffected."
 
     - name: Comment on the pull request
       if: ${{ github.event.pull_request && inputs.comment != 'false' }}
@@ -137,14 +213,18 @@ runs:
     - name: Coverage
       if: always()
       shell: bash
-      run: '"$WEAVE_BIN" doctor --root "${{ inputs.root }}"'
+      env:
+        ROOT: ${{ inputs.root }}
+      run: '"$WEAVE_BIN" doctor --root "$ROOT"'
 
     - name: Wiki is current
       if: ${{ inputs.wiki == 'true' }}
       shell: bash
+      env:
+        ROOT: ${{ inputs.root }}
       run: |-
         set -euo pipefail
-        root="${{ inputs.root }}"
+        root="$ROOT"
         "$WEAVE_BIN" wiki --root "$root" --out docs/wiki
         if ! git -C "$root" diff --quiet -- docs/wiki; then
           echo "::error::docs/wiki describes an older tree. Commit the regenerated pages."

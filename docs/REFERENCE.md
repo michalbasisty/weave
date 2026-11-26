@@ -264,6 +264,13 @@ steps:
 so `weave check` exits 2 rather than comparing against an incomplete history. The same
 applies locally to `--against` refs that have not been fetched.
 
+To upload findings to GitHub code scanning, add `security-events: write` to the
+job permissions and set `sarif: 'true'` on the action. Upload is off by default.
+It requires `root: '.'` and a nonempty `against` ref. Fork pull requests and
+checks that could not run do not upload a report. Upload errors produce a warning
+without changing the gate verdict. The `sarif-file` output gives the report path
+when one was generated.
+
 It builds the Go binary, indexes, checks, prints coverage, writes the report to the job
 summary and, on a pull request, comments with each removed endpoint that is still called, the
 line that calls it and the screens that reach that line:
